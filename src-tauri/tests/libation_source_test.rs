@@ -33,7 +33,7 @@ async fn scan_walks_libation_layout() {
     let tmp = TempDir::new().unwrap();
     setup_libation(tmp.path());
 
-    let src = LibationFolderSource::default();
+    let src = LibationFolderSource;
     let candidates = src.scan(tmp.path()).await.unwrap();
     assert_eq!(candidates.len(), 2);
 
@@ -72,7 +72,7 @@ async fn scan_walks_libation_layout() {
 #[tokio::test]
 async fn empty_root_returns_empty() {
     let tmp = TempDir::new().unwrap();
-    let src = LibationFolderSource::default();
+    let src = LibationFolderSource;
     let candidates = src.scan(tmp.path()).await.unwrap();
     assert!(candidates.is_empty());
 }
