@@ -2,6 +2,8 @@ use serde::Serialize;
 use specta::Type;
 use thiserror::Error;
 
+use crate::secrets::SecretError;
+
 #[derive(Error, Debug, Serialize, Type)]
 #[serde(tag = "kind", content = "message")]
 #[allow(dead_code)]
@@ -10,10 +12,18 @@ pub enum AppError {
     Io(String),
     #[error("internal error: {0}")]
     Internal(String),
+    #[error("secrets error: {0}")]
+    Secrets(SecretError),
 }
 
 impl From<std::io::Error> for AppError {
     fn from(e: std::io::Error) -> Self {
         AppError::Io(e.to_string())
+    }
+}
+
+impl From<SecretError> for AppError {
+    fn from(e: SecretError) -> Self {
+        AppError::Secrets(e)
     }
 }

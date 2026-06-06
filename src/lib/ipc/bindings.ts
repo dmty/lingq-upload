@@ -22,6 +22,30 @@ async startDemoJob() : Promise<Result<string, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async cmdSaveLingqKey(key: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_save_lingq_key", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdLoadLingqKey() : Promise<Result<string | null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_load_lingq_key") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdClearLingqKey() : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_clear_lingq_key") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -35,10 +59,18 @@ async startDemoJob() : Promise<Result<string, AppError>> {
 
 /** user-defined types **/
 
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "Secrets"; message: SecretError }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+/**
+ * Errors raised by the secrets layer, lifted from the keyring backend.
+ * 
+ * Variants are intentionally coarse: the UI surfaces them as distinct
+ * messages and `Backend(_)` is the catch-all so platform churn doesn't
+ * break the contract.
+ */
+export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | { kind: "MissingEntry" } | { kind: "Backend"; message: string }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
 
 /** tauri-specta globals **/

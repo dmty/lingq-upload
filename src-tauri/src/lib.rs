@@ -1,6 +1,7 @@
 mod commands;
 mod error;
 mod events;
+mod secrets;
 
 use specta_typescript::Typescript;
 use tauri_specta::{collect_commands, Builder};
@@ -14,6 +15,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             commands::ping::ping,
             commands::demo::start_demo_job,
+            commands::secrets::cmd_save_lingq_key,
+            commands::secrets::cmd_load_lingq_key,
+            commands::secrets::cmd_clear_lingq_key,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.
