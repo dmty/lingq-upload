@@ -3,6 +3,7 @@ name = "lingq-upload"
 version = "0.1.0"
 description = "Desktop app: import EPUB + audio into LingQ as language-learning courses."
 edition = "2021"
+default-run = "lingq-upload"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
