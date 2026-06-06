@@ -105,7 +105,7 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
 /** user-defined types **/
 
 export type AccountProfile = { username: string }
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
@@ -113,7 +113,7 @@ export type ChapterEntry = { title: string; start_sec: number; end_sec: number |
 export type ChapterManifest = { chapters: ChapterEntry[] }
 export type Collection = { id: number; title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
+export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
