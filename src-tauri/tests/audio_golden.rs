@@ -13,8 +13,7 @@ use std::process::Command as SyncCommand;
 
 use serde::Deserialize;
 
-#[path = "../src/core/audio.rs"]
-mod audio;
+use lingq_upload_lib::core::audio;
 
 #[derive(Deserialize)]
 struct Golden {
