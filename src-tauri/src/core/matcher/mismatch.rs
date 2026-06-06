@@ -19,11 +19,20 @@ pub enum MismatchResponse {
     Cancel,
 }
 
-/// Classify a count-pair. `None` means equal counts → clean pair.
+/// Classify a count-pair. `None` means equal non-zero counts → clean pair.
 ///
-/// Precedence (high → low): equal → OneToMany → ManyToOne → CountOff → Unalignable.
-/// CountOff covers `|c − t| ≤ 2`. Unalignable covers ratio > 3× or < 1/3.
+/// Precedence (high → low): equal-nonzero → empty-vs-content → OneToMany →
+/// ManyToOne → CountOff → Unalignable.
+///
+/// - `(0, 0)` is *not* a clean pair — an empty book paired with no audio is
+///   Unalignable; there is nothing to align.
+/// - `(0, n)` or `(n, 0)` for n > 0 is Unalignable for the same reason.
+/// - CountOff covers `|c − t| ≤ 2` (with both sides non-zero).
+/// - Unalignable covers ratio > 3× or < 1/3.
 pub fn classify(chapters: usize, tracks: usize) -> Option<MismatchCondition> {
+    if chapters == 0 || tracks == 0 {
+        return Some(MismatchCondition::Unalignable);
+    }
     if chapters == tracks {
         return None;
     }
@@ -37,12 +46,8 @@ pub fn classify(chapters: usize, tracks: usize) -> Option<MismatchCondition> {
     if delta <= 2 {
         return Some(MismatchCondition::CountOff);
     }
-    let (lo, hi) = if chapters < tracks {
-        (chapters, tracks)
-    } else {
-        (tracks, chapters)
-    };
-    if lo == 0 || hi > lo.saturating_mul(3) {
+    let (lo, hi) = (chapters.min(tracks), chapters.max(tracks));
+    if hi > lo.saturating_mul(3) {
         return Some(MismatchCondition::Unalignable);
     }
     Some(MismatchCondition::CountOff)

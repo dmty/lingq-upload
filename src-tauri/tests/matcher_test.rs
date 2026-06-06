@@ -118,6 +118,18 @@ fn fixtures_unalignable() {
 }
 
 #[test]
+fn empty_inputs_classify_as_unalignable() {
+    use lingq_upload_lib::core::matcher::MatchOutcome;
+    let outcome = auto_match_for_counts(0, 0);
+    match outcome {
+        MatchOutcome::Mismatch { condition, .. } => {
+            assert_eq!(condition, MismatchCondition::Unalignable);
+        }
+        _ => panic!("expected Mismatch for (0, 0)"),
+    }
+}
+
+#[test]
 fn equal_counts_returns_paired_by_index() {
     let outcome = auto_match_for_counts(3, 3);
     match outcome {
@@ -141,7 +153,10 @@ fn manual_pair_is_not_a_response() {
 
 #[test]
 fn classify_boundary_cases() {
-    assert_eq!(classify(0, 0), None);
+    // (0, 0) is not a clean pair — empty book ↔ no audio has nothing to align.
+    assert_eq!(classify(0, 0), Some(MismatchCondition::Unalignable));
+    assert_eq!(classify(0, 5), Some(MismatchCondition::Unalignable));
+    assert_eq!(classify(5, 0), Some(MismatchCondition::Unalignable));
     assert_eq!(classify(1, 1), None);
     assert_eq!(classify(1, 2), Some(MismatchCondition::CountOff));
     assert_eq!(classify(1, 3), Some(MismatchCondition::OneToMany));
