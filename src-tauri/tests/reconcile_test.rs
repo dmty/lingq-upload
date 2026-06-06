@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use lingq_upload_lib::core::library::{reconcile, LibraryIndex, INDEX_FILENAME, INDEX_SCHEMA_V1};
-use lingq_upload_lib::core::store::InMemoryProjectStore;
+use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::IngestRegistry;
 use tempfile::TempDir;
 
@@ -61,4 +61,23 @@ async fn reconcile_idempotent_against_empty_root() {
     assert_eq!(first.merged.len(), 0);
     assert_eq!(second.created.len(), 0);
     assert_eq!(second.merged.len(), 0);
+}
+
+#[tokio::test]
+async fn reconcile_persists_new_projects_and_re_merges_on_rerun() {
+    let tmp = TempDir::new().unwrap();
+    seed_root(tmp.path());
+
+    let registry = IngestRegistry::default();
+    let store = InMemoryProjectStore::new();
+
+    let first = reconcile(&registry, &store, tmp.path()).await.unwrap();
+    assert_eq!(first.created.len(), 1, "first run creates");
+    assert!(first.merged.is_empty(), "first run does not merge: {first:?}");
+    assert_eq!(store.list().unwrap().len(), 1, "store now has the project");
+
+    let second = reconcile(&registry, &store, tmp.path()).await.unwrap();
+    assert!(second.created.is_empty(), "second run is a no-op create");
+    assert_eq!(second.merged.len(), 1, "second run reports merged");
+    assert_eq!(store.list().unwrap().len(), 1, "no duplicate");
 }
