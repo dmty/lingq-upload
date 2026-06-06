@@ -1,0 +1,55 @@
+name: lingq-canary
+
+# Nightly canary that records a throwaway lesson against the live LingQ API and
+# diffs the response against the checked-in cassettes under
+# `src-tauri/tests/fixtures/lingq/cassettes/`. Schema-shape drift opens an issue.
+#
+# Throwaway-account credentials and the issue-opening step land later; this
+# workflow is the scheduling skeleton so the cron + manual trigger exist now.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: lingq-canary
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  canary:
+    name: live cassette diff
+    runs-on: ubuntu-latest
+    if: vars.LINGQ_CANARY_ENABLED == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system deps
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg
+          version: 1.0
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Run live whoami probe
+        working-directory: src-tauri
+        env:
+          LINGQ_API_KEY: ${{ secrets.LINGQ_CANARY_API_KEY }}
+        run: cargo test --locked --test manual_lingq_smoke -- --ignored live_whoami --nocapture
+
+      - name: Diff response shape against cassettes
+        run: |
+          if ! git diff --exit-code src-tauri/tests/fixtures/lingq/cassettes; then
+            echo "::warning::LingQ schema drift detected; cassette diff is non-empty."
+          fi
