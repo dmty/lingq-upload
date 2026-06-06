@@ -1,19 +1,12 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { LibraryEntry } from "$lib/ipc/bindings";
+  import { joinKey } from "$lib/identity";
 
   let { entries }: { entries: LibraryEntry[] } = $props();
 
-  function joinKey(entry: LibraryEntry): string {
-    const id = entry.id;
-    if (id.audible_asin) return `asin:${id.audible_asin}`;
-    if (id.isbn13) return `isbn13:${id.isbn13}`;
-    if (id.calibre_uuid) return `uuid:${id.calibre_uuid}`;
-    return `ch:${id.content_hash}`;
-  }
-
   function open(entry: LibraryEntry) {
-    const key = joinKey(entry);
+    const key = joinKey(entry.id);
     if (entry.receipt_count > 0) {
       goto(`/run/${encodeURIComponent(key)}`);
     } else {
