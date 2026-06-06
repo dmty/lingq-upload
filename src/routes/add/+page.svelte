@@ -12,6 +12,7 @@
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
+  import { joinKey } from "$lib/identity";
   import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
 
@@ -162,14 +163,7 @@
       error = appErrorMessage(res.error);
       return;
     }
-    const id = res.data;
-    const key = id.audible_asin
-      ? `asin:${id.audible_asin}`
-      : id.isbn13
-        ? `isbn13:${id.isbn13}`
-        : id.calibre_uuid
-          ? `uuid:${id.calibre_uuid}`
-          : `ch:${id.content_hash}`;
+    const key = joinKey(res.data);
     goto(`/run/${encodeURIComponent(key)}`);
   }
 </script>
