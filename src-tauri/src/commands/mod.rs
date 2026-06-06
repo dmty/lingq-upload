@@ -1,6 +1,9 @@
+pub mod add_project;
 pub mod demo;
 pub mod ingest;
+pub mod library;
 pub mod lingq;
+pub mod matcher;
 pub mod ping;
 pub mod secrets;
 pub mod upload;

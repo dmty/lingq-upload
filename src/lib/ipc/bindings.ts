@@ -91,6 +91,41 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * List the library. Loads `library.index.json` if present, else rebuilds from
+ * the project store.
+ */
+async cmdLibraryList() : Promise<Result<LibraryIndex, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_library_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Persist a Candidate as a Project. Returns the stable `ProjectId`.
+ * If a matching project already exists the existing project is replaced.
+ */
+async cmdCreateProject(candidate: Candidate, language: string, collectionTitle: string) : Promise<Result<ProjectId, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_create_project", { candidate, language, collectionTitle }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Record the user's matcher decision and advance the project.
+ */
+async cmdMatcherResolve(projectId: ProjectId, condition: MismatchCondition, response: MismatchResponse, chapterCount: number, trackCount: number) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_matcher_resolve", { projectId, condition, response, chapterCount, trackCount }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -105,20 +140,38 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
 /** user-defined types **/
 
 export type AccountProfile = { username: string }
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Other"; message: string }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 export type ChapterManifest = { chapters: ChapterEntry[] }
+export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
+export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null }
+export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
+export type MismatchCondition = "one_to_many" | "many_to_one" | "count_off" | "unalignable"
+export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "cancel"
+export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null }
+/**
+ * Canonical project identity (AD-021).
+ * 
+ * `content_hash` is the always-present fallback. Strong keys
+ * (`audible_asin` / `isbn13` / `calibre_uuid`) supply higher-confidence
+ * joins when available across sources.
+ */
+export type ProjectId = { content_hash: [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
+export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
+export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
+export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number }
 /**
  * Errors raised by the secrets layer, lifted from the keyring backend.
  * 

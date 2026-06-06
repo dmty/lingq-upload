@@ -26,6 +26,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::lingq::cmd_list_languages,
             commands::lingq::cmd_list_collections,
             commands::upload::upload_one_shot,
+            commands::library::cmd_library_list,
+            commands::add_project::cmd_create_project,
+            commands::matcher::cmd_matcher_resolve,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.
@@ -46,6 +49,15 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<ingest::SeriesRef>()
         .typ::<ingest::IngestError>()
         .typ::<commands::upload::UploadResult>()
+        .typ::<core::identity::ProjectId>()
+        .typ::<core::project::Project>()
+        .typ::<core::project::ProjectSummary>()
+        .typ::<core::project::ChapterReceipt>()
+        .typ::<core::project::MatcherDecision>()
+        .typ::<core::matcher::MismatchCondition>()
+        .typ::<core::matcher::MismatchResponse>()
+        .typ::<core::library::LibraryIndex>()
+        .typ::<core::library::LibraryEntry>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.

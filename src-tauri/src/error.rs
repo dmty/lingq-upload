@@ -30,6 +30,8 @@ pub enum AppError {
     Lingq(#[from] LingqError),
     #[error("ingest error: {0}")]
     Ingest(#[from] IngestError),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl From<std::io::Error> for AppError {
