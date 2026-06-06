@@ -90,7 +90,8 @@ fn exactly_one_job_is_current() {
 fn rebuild_pending_re_enqueues_unfinished_projects() {
     let store_arc: Arc<dyn ProjectStore> = Arc::new(InMemoryProjectStore::new());
 
-    let finished = project("Done", vec![done_receipt(0), done_receipt(1)]);
+    let mut finished = project("Done", vec![done_receipt(0), done_receipt(1)]);
+    finished.queue_cursor = 2; // fully advanced
     let pending = project("Pending", vec![done_receipt(0), pending_receipt(1)]);
     let no_receipts = project("Untouched", vec![]);
 
