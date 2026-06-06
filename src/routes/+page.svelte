@@ -12,6 +12,7 @@
     type UploadResult,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import { basename, extOf, filenameStem } from "$lib/paths";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -48,11 +49,6 @@
 
   const TEXT_EXTS = ["xhtml", "html", "htm", "txt"];
   const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
-
-  function extOf(path: string): string {
-    const dot = path.lastIndexOf(".");
-    return dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
-  }
 
   function zoneForExt(ext: string): "text" | "audio" | null {
     if (TEXT_EXTS.includes(ext)) return "text";
@@ -144,19 +140,6 @@
     return l.known_words > 0
       ? `${l.title} (${l.known_words.toLocaleString()})`
       : l.title;
-  }
-
-  function filenameStem(path: string): string {
-    const sep = path.lastIndexOf("/") >= 0 ? "/" : "\\";
-    const base = path.split(sep).pop() ?? path;
-    const dot = base.lastIndexOf(".");
-    return dot > 0 ? base.slice(0, dot) : base;
-  }
-
-  function shortPath(path: string): string {
-    if (!path) return "";
-    const sep = path.lastIndexOf("/") >= 0 ? "/" : "\\";
-    return path.split(sep).pop() ?? path;
   }
 
   function stageLabel(stage: Stage["kind"]): string {
@@ -567,7 +550,7 @@
             <div class="flex-1">
               {#if textPath}
                 <div class="text-sm font-medium text-fg">
-                  {shortPath(textPath)}
+                  {basename(textPath)}
                 </div>
                 <div class="text-xs text-fg-subtle">
                   Click to choose a different file
@@ -633,7 +616,7 @@
             <div class="flex-1">
               {#if audioPath}
                 <div class="text-sm font-medium text-fg">
-                  {shortPath(audioPath)}
+                  {basename(audioPath)}
                 </div>
                 <div class="text-xs text-fg-subtle">
                   Click to choose a different file
