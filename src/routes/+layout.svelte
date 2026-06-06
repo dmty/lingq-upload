@@ -14,6 +14,26 @@
   <span class="text-sm font-medium text-fg-muted">LingQ Importer</span>
   <nav class="flex items-center gap-1">
     <a
+      href="/library"
+      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
+        '/library',
+      )
+        ? 'bg-accent-soft text-fg'
+        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
+    >
+      Library
+    </a>
+    <a
+      href="/add"
+      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
+        '/add',
+      )
+        ? 'bg-accent-soft text-fg'
+        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
+    >
+      Add
+    </a>
+    <a
       href="/"
       class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
         '/',

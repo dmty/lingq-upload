@@ -91,5 +91,7 @@ export function appErrorMessage(e: AppError): string {
       return textErrorMessage(e.message);
     case "Ingest":
       return ingestMessage(e.message);
+    case "Other":
+      return e.message;
   }
 }
