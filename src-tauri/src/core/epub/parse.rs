@@ -116,7 +116,7 @@ mod kindle {
     }
 
     fn decode_utf16(bytes: &[u8], little_endian: bool, name: &str) -> Result<String, EpubError> {
-        if bytes.len() % 2 != 0 {
+        if !bytes.len().is_multiple_of(2) {
             return Err(EpubError::Parse(format!("{name}: truncated utf-16 stream")));
         }
         let units: Vec<u16> = bytes

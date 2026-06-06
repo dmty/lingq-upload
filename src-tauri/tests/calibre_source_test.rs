@@ -136,7 +136,7 @@ async fn calibre_uuid_invalid_dropped_from_extras() {
 
     let src = CalibreLibrarySource;
     let cs = src.scan(tmp.path()).await.unwrap();
-    assert!(cs[0].metadata_extras.get("calibre_uuid").is_none());
+    assert!(!cs[0].metadata_extras.contains_key("calibre_uuid"));
 }
 
 #[tokio::test]
