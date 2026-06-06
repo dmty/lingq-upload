@@ -3,24 +3,77 @@ use std::path::Path;
 use crate::ingest::{ChapterEntry, ChapterManifest};
 
 /// Find and parse the Libation JSON sidecar inside a book directory.
-/// Convention: `<book>.json` sibling of the .m4b file(s).
+///
+/// Selection rules, in order:
+/// 1. If `audio_stem` is given, prefer `<audio_stem>.json` (e.g. for
+///    `Book [B0XXX].m4b` we look for `Book [B0XXX].json`). Random
+///    `metadata.json` files in the same directory must not win.
+/// 2. Otherwise, prefer any `.json` whose stem matches a sibling audio file's
+///    stem.
+/// 3. Finally, any `.json` that contains a top-level `"chapters"` array.
+///
+/// The function returns the first valid manifest found and ignores the rest.
 pub fn load_for_book(dir: &Path) -> Option<ChapterManifest> {
-    let rd = std::fs::read_dir(dir).ok()?;
-    for ent in rd.flatten() {
+    load_for_book_with_stem(dir, None)
+}
+
+pub fn load_for_book_with_stem(dir: &Path, audio_stem: Option<&str>) -> Option<ChapterManifest> {
+    let mut jsons: Vec<std::path::PathBuf> = Vec::new();
+    let mut audio_stems: Vec<String> = Vec::new();
+    for ent in std::fs::read_dir(dir).ok()?.flatten() {
         let p = ent.path();
-        if p.extension()
-            .and_then(|s| s.to_str())
-            .map(|s| s.eq_ignore_ascii_case("json"))
-            .unwrap_or(false)
-        {
-            if let Ok(raw) = std::fs::read_to_string(&p) {
-                if let Some(m) = parse_sidecar(&raw) {
-                    return Some(m);
-                }
+        let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+        if ext.eq_ignore_ascii_case("json") {
+            jsons.push(p);
+        } else if matches!(ext.to_ascii_lowercase().as_str(), "m4b" | "m4a") {
+            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                audio_stems.push(stem.to_string());
             }
         }
     }
+    jsons.sort();
+    audio_stems.sort();
+
+    // 1. Exact-stem match for the named audio file.
+    if let Some(stem) = audio_stem {
+        if let Some(hit) = jsons.iter().find(|p| {
+            p.file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s == stem)
+                .unwrap_or(false)
+        }) {
+            if let Some(m) = try_parse(hit) {
+                return Some(m);
+            }
+        }
+    }
+
+    // 2. Stem-match against any sibling audio file.
+    if !audio_stems.is_empty() {
+        if let Some(hit) = jsons.iter().find(|p| {
+            p.file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| audio_stems.iter().any(|a| a == s))
+                .unwrap_or(false)
+        }) {
+            if let Some(m) = try_parse(hit) {
+                return Some(m);
+            }
+        }
+    }
+
+    // 3. Any json with a chapters array.
+    for p in &jsons {
+        if let Some(m) = try_parse(p) {
+            return Some(m);
+        }
+    }
     None
+}
+
+fn try_parse(p: &Path) -> Option<ChapterManifest> {
+    let raw = std::fs::read_to_string(p).ok()?;
+    parse_sidecar(&raw)
 }
 
 pub fn parse_sidecar(raw: &str) -> Option<ChapterManifest> {
