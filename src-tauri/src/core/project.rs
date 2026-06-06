@@ -1,0 +1,98 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
+use crate::core::identity::ProjectId;
+use crate::core::matcher::{MismatchCondition, MismatchResponse};
+use crate::ingest::{AudioSource, ChapterManifest, TextSource};
+
+pub const SCHEMA_V1: u32 = 1;
+
+fn schema_v1() -> u32 {
+    SCHEMA_V1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct ProjectSources {
+    pub text: TextSource,
+    #[serde(default)]
+    pub audio: Option<AudioSource>,
+    #[serde(default)]
+    pub chapter_manifest: Option<ChapterManifest>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct ProjectSettings {
+    pub language: String,
+    pub collection_title: String,
+    #[serde(default = "default_level")]
+    pub level: u8,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+fn default_level() -> u8 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct MatcherDecision {
+    pub condition: MismatchCondition,
+    pub response: MismatchResponse,
+    pub chapter_count: usize,
+    pub track_count: usize,
+    #[serde(default)]
+    pub user_overrode: bool,
+    pub decided_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct ChapterReceipt {
+    pub chapter_index: usize,
+    #[serde(default)]
+    pub track_index: Option<usize>,
+    #[serde(default)]
+    pub lesson_id: Option<i64>,
+    #[serde(default)]
+    pub degraded: bool,
+    #[serde(default)]
+    pub uploaded_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct Project {
+    #[serde(default = "schema_v1")]
+    pub schema_version: u32,
+    pub id: ProjectId,
+    pub sources: ProjectSources,
+    pub settings: ProjectSettings,
+    #[serde(default)]
+    pub receipts: Vec<ChapterReceipt>,
+    #[serde(default)]
+    pub queue_cursor: usize,
+    #[serde(default)]
+    pub completed_lesson_ids: Vec<i64>,
+    #[serde(default)]
+    pub matcher_decision: Option<MatcherDecision>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct ProjectSummary {
+    pub id: ProjectId,
+    pub title: String,
+    pub language: String,
+    pub receipt_count: usize,
+    pub completed_lesson_count: usize,
+}
+
+impl From<&Project> for ProjectSummary {
+    fn from(p: &Project) -> Self {
+        Self {
+            id: p.id.clone(),
+            title: p.settings.collection_title.clone(),
+            language: p.settings.language.clone(),
+            receipt_count: p.receipts.len(),
+            completed_lesson_count: p.completed_lesson_ids.len(),
+        }
+    }
+}

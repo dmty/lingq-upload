@@ -1,5 +1,5 @@
 mod commands;
-mod core;
+pub mod core;
 mod error;
 mod events;
 pub mod ingest;
