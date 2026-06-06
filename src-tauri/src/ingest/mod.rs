@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
+pub mod calibre;
+pub mod libation;
 pub mod manual;
 
+pub use calibre::CalibreLibrarySource;
+pub use libation::LibationFolderSource;
 pub use manual::ManualSource;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
@@ -23,6 +27,7 @@ pub struct SeriesRef {
 pub enum TextSource {
     Epub(PathBuf),
     LooseFiles { paths: Vec<PathBuf> },
+    Missing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
@@ -117,6 +122,8 @@ impl Default for IngestRegistry {
     fn default() -> Self {
         let mut registry = Self::new();
         registry.register(Box::new(ManualSource));
+        registry.register(Box::new(CalibreLibrarySource::default()));
+        registry.register(Box::new(LibationFolderSource::default()));
         registry
     }
 }
