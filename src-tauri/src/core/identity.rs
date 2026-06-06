@@ -3,6 +3,7 @@ use std::fmt::Write;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
+use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
@@ -23,6 +24,14 @@ pub struct ProjectId {
     pub calibre_uuid: Option<Uuid>,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum IdentityError {
+    #[error("invalid isbn13: {0}")]
+    InvalidIsbn13(String),
+    #[error("invalid asin: {0}")]
+    InvalidAsin(String),
+}
+
 impl ProjectId {
     pub fn from_title_author(title: &str, author: &str) -> Self {
         Self {
@@ -33,14 +42,37 @@ impl ProjectId {
         }
     }
 
+    /// Set Audible ASIN. Trims + uppercases; logs a warning when the
+    /// normalised value does not match `^B0[A-Z0-9]{8}$` but stores it
+    /// anyway (some legacy / regional catalogues issue off-shape IDs).
     pub fn with_asin(mut self, asin: impl Into<String>) -> Self {
-        self.audible_asin = Some(asin.into());
+        let raw = asin.into();
+        let normalised = raw.trim().to_ascii_uppercase();
+        if !is_well_formed_asin(&normalised) {
+            tracing::warn!(asin = %normalised, "asin does not match B0[A-Z0-9]{{8}}");
+        }
+        self.audible_asin = Some(normalised);
         self
     }
 
+    /// Set ISBN-13. Silently drops the value (with warning) if it is not
+    /// exactly 13 ASCII digits — invalid ISBNs in a join slot are worse than
+    /// no value at all. Use [`Self::try_with_isbn13`] for a fallible variant.
     pub fn with_isbn13(mut self, isbn13: impl Into<String>) -> Self {
-        self.isbn13 = Some(isbn13.into());
+        let raw = isbn13.into();
+        match validate_isbn13(&raw) {
+            Ok(clean) => self.isbn13 = Some(clean),
+            Err(_) => {
+                tracing::warn!(isbn13 = %raw, "isbn13 is not 13 ascii digits; dropping");
+            }
+        }
         self
+    }
+
+    pub fn try_with_isbn13(mut self, isbn13: impl Into<String>) -> Result<Self, IdentityError> {
+        let raw = isbn13.into();
+        self.isbn13 = Some(validate_isbn13(&raw)?);
+        Ok(self)
     }
 
     pub fn with_calibre_uuid(mut self, uuid: Uuid) -> Self {
@@ -62,9 +94,19 @@ impl ProjectId {
         format!("ch:{}", hex_encode(&self.content_hash))
     }
 
-    /// Any-of-many strong-key match. Falls back to `content_hash` equality.
-    /// `None` slots on either side are ignored.
+    /// Two IDs match when their `join_key()`s are equal, OR when any strong-key
+    /// slot present on both sides agrees, OR when the `content_hash` matches as
+    /// a last resort.
+    ///
+    /// This is intentionally "any-of-many": we accept the trade-off that
+    /// `matches` is not strictly transitive (A↔B by asin, B↔C by isbn does not
+    /// imply A↔C). `join_key()` precedence (asin > isbn13 > uuid) is the
+    /// single-key resolution used elsewhere; that key wins for grouping
+    /// purposes when multiple strong keys are present and disagree.
     pub fn matches(&self, other: &Self) -> bool {
+        if self.join_key() == other.join_key() {
+            return true;
+        }
         if let (Some(a), Some(b)) = (&self.audible_asin, &other.audible_asin) {
             if a == b {
                 return true;
@@ -81,6 +123,21 @@ impl ProjectId {
             }
         }
         self.content_hash == other.content_hash
+    }
+}
+
+fn is_well_formed_asin(s: &str) -> bool {
+    s.len() == 10
+        && s.starts_with("B0")
+        && s.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
+fn validate_isbn13(s: &str) -> Result<String, IdentityError> {
+    let cleaned: String = s.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+    if cleaned.len() == 13 && cleaned.bytes().all(|b| b.is_ascii_digit()) {
+        Ok(cleaned)
+    } else {
+        Err(IdentityError::InvalidIsbn13(s.to_string()))
     }
 }
 
@@ -121,7 +178,7 @@ mod hex_array_32 {
 
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
         let s = String::deserialize(d)?;
-        let raw = hex::decode(&s).map_err(D::Error::custom)?;
+        let raw = hex::decode(s.to_ascii_lowercase()).map_err(D::Error::custom)?;
         let arr: [u8; 32] = raw
             .try_into()
             .map_err(|v: Vec<u8>| D::Error::custom(format!("expected 32 bytes, got {}", v.len())))?;

@@ -1,4 +1,4 @@
-use lingq_upload_lib::core::identity::{content_hash, ProjectId};
+use lingq_upload_lib::core::identity::{content_hash, IdentityError, ProjectId};
 use uuid::Uuid;
 
 #[test]
@@ -85,6 +85,82 @@ fn join_key_fallback_to_content_hash() {
     let key = id.join_key();
     assert!(key.starts_with("ch:"));
     assert_eq!(key.len(), 3 + 64);
+}
+
+#[test]
+fn matches_same_asin_different_titles() {
+    let a = ProjectId::from_title_author("Kafka on the Shore", "Murakami")
+        .with_asin("B0ABCDEFGH");
+    let b = ProjectId::from_title_author("totally different", "different person")
+        .with_asin("B0ABCDEFGH");
+    assert!(a.matches(&b));
+}
+
+#[test]
+fn matches_when_asin_agrees_even_if_isbn_differs() {
+    // join_key resolution: asin wins; both sides share the same asin so they
+    // still match, even though the isbn slots disagree.
+    let a = ProjectId::from_title_author("X", "Y")
+        .with_asin("B0ABCDEFGH")
+        .with_isbn13("9780000000001");
+    let b = ProjectId::from_title_author("Q", "R")
+        .with_asin("B0ABCDEFGH")
+        .with_isbn13("9780000000002");
+    assert!(a.matches(&b));
+}
+
+#[test]
+fn matches_only_one_strong_key_each_side_falls_back_to_hash() {
+    // a has only asin; b has only isbn; titles differ → no match.
+    let a = ProjectId::from_title_author("X", "Y").with_asin("B0AAAAAAAA");
+    let b = ProjectId::from_title_author("Q", "R").with_isbn13("9780000000001");
+    assert!(!a.matches(&b));
+
+    // Same a, same title/author on b but with isbn → hash matches.
+    let c = ProjectId::from_title_author("X", "Y").with_isbn13("9780000000001");
+    assert!(a.matches(&c));
+}
+
+#[test]
+fn with_isbn13_drops_invalid_silently() {
+    let id = ProjectId::from_title_author("X", "Y").with_isbn13("not-an-isbn");
+    assert!(id.isbn13.is_none());
+}
+
+#[test]
+fn with_isbn13_strips_hyphens_and_whitespace() {
+    let id = ProjectId::from_title_author("X", "Y").with_isbn13("978-4-10-100101-2");
+    assert_eq!(id.isbn13.as_deref(), Some("9784101001012"));
+}
+
+#[test]
+fn with_isbn13_rejects_x_check_digit() {
+    // X is ISBN-10 only.
+    let id = ProjectId::from_title_author("X", "Y").with_isbn13("978410100101X");
+    assert!(id.isbn13.is_none());
+}
+
+#[test]
+fn try_with_isbn13_returns_err_on_invalid() {
+    let r = ProjectId::from_title_author("X", "Y").try_with_isbn13("nope");
+    assert_eq!(r.unwrap_err(), IdentityError::InvalidIsbn13("nope".into()));
+}
+
+#[test]
+fn with_asin_normalises_case_and_whitespace() {
+    let id = ProjectId::from_title_author("X", "Y").with_asin("  b0abcdefgh  ");
+    assert_eq!(id.audible_asin.as_deref(), Some("B0ABCDEFGH"));
+}
+
+#[test]
+fn content_hash_hex_decode_accepts_mixed_case() {
+    let id = ProjectId::from_title_author("X", "Y");
+    let mut json = serde_json::to_value(&id).unwrap();
+    // Force the hex string to uppercase to exercise the case-insensitive decoder.
+    let upper = json["content_hash"].as_str().unwrap().to_ascii_uppercase();
+    json["content_hash"] = serde_json::Value::String(upper);
+    let back: ProjectId = serde_json::from_value(json).unwrap();
+    assert_eq!(back, id);
 }
 
 #[test]
