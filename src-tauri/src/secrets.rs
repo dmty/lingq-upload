@@ -2,9 +2,9 @@ use serde::Serialize;
 use specta::Type;
 use thiserror::Error;
 
-// Match tauri.conf.json bundle identifier so macOS displays the app's real
-// identity in the keychain prompt instead of a stale namespace.
-const SERVICE: &str = "com.lingq.upload";
+// Sourced from tauri.conf.json at build time (see build.rs) so the keychain
+// prompt always shows the app's real bundle identity.
+const SERVICE: &str = env!("LINGQ_BUNDLE_ID");
 const ACCOUNT: &str = "lingq_api_key";
 
 /// Errors raised by the secrets layer, lifted from the keyring backend.
