@@ -37,11 +37,18 @@
 
   let languages = $state<Language[]>([]);
   let languagesError = $state<string | null>(null);
+  let showAllLanguages = $state(false);
   let collections = $state<Collection[]>([]);
   let collectionsError = $state<string | null>(null);
   let loadingCollections = $state(false);
 
   let unlisten: UnlistenFn | undefined;
+
+  const visibleLanguages = $derived(
+    showAllLanguages
+      ? languages
+      : languages.filter((l) => l.known_words > 0),
+  );
 
   const collectionId = $derived(Number.parseInt(collectionIdRaw, 10));
   const canSubmit = $derived(
@@ -300,16 +307,23 @@
       <select
         bind:value={lang}
         onchange={onLanguageChange}
-        disabled={busy || languages.length === 0}
+        disabled={busy || visibleLanguages.length === 0}
       >
         <option value="" disabled>
           {languagesError ? "Could not load languages" : "Select language…"}
         </option>
-        {#each languages as l (l.code)}
+        {#each visibleLanguages as l (l.code)}
           <option value={l.code}>{formatLanguageOption(l)}</option>
         {/each}
       </select>
-      {#if languagesError}<span class="hint err">{languagesError}</span>{/if}
+      {#if languagesError}
+        <span class="hint err">{languagesError}</span>
+      {:else if languages.length > 0}
+        <label class="toggle">
+          <input type="checkbox" bind:checked={showAllLanguages} />
+          Show all LingQ languages
+        </label>
+      {/if}
     </label>
 
     <label>
@@ -469,6 +483,20 @@
 
   .hint.err {
     color: #c00;
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    color: #555;
+    cursor: pointer;
+  }
+
+  .toggle input {
+    width: auto;
   }
 
   .picker-row {
