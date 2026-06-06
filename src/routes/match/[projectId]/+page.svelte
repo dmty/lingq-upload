@@ -37,7 +37,7 @@
       goto("/library");
       return;
     }
-    const projectKey = page.params.projectId;
+    const projectKey = page.params.projectId ?? "";
     const loaded = await commands.cmdProjectLoad(projectKey);
     if (loaded.status === "error") {
       error = appErrorMessage(loaded.error);
