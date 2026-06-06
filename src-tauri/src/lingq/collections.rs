@@ -15,13 +15,15 @@ use super::lessons::title_hash;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct CollectionId(pub i64);
 
+type LockKey = (String, [u8; 32]);
+type LockMap = Mutex<HashMap<LockKey, Arc<AsyncMutex<()>>>>;
+
 /// In-process serialiser for `find_or_create_collection` keyed by `(lang, title_hash)`.
 /// Prevents two concurrent calls within the same process from both POSTing when the
 /// server has no existing match. Does NOT protect across multiple app instances —
 /// that case relies on the post-POST re-search fallback below + server-side dedupe.
-fn create_locks() -> &'static Mutex<HashMap<(String, [u8; 32]), Arc<AsyncMutex<()>>>> {
-    static LOCKS: OnceLock<Mutex<HashMap<(String, [u8; 32]), Arc<AsyncMutex<()>>>>> =
-        OnceLock::new();
+fn create_locks() -> &'static LockMap {
+    static LOCKS: OnceLock<LockMap> = OnceLock::new();
     LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
