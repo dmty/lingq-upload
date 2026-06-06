@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     commands,
     type AudioSource,
@@ -8,7 +11,7 @@
     type TextSource,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
-  import { basename, filenameStem } from "$lib/paths";
+  import { extOf, filenameStem } from "$lib/paths";
   import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
 
@@ -21,7 +24,90 @@
   let title = $state("");
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let hovered = $state(false);
+
+  let textDropEl = $state<HTMLButtonElement | null>(null);
+  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let hoverZone = $state<"text" | "audio" | null>(null);
+  let unlistenDrop: UnlistenFn | undefined;
+
+  const TEXT_EXTS = ["epub", "xhtml", "html", "htm", "txt"];
+  const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
+
+  function zoneForExt(ext: string): "text" | "audio" | null {
+    if (TEXT_EXTS.includes(ext)) return "text";
+    if (AUDIO_EXTS.includes(ext)) return "audio";
+    return null;
+  }
+
+  function hitTestZone(
+    clientX: number,
+    clientY: number,
+  ): "text" | "audio" | null {
+    const inRect = (el: HTMLElement | null) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      );
+    };
+    if (inRect(textDropEl)) return "text";
+    if (inRect(audioDropEl)) return "audio";
+    return null;
+  }
+
+  function assignToZone(zone: "text" | "audio", paths: string[]) {
+    const matching = paths.find((p) => zoneForExt(extOf(p)) === zone);
+    const path = matching ?? paths[0];
+    if (!path) return;
+    if (zone === "text") {
+      textPath = path;
+      if (!title) title = filenameStem(path);
+    } else {
+      audioPath = path;
+    }
+  }
+
+  function assignDropped(paths: string[]) {
+    if (!paths.length) return;
+    let textCandidate: string | null = null;
+    let audioCandidate: string | null = null;
+    for (const p of paths) {
+      const z = zoneForExt(extOf(p));
+      if (z === "text" && !textCandidate) textCandidate = p;
+      else if (z === "audio" && !audioCandidate) audioCandidate = p;
+    }
+    if (textCandidate) {
+      textPath = textCandidate;
+      if (!title) title = filenameStem(textCandidate);
+    }
+    if (audioCandidate) audioPath = audioCandidate;
+  }
+
+  onMount(() => {
+    (async () => {
+      unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+        if (busy) return;
+        const p = event.payload;
+        const dpr = window.devicePixelRatio || 1;
+        if (p.type === "over") {
+          hoverZone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+        } else if (p.type === "leave") {
+          hoverZone = null;
+        } else if (p.type === "drop") {
+          const zone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+          if (zone) assignToZone(zone, p.paths);
+          else assignDropped(p.paths);
+          hoverZone = null;
+        }
+      });
+    })();
+    return () => {
+      unlistenDrop?.();
+    };
+  });
 
   const canCreate = $derived(
     !!textPath && !!audioPath && !!lang.trim() && !!title.trim() && !busy,
@@ -103,8 +189,8 @@
       class="rounded-sm border border-border bg-surface-sunken p-4 text-sm text-fg-muted"
     >
       {source === "calibre" ? "Calibre" : "Libation"} library auto-discovery is staged
-      in the backend (see <code>core::library::reconcile</code>). UI picker for it
-      ships next sprint — use Manual for now.
+      in the backend (see <code>core::library::reconcile</code>). UI picker for
+      it ships next sprint — use Manual for now.
     </p>
   {/if}
 
@@ -115,10 +201,11 @@
     <DropZone
       variant="text"
       path={textPath}
-      {hovered}
+      hovered={hoverZone === "text"}
       disabled={busy}
       onPick={pickText}
       onClear={() => (textPath = "")}
+      ref={(el) => (textDropEl = el)}
     />
   </fieldset>
 
@@ -129,10 +216,11 @@
     <DropZone
       variant="audio"
       path={audioPath}
-      {hovered}
+      hovered={hoverZone === "audio"}
       disabled={busy}
       onPick={pickAudio}
       onClear={() => (audioPath = "")}
+      ref={(el) => (audioDropEl = el)}
     />
   </fieldset>
 
