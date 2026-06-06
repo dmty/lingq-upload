@@ -3,8 +3,7 @@
 
 use std::io::Write;
 
-#[path = "../src/core/text.rs"]
-mod text;
+use lingq_upload_lib::core::text;
 
 fn write_tmp(name: &str, bytes: &[u8]) -> tempfile::NamedTempFile {
     let mut f = tempfile::Builder::new()
