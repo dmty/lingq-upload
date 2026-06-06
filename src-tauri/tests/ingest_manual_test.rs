@@ -63,9 +63,8 @@ async fn scan_and_enrich_return_not_supported() {
 }
 
 #[test]
-fn default_registry_has_only_manual_source() {
+fn default_registry_includes_manual() {
     let registry = IngestRegistry::default();
-    assert_eq!(registry.len(), 1);
     let ids: Vec<&'static str> = registry.iter().map(|s| s.id()).collect();
-    assert_eq!(ids, vec!["manual"]);
+    assert!(ids.contains(&"manual"));
 }

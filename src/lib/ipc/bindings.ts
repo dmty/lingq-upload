@@ -130,7 +130,7 @@ export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | 
 export type SeriesRef = { name: string; index: number | null }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
 export type TextError = { kind: "Io"; message: string }
-export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } }
+export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
 export type UploadResult = { lesson_id: number; lesson_url: string }
 export type WhoAmI = { ok: boolean }
 
