@@ -91,7 +91,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            use std::sync::Arc;
+            use tauri::Manager;
             register_bundled_audio_binaries(app);
+            let root = app
+                .path()
+                .app_data_dir()
+                .expect("app_data_dir resolves at startup");
+            let store: Arc<dyn core::store::ProjectStore> =
+                Arc::new(core::store::JsonProjectStore::new(root));
+            app.manage(store);
             builder.mount_events(app);
             Ok(())
         })
