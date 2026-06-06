@@ -87,25 +87,43 @@
     if (audioCandidate) audioPath = audioCandidate;
   }
 
+  // Tauri 2's drag-drop event reports CSS pixels on macOS but physical pixels
+  // on Windows/Linux. Try the raw coord first; if nothing hits and the device
+  // pixel ratio is non-unity, retry divided by dpr. Works on both platforms
+  // without sniffing the user agent.
+  function resolveZone(x: number, y: number): "text" | "audio" | null {
+    const direct = hitTestZone(x, y);
+    if (direct) return direct;
+    const dpr = window.devicePixelRatio || 1;
+    if (dpr !== 1) return hitTestZone(x / dpr, y / dpr);
+    return null;
+  }
+
   onMount(() => {
+    let disposed = false;
     (async () => {
-      unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+      const off = await getCurrentWebview().onDragDropEvent((event) => {
         if (busy) return;
         const p = event.payload;
-        const dpr = window.devicePixelRatio || 1;
         if (p.type === "over") {
-          hoverZone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+          hoverZone = resolveZone(p.position.x, p.position.y);
         } else if (p.type === "leave") {
           hoverZone = null;
         } else if (p.type === "drop") {
-          const zone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+          const zone = resolveZone(p.position.x, p.position.y);
           if (zone) assignToZone(zone, p.paths);
           else assignDropped(p.paths);
           hoverZone = null;
         }
       });
+      if (disposed) {
+        off();
+        return;
+      }
+      unlistenDrop = off;
     })();
     return () => {
+      disposed = true;
       unlistenDrop?.();
     };
   });
