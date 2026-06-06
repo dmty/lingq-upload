@@ -43,6 +43,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 quick-xml = { version = "0.36", features = ["serialize"] }
 async-trait = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+percent-encoding = "2"
+tokio-util = { version = "0.7", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
