@@ -5,6 +5,9 @@ pub use mismatch::{allowed, classify, MismatchCondition, MismatchResponse};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::core::audio::AudioTrack;
+use crate::core::epub::Chapter;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MatchOutcome {
@@ -18,11 +21,13 @@ pub enum MatchOutcome {
     },
 }
 
-/// Auto-match by index when counts are equal. Otherwise classifies the
-/// mismatch and returns the allowed response set.
-///
-/// Sprint 2 matcher is count-based only. Heading/track-title fuzzy match
-/// is deferred; manual mapping editor lands later.
+/// Pair chapters ↔ tracks. Sprint 2 is count-based only: equal counts pair
+/// by index; otherwise classify the mismatch and return the allowed response set.
+/// Manual mapping editor is deferred.
+pub fn auto_match(chapters: &[Chapter], tracks: &[AudioTrack]) -> MatchOutcome {
+    auto_match_counts(chapters.len(), tracks.len())
+}
+
 pub fn auto_match_counts(chapters: usize, tracks: usize) -> MatchOutcome {
     match classify(chapters, tracks) {
         None => {
