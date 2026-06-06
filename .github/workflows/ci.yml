@@ -1,0 +1,179 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system deps
+        if: runner.os == 'Linux'
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg
+          version: 1.0
+
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: bun install
+        run: bun install --frozen-lockfile
+
+      - name: bun run check
+        run: bun run check
+
+      - name: bun run build (frontend smoke)
+        run: bun run build
+
+      - name: cargo build (locked)
+        working-directory: src-tauri
+        run: cargo build --locked
+
+      - name: cargo test (locked)
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --locked -- -D warnings
+
+      - name: bindings.ts drift check
+        if: runner.os == 'Linux'
+        run: |
+          git diff --exit-code src/lib/ipc/bindings.ts \
+            || (echo "bindings.ts drifted from Rust signatures — rebuild and commit" && exit 1)
+
+      - name: bun tauri build --debug (smoke)
+        if: runner.os == 'Linux'
+        run: bun tauri build --debug
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system deps
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg
+          version: 1.0
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: cargo llvm-cov
+        working-directory: src-tauri
+        run: cargo llvm-cov --locked --lcov --output-path lcov.info
+
+      - name: Upload lcov artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: src-tauri/lcov.info
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: src-tauri/Cargo.toml
+
+  unwrap-grep:
+    name: unwrap-grep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disallow unwrap() outside #[cfg(test)]
+        shell: bash
+        run: |
+          set -eu
+          violations=0
+          while IFS= read -r f; do
+            stripped=$(awk '
+              BEGIN { skip=0; depth=0; pending=0 }
+              /#\[cfg\(test\)\]/ { pending=1; next }
+              pending && /^[[:space:]]*mod[[:space:]]/ {
+                pending=0; skip=1; depth=0
+                for (i=1;i<=length($0);i++) { c=substr($0,i,1); if(c=="{") depth++; else if(c=="}") depth-- }
+                next
+              }
+              pending { pending=0 }
+              {
+                if (skip) {
+                  for (i=1;i<=length($0);i++) { c=substr($0,i,1); if(c=="{") depth++; else if(c=="}") depth-- }
+                  if (depth<=0) skip=0
+                  next
+                }
+                print
+              }
+            ' "$f")
+            if printf "%s" "$stripped" | grep -nE "\.unwrap\(\)" >/dev/null; then
+              echo "::error file=$f::contains .unwrap() outside #[cfg(test)]"
+              printf "%s" "$stripped" | grep -nE "\.unwrap\(\)" | sed "s|^|$f: |"
+              violations=$((violations+1))
+            fi
+          done < <(find src-tauri/src -type f -name '*.rs')
+          if [ "$violations" -gt 0 ]; then
+            echo "Found $violations file(s) with disallowed .unwrap()."
+            exit 1
+          fi
