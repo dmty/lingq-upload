@@ -79,6 +79,38 @@ async fn import_lesson_v2_retries_on_5xx_then_succeeds() {
 }
 
 #[tokio::test]
+async fn import_lesson_v2_exhausts_three_attempts_on_5xx() {
+    let mut server = Server::new_async().await;
+    let _fail = server
+        .mock("POST", "/api/v3/ja/lessons/import/")
+        .with_status(503)
+        .expect(3)
+        .create_async()
+        .await;
+    let client = LingqClient::with_base_url(
+        SecretString::new("k".into()),
+        "en",
+        server.url(),
+    );
+    let req = ImportLessonRequest {
+        collection: CollectionId(1),
+        title: "Chapter",
+        text: "hi",
+        audio: None,
+        language: "ja",
+        level: 1,
+        status: LessonStatus::Private,
+        tags: &[],
+        save: true,
+    };
+    let err = client.import_lesson_v2(req).await.unwrap_err();
+    assert!(
+        matches!(err, lingq_upload_lib::lingq::LingqError::Server(_)),
+        "got {err:?}"
+    );
+}
+
+#[tokio::test]
 async fn import_lesson_v2_4xx_fails_fast() {
     let mut server = Server::new_async().await;
     let _m = server
