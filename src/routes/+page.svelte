@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
   import {
     commands,
     type AppError,
@@ -44,11 +45,75 @@
   let loadingCollections = $state(false);
 
   let unlisten: UnlistenFn | undefined;
+  let unlistenDrop: UnlistenFn | undefined;
+
+  let textDropEl = $state<HTMLButtonElement | null>(null);
+  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let hoverZone = $state<"text" | "audio" | null>(null);
+
+  const TEXT_EXTS = ["xhtml", "html", "htm", "txt"];
+  const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
+
+  function extOf(path: string): string {
+    const dot = path.lastIndexOf(".");
+    return dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
+  }
+
+  function zoneForExt(ext: string): "text" | "audio" | null {
+    if (TEXT_EXTS.includes(ext)) return "text";
+    if (AUDIO_EXTS.includes(ext)) return "audio";
+    return null;
+  }
+
+  function hitTestZone(
+    clientX: number,
+    clientY: number,
+  ): "text" | "audio" | null {
+    const inRect = (el: HTMLElement | null) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      );
+    };
+    if (inRect(textDropEl)) return "text";
+    if (inRect(audioDropEl)) return "audio";
+    return null;
+  }
+
+  function assignDropped(paths: string[]) {
+    if (!paths.length) return;
+    let textCandidate: string | null = null;
+    let audioCandidate: string | null = null;
+    for (const p of paths) {
+      const z = zoneForExt(extOf(p));
+      if (z === "text" && !textCandidate) textCandidate = p;
+      else if (z === "audio" && !audioCandidate) audioCandidate = p;
+    }
+    if (textCandidate) textPath = textCandidate;
+    if (audioCandidate) {
+      audioPath = audioCandidate;
+      if (!titleEdited) title = filenameStem(audioCandidate);
+    }
+  }
+
+  function assignToZone(zone: "text" | "audio", paths: string[]) {
+    const matching = paths.find((p) => zoneForExt(extOf(p)) === zone);
+    const path = matching ?? paths[0];
+    if (!path) return;
+    if (zone === "text") {
+      textPath = path;
+    } else {
+      audioPath = path;
+      if (!titleEdited) title = filenameStem(path);
+    }
+  }
 
   const visibleLanguages = $derived(
-    showAllLanguages
-      ? languages
-      : languages.filter((l) => l.known_words > 0),
+    showAllLanguages ? languages : languages.filter((l) => l.known_words > 0),
   );
 
   const collectionId = $derived(Number.parseInt(collectionIdRaw, 10));
@@ -264,10 +329,26 @@
       unlisten = await listen<JobEvent>("job", (event) => {
         handleJobEvent(event.payload);
       });
+      unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+        if (busy) return;
+        const p = event.payload;
+        const dpr = window.devicePixelRatio || 1;
+        if (p.type === "over") {
+          hoverZone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+        } else if (p.type === "leave") {
+          hoverZone = null;
+        } else if (p.type === "drop") {
+          const zone = hitTestZone(p.position.x / dpr, p.position.y / dpr);
+          if (zone) assignToZone(zone, p.paths);
+          else assignDropped(p.paths);
+          hoverZone = null;
+        }
+      });
       await loadLanguages();
     })();
     return () => {
       unlisten?.();
+      unlistenDrop?.();
     };
   });
 
@@ -542,11 +623,15 @@
         <div class="mt-4 grid gap-3">
           <button
             type="button"
+            bind:this={textDropEl}
             onclick={() => pick("text")}
             disabled={busy}
-            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {textPath
-              ? 'border-success bg-success-soft'
-              : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hoverZone ===
+            'text'
+              ? 'border-accent bg-accent-soft'
+              : textPath
+                ? 'border-success bg-success-soft'
+                : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
           >
             <svg
               width="22"
@@ -560,7 +645,9 @@
               class={textPath ? "text-success" : "text-fg-muted"}
               aria-hidden="true"
             >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
               <polyline points="14 2 14 8 20 8" />
               <line x1="9" y1="14" x2="15" y2="14" />
               <line x1="9" y1="18" x2="13" y2="18" />
@@ -570,7 +657,9 @@
                 <div class="text-sm font-medium text-fg">
                   {shortPath(textPath)}
                 </div>
-                <div class="text-xs text-fg-subtle">Click to choose a different file</div>
+                <div class="text-xs text-fg-subtle">
+                  Click to choose a different file
+                </div>
               {:else}
                 <div class="text-sm font-medium text-fg">
                   Drop chapter text or click to choose
@@ -603,11 +692,15 @@
 
           <button
             type="button"
+            bind:this={audioDropEl}
             onclick={() => pick("audio")}
             disabled={busy}
-            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {audioPath
-              ? 'border-success bg-success-soft'
-              : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hoverZone ===
+            'audio'
+              ? 'border-accent bg-accent-soft'
+              : audioPath
+                ? 'border-success bg-success-soft'
+                : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
           >
             <svg
               width="22"
@@ -630,7 +723,9 @@
                 <div class="text-sm font-medium text-fg">
                   {shortPath(audioPath)}
                 </div>
-                <div class="text-xs text-fg-subtle">Click to choose a different file</div>
+                <div class="text-xs text-fg-subtle">
+                  Click to choose a different file
+                </div>
               {:else}
                 <div class="text-sm font-medium text-fg">
                   Drop audio or click to choose
