@@ -92,9 +92,7 @@ pub async fn reconcile(
 
     report.merged.sort_by_key(|id| id.join_key());
     report.created.sort_by_key(|id| id.join_key());
-    report
-        .conflicts
-        .sort_by(|a, b| a.0.join_key().cmp(&b.0.join_key()));
+    report.conflicts.sort_by_key(|a| a.0.join_key());
 
     let idx = LibraryIndex {
         schema_version: INDEX_SCHEMA_V1,
@@ -145,7 +143,7 @@ fn nearest_existing(
     let mut best: Option<(&crate::core::project::ProjectSummary, f32)> = None;
     for s in existing {
         let r = title_similarity(title, &s.title);
-        if r >= FUZZY_CONFLICT_THRESHOLD && best.map_or(true, |(_, br)| r > br) {
+        if r >= FUZZY_CONFLICT_THRESHOLD && best.is_none_or(|(_, br)| r > br) {
             best = Some((s, r));
         }
     }
