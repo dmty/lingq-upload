@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use lingq_upload_lib::core::identity::ProjectId;
+use lingq_upload_lib::core::matcher::{MismatchCondition, MismatchResponse};
 use lingq_upload_lib::core::project::{
-    ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
+    ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
 use lingq_upload_lib::core::queue::Queue;
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
@@ -102,4 +103,43 @@ fn rebuild_pending_re_enqueues_unfinished_projects() {
     assert_eq!(added, 1, "only the half-done project re-enqueues");
     let cur = q.current().unwrap();
     assert_eq!(cur.project_id, pending.id);
+}
+
+#[test]
+fn rebuild_pending_re_enqueues_decided_but_unstarted_projects() {
+    let store_arc: Arc<dyn ProjectStore> = Arc::new(InMemoryProjectStore::new());
+
+    let mut decided = project("Decided", vec![]);
+    decided.matcher_decision = Some(MatcherDecision {
+        condition: MismatchCondition::CountOff,
+        response: MismatchResponse::PairAccept,
+        chapter_count: 5,
+        track_count: 6,
+        user_overrode: false,
+        decided_at: Utc::now(),
+    });
+    let untouched = project("Untouched", vec![]);
+
+    store_arc.put(&decided).unwrap();
+    store_arc.put(&untouched).unwrap();
+
+    let q = Queue::new(Arc::clone(&store_arc));
+    let added = q.rebuild_pending().unwrap();
+    assert_eq!(added, 1, "only the decided-but-unstarted project re-enqueues");
+    let cur = q.current().unwrap();
+    assert_eq!(cur.project_id, decided.id);
+}
+
+#[test]
+fn rebuild_pending_re_enqueues_cursor_lag() {
+    let store_arc: Arc<dyn ProjectStore> = Arc::new(InMemoryProjectStore::new());
+
+    let mut lagging = project("Lagging", vec![done_receipt(0), done_receipt(1)]);
+    lagging.queue_cursor = 1; // cursor hasn't advanced past second receipt
+
+    store_arc.put(&lagging).unwrap();
+
+    let q = Queue::new(Arc::clone(&store_arc));
+    let added = q.rebuild_pending().unwrap();
+    assert_eq!(added, 1, "cursor lag re-enqueues even when all receipts have lesson_ids");
 }

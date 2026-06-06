@@ -71,19 +71,23 @@ impl Queue {
         self.inner.lock().unwrap().is_empty()
     }
 
-    /// Scan the store for projects whose `queue_cursor < receipts.len()`
-    /// (i.e. work not yet finished) and re-enqueue them in title order.
+    /// Scan the store for projects with outstanding work and re-enqueue
+    /// them in title order. A project counts as pending when:
+    /// - any receipt is missing a `lesson_id` (started but not uploaded), OR
+    /// - `queue_cursor` lags behind `receipts.len()` (cursor not advanced), OR
+    /// - the project has a `matcher_decision` recorded but no receipts and
+    ///   no completed lessons yet (decided but never started).
     pub fn rebuild_pending(&self) -> Result<usize, StoreError> {
         let summaries = self.store.list()?;
         let mut added = 0;
         for s in summaries {
             if let Some(p) = self.store.get(&s.id)? {
-                // A project has pending work if any receipt lacks a lesson_id.
-                let pending = p
-                    .receipts
-                    .iter()
-                    .any(|r| r.lesson_id.is_none());
-                if pending {
+                let any_unposted = p.receipts.iter().any(|r| r.lesson_id.is_none());
+                let cursor_lag = p.queue_cursor < p.receipts.len();
+                let decided_but_unstarted = p.receipts.is_empty()
+                    && p.completed_lesson_ids.is_empty()
+                    && p.matcher_decision.is_some();
+                if any_unposted || cursor_lag || decided_but_unstarted {
                     self.push(p.id);
                     added += 1;
                 }
