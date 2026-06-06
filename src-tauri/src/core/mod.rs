@@ -1,5 +1,7 @@
 pub mod audio;
+pub mod epub;
 pub mod identity;
+pub mod lesson;
 pub mod library;
 pub mod matcher;
 pub mod project;

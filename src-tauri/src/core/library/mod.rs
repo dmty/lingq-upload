@@ -1,5 +1,5 @@
-/// Reconciliation across multiple IngestSources scanning the same library. Lands when CalibreLibrarySource + LibationFolderSource exist.
-#[allow(dead_code)]
-pub fn reconcile() {
-    todo!()
-}
+pub mod index;
+pub mod reconcile;
+
+pub use index::{load_or_rebuild, write_atomic, LibraryEntry, LibraryError, LibraryIndex};
+pub use reconcile::{reconcile, ReconcileReport};

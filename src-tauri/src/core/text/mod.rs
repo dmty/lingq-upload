@@ -5,6 +5,10 @@ use specta::Type;
 use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 
+pub mod ruby;
+
+pub use ruby::strip_ruby;
+
 #[derive(Error, Debug, Serialize, Deserialize, Type, Clone)]
 #[serde(tag = "kind", content = "message")]
 #[allow(dead_code)]
