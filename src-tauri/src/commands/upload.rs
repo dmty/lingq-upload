@@ -30,32 +30,16 @@ pub async fn upload_one_shot(
     let job_id = Uuid::new_v4();
     let mut job = JobEmitter::new(&app, job_id);
 
-    let text_path = match &candidate.text_source {
-        TextSource::Epub(p) => p.clone(),
-        TextSource::LooseFiles { .. } => {
-            return Err(AppError::Unsupported(
-                "LooseFiles text source not supported in one-shot upload".into(),
-            ));
-        }
+    let TextSource::Epub(text_path) = candidate.text_source.clone() else {
+        return Err(AppError::Unsupported(
+            "one-shot upload requires an EPUB-derived text source".into(),
+        ));
     };
 
-    let audio_path = match candidate.audio_source.as_ref() {
-        Some(AudioSource::SingleFile(p)) => p.clone(),
-        Some(AudioSource::Folder(_)) => {
-            return Err(AppError::Unsupported(
-                "folder audio source not supported in one-shot upload".into(),
-            ));
-        }
-        Some(AudioSource::LibationManifest(_)) => {
-            return Err(AppError::Unsupported(
-                "libation manifest audio source not supported in one-shot upload".into(),
-            ));
-        }
-        None => {
-            return Err(AppError::Unsupported(
-                "candidate has no audio_source".into(),
-            ));
-        }
+    let Some(AudioSource::SingleFile(audio_path)) = candidate.audio_source.clone() else {
+        return Err(AppError::Unsupported(
+            "one-shot upload requires a single audio file".into(),
+        ));
     };
 
     let store = SecretsStore::new(Box::new(RealKeyring::new()));
