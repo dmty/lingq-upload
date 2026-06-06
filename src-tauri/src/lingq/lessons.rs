@@ -16,6 +16,16 @@ pub struct LessonSummary {
 
 impl LingqClient {
     /// Paginate `/api/v3/{lang}/collections/{cid}/lessons/` and collect summaries.
+    ///
+    /// Handles both response shapes the LingQ API has returned across versions:
+    /// * DRF-style `{results: [...], next: "..."|null}` — paginate until `next`
+    ///   becomes null/absent.
+    /// * Bare JSON array `[...]` — no envelope; paginate via `page=N` until an
+    ///   empty page comes back.
+    ///
+    /// Shape is detected on each response, not assumed up-front: the envelope
+    /// flavour is the trigger to stop on `next == null`; the bare-array flavour
+    /// stops on empty page. Either way `page=N` is incremented in lockstep.
     pub async fn list_lessons(
         &self,
         cid: CollectionId,
@@ -43,12 +53,15 @@ impl LingqClient {
                         .json()
                         .await
                         .map_err(|e| LingqError::Transport(e.to_string()))?;
-                    let results = body
-                        .get("results")
-                        .and_then(|v| v.as_array())
-                        .cloned()
-                        .or_else(|| body.as_array().cloned())
-                        .unwrap_or_default();
+                    let is_bare_array = body.is_array();
+                    let results = if is_bare_array {
+                        body.as_array().cloned().unwrap_or_default()
+                    } else {
+                        body.get("results")
+                            .and_then(|v| v.as_array())
+                            .cloned()
+                            .unwrap_or_default()
+                    };
                     if results.is_empty() {
                         break;
                     }
@@ -65,7 +78,11 @@ impl LingqClient {
                             out.push(LessonSummary { id, title });
                         }
                     }
-                    if body.get("next").map(|v| v.is_null()).unwrap_or(true) {
+                    // Envelope shape: trust `next`. Bare array: keep going until
+                    // an empty page comes back.
+                    if !is_bare_array
+                        && body.get("next").map(|v| v.is_null()).unwrap_or(true)
+                    {
                         break;
                     }
                     page += 1;
@@ -90,11 +107,16 @@ impl LingqClient {
     }
 }
 
-/// SHA-256 of NFC-normalised, lower-cased, full→half-width folded title.
+/// SHA-256 over the normalised title.
+///
+/// Pipeline: full→half-width fold → NFC → whitespace-run collapse → lowercase.
+/// Matches `core::identity::normalise` so titles compared across the two layers
+/// land on the same key — e.g. `"Chapter  1"` and `"Chapter 1"` hash equal.
 pub fn title_hash(title: &str) -> [u8; 32] {
     let folded = fold_half_width(title);
     let nfc: String = folded.nfc().collect();
-    let lower = nfc.to_lowercase();
+    let collapsed = nfc.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = collapsed.to_lowercase();
     let mut h = Sha256::new();
     h.update(lower.as_bytes());
     h.finalize().into()
@@ -139,6 +161,15 @@ mod tests {
         let a = title_hash("Chapter1");
         let b = title_hash("Ｃｈａｐｔｅｒ１");
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn title_hash_collapses_whitespace_runs() {
+        let a = title_hash("Chapter 1");
+        let b = title_hash("Chapter  1");
+        let c = title_hash("  Chapter\t1\n");
+        assert_eq!(a, b);
+        assert_eq!(a, c);
     }
 
     #[test]
