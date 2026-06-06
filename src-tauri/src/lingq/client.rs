@@ -34,6 +34,19 @@ pub struct WhoAmI {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct Language {
+    pub code: String,
+    pub title: String,
+    pub known_words: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct Collection {
+    pub id: i64,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LessonOpts {
     pub level: String,
     pub status: String,
@@ -76,6 +89,61 @@ impl LingqClient {
 
     fn auth_header(&self) -> String {
         format!("Token {}", self.api_key.expose_secret())
+    }
+
+    pub async fn list_my_languages(&self) -> Result<Vec<Language>, LingqError> {
+        // /api/v2/languages/ is one of two surviving v2 endpoints — it returns the
+        // catalogue plus the caller's known-word counts. Not lang-scoped.
+        let url = format!("{}/api/v2/languages/", self.base_url);
+        tracing::debug!("lingq list_my_languages");
+
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| LingqError::Transport(e.to_string()))?;
+
+        let status = resp.status();
+        tracing::debug!(status = %status, "lingq list_my_languages response");
+
+        match status {
+            s if s.is_success() => parse_languages(resp).await,
+            StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
+            StatusCode::NOT_FOUND => Err(LingqError::NotFound),
+            s if s.is_client_error() => Err(LingqError::BadRequest(read_detail(resp).await)),
+            s if s.is_server_error() => Err(LingqError::Server(read_detail(resp).await)),
+            other => Err(LingqError::Transport(format!("unexpected status {other}"))),
+        }
+    }
+
+    pub async fn list_my_collections(&self) -> Result<Vec<Collection>, LingqError> {
+        let url = format!(
+            "{}/api/v3/{}/collections/my/?page_size=200",
+            self.base_url, self.lang
+        );
+        tracing::debug!(lang = %self.lang, "lingq list_my_collections");
+
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| LingqError::Transport(e.to_string()))?;
+
+        let status = resp.status();
+        tracing::debug!(status = %status, "lingq list_my_collections response");
+
+        match status {
+            s if s.is_success() => parse_collections(resp).await,
+            StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
+            StatusCode::NOT_FOUND => Err(LingqError::NotFound),
+            s if s.is_client_error() => Err(LingqError::BadRequest(read_detail(resp).await)),
+            s if s.is_server_error() => Err(LingqError::Server(read_detail(resp).await)),
+            other => Err(LingqError::Transport(format!("unexpected status {other}"))),
+        }
     }
 
     pub async fn whoami(&self) -> Result<WhoAmI, LingqError> {
@@ -164,6 +232,70 @@ impl LingqClient {
             other => Err(LingqError::Transport(format!("unexpected status {other}"))),
         }
     }
+}
+
+fn pick_str<'a>(v: &'a serde_json::Value, keys: &[&str]) -> Option<&'a str> {
+    keys.iter().find_map(|k| v.get(k).and_then(|x| x.as_str()))
+}
+
+fn pick_i64(v: &serde_json::Value, keys: &[&str]) -> Option<i64> {
+    keys.iter().find_map(|k| v.get(k).and_then(|x| x.as_i64()))
+}
+
+async fn read_items(resp: reqwest::Response) -> Result<Vec<serde_json::Value>, LingqError> {
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| LingqError::Transport(e.to_string()))?;
+    if let Some(arr) = body.as_array() {
+        return Ok(arr.clone());
+    }
+    if let Some(arr) = body.get("results").and_then(|v| v.as_array()) {
+        return Ok(arr.clone());
+    }
+    Err(LingqError::Schema(
+        "expected JSON array or object with `results: []`".into(),
+    ))
+}
+
+async fn parse_languages(resp: reqwest::Response) -> Result<Vec<Language>, LingqError> {
+    let items = read_items(resp).await?;
+    let mut out = Vec::with_capacity(items.len());
+    for v in &items {
+        // LingQ surfaces the language slug under varying names across endpoints;
+        // accept the common ones and skip rows missing both code + title.
+        let code = pick_str(v, &["code", "language", "url_slug", "tag"]).map(str::to_string);
+        let title = pick_str(v, &["title", "english_name", "name", "label"]).map(str::to_string);
+        let known_words =
+            pick_i64(v, &["known_words", "knownWords", "words_known", "wordsKnown"])
+                .unwrap_or(0);
+        if let (Some(code), Some(title)) = (code, title) {
+            out.push(Language {
+                code,
+                title,
+                known_words,
+            });
+        }
+    }
+    if out.is_empty() && !items.is_empty() {
+        return Err(LingqError::Schema(
+            "languages payload had entries but none had a recognisable code+title pair".into(),
+        ));
+    }
+    Ok(out)
+}
+
+async fn parse_collections(resp: reqwest::Response) -> Result<Vec<Collection>, LingqError> {
+    let items = read_items(resp).await?;
+    let mut out = Vec::with_capacity(items.len());
+    for v in &items {
+        let id = pick_i64(v, &["id", "pk"]);
+        let title = pick_str(v, &["title", "name"]).map(str::to_string);
+        if let (Some(id), Some(title)) = (id, title) {
+            out.push(Collection { id, title });
+        }
+    }
+    Ok(out)
 }
 
 async fn parse_lesson_id(resp: reqwest::Response) -> Result<i64, LingqError> {

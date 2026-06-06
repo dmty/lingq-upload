@@ -19,10 +19,23 @@
 
 | Op | Method | URL | Notes |
 |---|---|---|---|
+| List my languages | GET | `/api/v2/languages/` | **One of the few surviving v2 endpoints.** Not lang-scoped. Returns the catalogue with the caller's known-word counts. Response is either a flat array or `{ results: [...] }`; the client tolerates either. |
 | List my collections | GET | `/api/v3/{lang}/collections/my/?search=<title>&page_size=200` | Paginated; used to resume / dedupe by title. |
 | Create collection | POST | `/api/v3/{lang}/collections/` | JSON body `{title, description}`. Returns `{id, …}`. Cover-image field shape **unconfirmed** — see Open probes. |
 | List lessons | GET | `/api/v3/{lang}/collections/{cid}/lessons/?page=N&page_size=100` | Paginated. Used to skip already-uploaded lessons by title. |
 | Import lesson | POST | `/api/v3/{lang}/lessons/import/` | multipart/form-data. Confirmed shape below. |
+
+### `/api/v2/languages/` response (observed/permissive)
+
+Per-entry fields, parsed permissively with these aliases:
+
+| Logical | Accepted field names |
+|---|---|
+| `code` | `code`, `language`, `url_slug`, `tag` |
+| `title` | `title`, `english_name`, `name`, `label` |
+| `known_words` | `known_words`, `knownWords`, `words_known`, `wordsKnown` |
+
+Confirm exact field names on first manual smoke; tighten the parser if the surface stabilises.
 
 ## `lessons/import/` multipart shape (confirmed)
 
@@ -45,7 +58,7 @@ Returns `{id, …}` on success. Lesson ID is the integer to thread into subseque
 | URL | Behaviour |
 |---|---|
 | `/api/v3/contexts/` | 404. **Do not use** as an auth-check probe; use `/api/v3/{lang}/collections/my/?page_size=1` instead. |
-| `/api/v2/*` | `400 {"detail": "API is obsolete. Use v3 instead."}` |
+| `/api/v2/*` | `400 {"detail": "API is obsolete. Use v3 instead."}` — **except** `/api/v2/languages/` (see above). |
 
 ## Open probes
 

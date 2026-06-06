@@ -4,7 +4,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use lingq_upload_lib::lingq::{LessonOpts, LingqClient, LingqError};
+use lingq_upload_lib::lingq::{Collection, Language, LessonOpts, LingqClient, LingqError};
 use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -211,6 +211,72 @@ async fn import_lesson_response_with_extra_fields_succeeds() {
         .await
         .expect("extras tolerated");
     assert_eq!(id, 12345);
+}
+
+#[tokio::test]
+async fn list_languages_200_parses_flat_array() {
+    let cas = load_cassette("list_languages_200.json");
+    let mut server = spawn_server().await;
+
+    let _m = server
+        .mock(&cas.method, cas.url_path.as_str())
+        .match_header("authorization", "Token test-key")
+        .with_status(cas.status as usize)
+        .with_header("content-type", &cas.response_content_type)
+        .with_body(&cas.response_body)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "test-key");
+    let langs: Vec<Language> = client.list_my_languages().await.expect("languages ok");
+    assert_eq!(langs.len(), 4);
+    let ja = langs.iter().find(|l| l.code == "ja").expect("ja entry");
+    assert_eq!(ja.title, "Japanese");
+    assert_eq!(ja.known_words, 73900);
+}
+
+#[tokio::test]
+async fn list_languages_tolerates_alt_field_names() {
+    // LingQ has shipped this payload under different field names over the years;
+    // tolerate english_name / wordsKnown / language slug spellings.
+    let mut server = spawn_server().await;
+    let body = r#"[
+        {"language":"ja","english_name":"Japanese","wordsKnown":50000},
+        {"code":"fr","name":"French","known_words":100}
+    ]"#;
+    let _m = server
+        .mock("GET", "/api/v2/languages/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(body)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "test-key");
+    let langs = client.list_my_languages().await.expect("ok");
+    assert_eq!(langs.len(), 2);
+    assert!(langs.iter().any(|l| l.code == "ja" && l.known_words == 50000));
+    assert!(langs.iter().any(|l| l.code == "fr" && l.title == "French"));
+}
+
+#[tokio::test]
+async fn list_collections_200_parses_results_wrapper() {
+    let cas = load_cassette("list_collections_200.json");
+    let mut server = spawn_server().await;
+
+    let _m = server
+        .mock(&cas.method, cas.url_path.as_str())
+        .match_query(Matcher::UrlEncoded("page_size".into(), "200".into()))
+        .with_status(cas.status as usize)
+        .with_header("content-type", &cas.response_content_type)
+        .with_body(&cas.response_body)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "ja", "test-key");
+    let cols: Vec<Collection> = client.list_my_collections().await.expect("collections ok");
+    assert_eq!(cols.len(), 2);
+    assert!(cols.iter().any(|c| c.id == 123456 && c.title == "海辺のカフカ"));
 }
 
 #[tokio::test]

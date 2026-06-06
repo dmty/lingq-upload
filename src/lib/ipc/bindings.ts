@@ -55,6 +55,22 @@ async manualSourceFromFiles(epub: string, audio: string, lang: string, title: st
     else return { status: "error", error: e  as any };
 }
 },
+async cmdListLanguages() : Promise<Result<Language[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_list_languages") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdListCollections(lang: string) : Promise<Result<Collection[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_list_collections", { lang }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : Promise<Result<UploadResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("upload_one_shot", { candidate, collectionId, lang }) };
@@ -81,9 +97,11 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 export type ChapterManifest = { chapters: ChapterEntry[] }
+export type Collection = { id: number; title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
+export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"

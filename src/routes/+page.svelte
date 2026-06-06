@@ -6,8 +6,10 @@
     commands,
     type AppError,
     type AudioError,
+    type Collection,
     type IngestError,
     type JobEvent,
+    type Language,
     type LingqError,
     type SecretError,
     type Stage,
@@ -23,7 +25,7 @@
 
   let textPath = $state<string>("");
   let audioPath = $state<string>("");
-  let lang = $state<string>("ja");
+  let lang = $state<string>("");
   let collectionIdRaw = $state<string>("");
   let title = $state<string>("");
 
@@ -32,6 +34,12 @@
   let currentStage = $state<string | null>(null);
   let error = $state<string | null>(null);
   let result = $state<UploadResult | null>(null);
+
+  let languages = $state<Language[]>([]);
+  let languagesError = $state<string | null>(null);
+  let collections = $state<Collection[]>([]);
+  let collectionsError = $state<string | null>(null);
+  let loadingCollections = $state(false);
 
   let unlisten: UnlistenFn | undefined;
 
@@ -45,6 +53,12 @@
       Number.isFinite(collectionId) &&
       collectionId > 0,
   );
+
+  function formatLanguageOption(l: Language): string {
+    return l.known_words > 0
+      ? `${l.title} (${l.known_words.toLocaleString()})`
+      : l.title;
+  }
 
   function filenameStem(path: string): string {
     const sep = path.lastIndexOf("/") >= 0 ? "/" : "\\";
@@ -175,12 +189,46 @@
     }
   }
 
+  async function loadLanguages() {
+    languagesError = null;
+    const res = await commands.cmdListLanguages();
+    if (res.status === "ok") {
+      // Sort by known words descending so the user's main languages float up.
+      languages = [...res.data].sort((a, b) => b.known_words - a.known_words);
+    } else {
+      languagesError = appErrorMessage(res.error);
+    }
+  }
+
+  async function loadCollections(forLang: string) {
+    if (!forLang) {
+      collections = [];
+      return;
+    }
+    loadingCollections = true;
+    collectionsError = null;
+    collections = [];
+    collectionIdRaw = "";
+    const res = await commands.cmdListCollections(forLang);
+    if (res.status === "ok") {
+      collections = res.data;
+    } else {
+      collectionsError = appErrorMessage(res.error);
+    }
+    loadingCollections = false;
+  }
+
+  function onLanguageChange() {
+    void loadCollections(lang);
+  }
+
   onMount(() => {
     (async () => {
       // Subscribe BEFORE any command can fire so we don't miss the Started event.
       unlisten = await listen<JobEvent>("job", (event) => {
         handleJobEvent(event.payload);
       });
+      await loadLanguages();
     })();
 
     return () => {
@@ -248,24 +296,46 @@
 
   <div class="grid">
     <label>
-      <span>Collection ID</span>
-      <input
-        type="number"
-        bind:value={collectionIdRaw}
-        disabled={busy}
-        placeholder="e.g. 123456"
-      />
+      <span>Language</span>
+      <select
+        bind:value={lang}
+        onchange={onLanguageChange}
+        disabled={busy || languages.length === 0}
+      >
+        <option value="" disabled>
+          {languagesError ? "Could not load languages" : "Select language…"}
+        </option>
+        {#each languages as l (l.code)}
+          <option value={l.code}>{formatLanguageOption(l)}</option>
+        {/each}
+      </select>
+      {#if languagesError}<span class="hint err">{languagesError}</span>{/if}
     </label>
 
     <label>
-      <span>Language code</span>
-      <input
-        type="text"
-        bind:value={lang}
-        disabled={busy}
-        placeholder="ja"
-        maxlength="6"
-      />
+      <span>Collection</span>
+      <select
+        bind:value={collectionIdRaw}
+        disabled={busy || loadingCollections || collections.length === 0}
+      >
+        <option value="" disabled>
+          {#if !lang}
+            Pick a language first
+          {:else if loadingCollections}
+            Loading…
+          {:else if collectionsError}
+            Could not load collections
+          {:else if collections.length === 0}
+            No collections in this language
+          {:else}
+            Select collection…
+          {/if}
+        </option>
+        {#each collections as c (c.id)}
+          <option value={String(c.id)}>{c.title} ({c.id})</option>
+        {/each}
+      </select>
+      {#if collectionsError}<span class="hint err">{collectionsError}</span>{/if}
     </label>
 
     <label class="span2">
@@ -380,13 +450,25 @@
     color: #333;
   }
 
-  input {
+  input,
+  select {
     width: 100%;
     padding: 0.5rem;
     border-radius: 4px;
     border: 1px solid #888;
     font: inherit;
     box-sizing: border-box;
+    background: white;
+  }
+
+  .hint {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  .hint.err {
+    color: #c00;
   }
 
   .picker-row {

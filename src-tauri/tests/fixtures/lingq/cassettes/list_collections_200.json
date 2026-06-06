@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v3/ja/collections/my/",
+  "url_query": "page_size=200",
+  "status": 200,
+  "response_body": "{\"results\":[{\"id\":123456,\"title\":\"海辺のカフカ\"},{\"id\":7777,\"title\":\"Test Course\"}]}",
+  "response_content_type": "application/json"
+}

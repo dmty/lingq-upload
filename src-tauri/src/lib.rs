@@ -22,6 +22,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_load_lingq_key,
             commands::secrets::cmd_clear_lingq_key,
             commands::ingest::manual_source_from_files,
+            commands::lingq::cmd_list_languages,
+            commands::lingq::cmd_list_collections,
             commands::upload::upload_one_shot,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
@@ -32,6 +34,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<lingq::LingqError>()
         .typ::<lingq::WhoAmI>()
         .typ::<lingq::LessonOpts>()
+        .typ::<lingq::Language>()
+        .typ::<lingq::Collection>()
         .typ::<ingest::Candidate>()
         .typ::<ingest::TextSource>()
         .typ::<ingest::AudioSource>()

@@ -9,3 +9,7 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Generated audio fixtures (deterministic; produced at test setup).
+src-tauri/tests/fixtures/audio/*.m4a
+src-tauri/tests/fixtures/audio/*.m4b
