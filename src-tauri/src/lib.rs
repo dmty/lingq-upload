@@ -22,6 +22,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_load_lingq_key,
             commands::secrets::cmd_clear_lingq_key,
             commands::ingest::manual_source_from_files,
+            commands::lingq::cmd_account_profile,
             commands::lingq::cmd_list_languages,
             commands::lingq::cmd_list_collections,
             commands::upload::upload_one_shot,
@@ -36,6 +37,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<lingq::LessonOpts>()
         .typ::<lingq::Language>()
         .typ::<lingq::Collection>()
+        .typ::<lingq::AccountProfile>()
         .typ::<ingest::Candidate>()
         .typ::<ingest::TextSource>()
         .typ::<ingest::AudioSource>()

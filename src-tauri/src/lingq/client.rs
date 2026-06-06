@@ -47,6 +47,11 @@ pub struct Collection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct AccountProfile {
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LessonOpts {
     pub level: String,
     pub status: String,
@@ -91,11 +96,87 @@ impl LingqClient {
         format!("Token {}", self.api_key.expose_secret())
     }
 
+    /// Fetch the caller's account profile. Tries the known candidates in order:
+    /// `/api/v2/api-profile/`, `/api/v2/profile/`, `/api/v3/api-profile/`.
+    /// The browser extension uses the username it returns to scope follow-up
+    /// calls like `/api/v2/languages/?username=…`.
+    pub async fn account_profile(&self) -> Result<AccountProfile, LingqError> {
+        let candidates = ["/api/v2/api-profile/", "/api/v2/profile/", "/api/v3/api-profile/"];
+        let mut last_err: Option<LingqError> = None;
+        for path in candidates {
+            let url = format!("{}{}", self.base_url, path);
+            tracing::debug!(path, "lingq account_profile probe");
+            let resp = match self
+                .http
+                .get(&url)
+                .header("Authorization", self.auth_header())
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = Some(LingqError::Transport(e.to_string()));
+                    continue;
+                }
+            };
+            let status = resp.status();
+            tracing::debug!(path, status = %status, "lingq account_profile response");
+            if status == StatusCode::UNAUTHORIZED {
+                return Err(LingqError::Unauthorized);
+            }
+            if !status.is_success() {
+                last_err = Some(if status.is_client_error() {
+                    LingqError::BadRequest(read_detail(resp).await)
+                } else {
+                    LingqError::Server(read_detail(resp).await)
+                });
+                continue;
+            }
+            let body: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| LingqError::Transport(e.to_string()))?;
+            if let Some(username) = pick_str(&body, &["username", "user_name", "user"])
+                .map(str::to_string)
+            {
+                return Ok(AccountProfile { username });
+            }
+            last_err = Some(LingqError::Schema(format!(
+                "{path}: response missing recognisable username field"
+            )));
+        }
+        Err(last_err
+            .unwrap_or_else(|| LingqError::Schema("no profile endpoint candidate succeeded".into())))
+    }
+
     pub async fn list_my_languages(&self) -> Result<Vec<Language>, LingqError> {
+        self.list_languages_inner(None).await
+    }
+
+    /// User-scoped variant. With a username, LingQ trims the catalogue down to
+    /// the user's enrolled languages (matches the browser extension's behaviour).
+    pub async fn list_my_languages_for(
+        &self,
+        username: &str,
+    ) -> Result<Vec<Language>, LingqError> {
+        self.list_languages_inner(Some(username)).await
+    }
+
+    async fn list_languages_inner(
+        &self,
+        username: Option<&str>,
+    ) -> Result<Vec<Language>, LingqError> {
         // /api/v2/languages/ is one of two surviving v2 endpoints — it returns the
         // catalogue plus the caller's known-word counts. Not lang-scoped.
-        let url = format!("{}/api/v2/languages/", self.base_url);
-        tracing::debug!("lingq list_my_languages");
+        let url = match username {
+            Some(u) => format!(
+                "{}/api/v2/languages/?username={}",
+                self.base_url,
+                urlencode(u)
+            ),
+            None => format!("{}/api/v2/languages/", self.base_url),
+        };
+        tracing::debug!(scoped = username.is_some(), "lingq list_my_languages");
 
         let resp = self
             .http
@@ -232,6 +313,21 @@ impl LingqClient {
             other => Err(LingqError::Transport(format!("unexpected status {other}"))),
         }
     }
+}
+
+fn urlencode(s: &str) -> String {
+    // Minimal RFC 3986 percent-encoding for query values. Avoids pulling a crate
+    // just for usernames — only need to handle the unreserved/reserved split.
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 fn pick_str<'a>(v: &'a serde_json::Value, keys: &[&str]) -> Option<&'a str> {

@@ -4,7 +4,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use lingq_upload_lib::lingq::{Collection, Language, LessonOpts, LingqClient, LingqError};
+use lingq_upload_lib::lingq::{
+    AccountProfile, Collection, Language, LessonOpts, LingqClient, LingqError,
+};
 use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -211,6 +213,82 @@ async fn import_lesson_response_with_extra_fields_succeeds() {
         .await
         .expect("extras tolerated");
     assert_eq!(id, 12345);
+}
+
+#[tokio::test]
+async fn account_profile_returns_username_from_first_candidate() {
+    let cas = load_cassette("api_profile_200.json");
+    let mut server = spawn_server().await;
+
+    let _m = server
+        .mock(&cas.method, cas.url_path.as_str())
+        .with_status(cas.status as usize)
+        .with_header("content-type", &cas.response_content_type)
+        .with_body(&cas.response_body)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "test-key");
+    let profile: AccountProfile = client.account_profile().await.expect("profile ok");
+    assert_eq!(profile.username, "dmty");
+}
+
+#[tokio::test]
+async fn account_profile_falls_back_when_first_candidate_404s() {
+    let mut server = spawn_server().await;
+
+    let _m1 = server
+        .mock("GET", "/api/v2/api-profile/")
+        .with_status(404)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"detail":"Not found."}"#)
+        .create_async()
+        .await;
+    let _m2 = server
+        .mock("GET", "/api/v2/profile/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"username":"dmty"}"#)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "test-key");
+    let profile = client.account_profile().await.expect("fallback ok");
+    assert_eq!(profile.username, "dmty");
+}
+
+#[tokio::test]
+async fn account_profile_401_short_circuits() {
+    let mut server = spawn_server().await;
+    let _m = server
+        .mock("GET", "/api/v2/api-profile/")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"detail":"Invalid token."}"#)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "wrong-key");
+    let err = client.account_profile().await.expect_err("should err");
+    assert!(matches!(err, LingqError::Unauthorized));
+}
+
+#[tokio::test]
+async fn list_languages_for_user_appends_username_query() {
+    let mut server = spawn_server().await;
+    let _m = server
+        .mock("GET", "/api/v2/languages/")
+        .match_query(Matcher::UrlEncoded("username".into(), "dmty".into()))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"[{"code":"ja","title":"Japanese","known_words":73900}]"#)
+        .create_async()
+        .await;
+
+    let client = client_for(&server, "en", "test-key");
+    let langs = client.list_my_languages_for("dmty").await.expect("ok");
+    assert_eq!(langs.len(), 1);
+    assert_eq!(langs[0].code, "ja");
 }
 
 #[tokio::test]

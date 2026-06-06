@@ -198,10 +198,20 @@
 
   async function loadLanguages() {
     languagesError = null;
-    const res = await commands.cmdListLanguages();
+    // Resolve username so /api/v2/languages/ returns the user-trimmed list
+    // (the catalogue otherwise). Profile probe is best-effort.
+    let username: string | null = null;
+    const profileRes = await commands.cmdAccountProfile();
+    if (profileRes.status === "ok") {
+      username = profileRes.data.username;
+    }
+    const res = await commands.cmdListLanguages(username);
     if (res.status === "ok") {
       // Sort by known words descending so the user's main languages float up.
       languages = [...res.data].sort((a, b) => b.known_words - a.known_words);
+      // Once we have the user-scoped list, the catalogue toggle becomes
+      // unnecessary noise — the API already trimmed it.
+      if (username) showAllLanguages = false;
     } else {
       languagesError = appErrorMessage(res.error);
     }

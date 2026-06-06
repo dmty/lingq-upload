@@ -55,9 +55,22 @@ async manualSourceFromFiles(epub: string, audio: string, lang: string, title: st
     else return { status: "error", error: e  as any };
 }
 },
-async cmdListLanguages() : Promise<Result<Language[], AppError>> {
+async cmdAccountProfile() : Promise<Result<AccountProfile, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_list_languages") };
+    return { status: "ok", data: await TAURI_INVOKE("cmd_account_profile") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Returns the caller's enrolled languages. With a username we get the
+ * user-trimmed catalogue (matches the browser extension); without one we
+ * fall back to the full catalogue and let the UI filter by known_words.
+ */
+async cmdListLanguages(username: string | null) : Promise<Result<Language[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_list_languages", { username }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -91,6 +104,7 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
 
 /** user-defined types **/
 
+export type AccountProfile = { username: string }
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
