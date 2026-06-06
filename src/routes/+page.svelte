@@ -14,6 +14,8 @@
   import { appErrorMessage } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
   import DropZone from "$lib/components/DropZone.svelte";
+  import ProgressPanel from "$lib/components/ProgressPanel.svelte";
+  import ResultPanel from "$lib/components/ResultPanel.svelte";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -330,90 +332,9 @@
     class="mt-8 rounded-md border border-border bg-surface shadow-(--shadow-card)"
   >
     {#if result}
-      <div class="p-6">
-        <div class="flex items-start gap-3">
-          <span
-            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success-soft text-success"
-            aria-hidden="true"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M4 10.5l4 4 8-9" />
-            </svg>
-          </span>
-          <div class="flex-1">
-            <h2 class="text-md font-semibold text-fg">
-              Lesson added to your library.
-            </h2>
-            <p class="mt-1 text-sm text-fg-muted">
-              {title || "Untitled lesson"} · ID
-              <code class="tabular text-fg">{result.lesson_id}</code>
-            </p>
-            <div class="mt-4 flex items-center gap-2">
-              <a
-                href={result.lesson_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white no-underline transition-colors duration-180 ease-snappy hover:bg-accent-hover hover:no-underline"
-              >
-                Open in LingQ
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M7 17L17 7" />
-                  <path d="M8 7h9v9" />
-                </svg>
-              </a>
-              <button
-                type="button"
-                onclick={uploadAnother}
-                class="rounded-sm px-3 py-2 text-sm font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg"
-              >
-                Upload another
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ResultPanel {title} {result} onUploadAnother={uploadAnother} />
     {:else if busy || progress.length > 0}
-      <div class="p-6">
-        <div class="flex items-baseline justify-between">
-          <h2 class="text-lg font-semibold text-fg">
-            {currentStage ?? "Working…"}
-          </h2>
-          <span class="tabular text-sm text-fg-muted">
-            {Math.round(livePct * 100)}%
-          </span>
-        </div>
-        <div
-          class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken"
-          aria-live="polite"
-        >
-          <div
-            class="h-full rounded-full bg-accent transition-[width] duration-180 ease-snappy"
-            style:width="{Math.max(2, livePct * 100)}%"
-          ></div>
-        </div>
-        {#if liveMessage}
-          <p class="mt-2 text-sm text-fg-muted">{liveMessage}</p>
-        {/if}
-      </div>
+      <ProgressPanel stage={currentStage} pct={livePct} message={liveMessage} />
     {:else}
       <!-- Destination -->
       <div class="p-6">
