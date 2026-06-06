@@ -78,9 +78,34 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            register_bundled_audio_binaries(app);
             builder.mount_events(app);
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Resolve the bundled ffmpeg / ffprobe under `resource_dir/ffmpeg/<os>/` and
+/// hand them to the audio module. Layout matches `docs/dev-setup.md`.
+fn register_bundled_audio_binaries(app: &tauri::App) {
+    use tauri::Manager;
+
+    let Ok(resource_dir) = app.path().resource_dir() else {
+        return;
+    };
+    let platform = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    };
+    let (ffmpeg_name, ffprobe_name) = if cfg!(target_os = "windows") {
+        ("ffmpeg.exe", "ffprobe.exe")
+    } else {
+        ("ffmpeg", "ffprobe")
+    };
+    let base = resource_dir.join("ffmpeg").join(platform);
+    core::audio::set_bundled_binaries(base.join(ffmpeg_name), base.join(ffprobe_name));
 }

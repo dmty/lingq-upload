@@ -1,10 +1,24 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 use tokio::process::Command;
+
+/// Bundled binary paths set at app startup from `app.path().resource_dir()`.
+/// Release builds use these; dev builds fall through to `FFMPEG_BIN` or PATH.
+static BUNDLED_FFMPEG: OnceLock<PathBuf> = OnceLock::new();
+static BUNDLED_FFPROBE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Register the bundled ffmpeg / ffprobe paths. Called once at app startup.
+/// Subsequent calls are ignored.
+#[allow(dead_code)]
+pub fn set_bundled_binaries(ffmpeg: PathBuf, ffprobe: PathBuf) {
+    let _ = BUNDLED_FFMPEG.set(ffmpeg);
+    let _ = BUNDLED_FFPROBE.set(ffprobe);
+}
 
 /// Threshold above which |dst - src| seconds is considered a transcode mismatch.
 /// Rationale lives in the shared-context audio-corruption story.
@@ -64,9 +78,8 @@ pub struct TranscodeReport {
     pub delta_sec: f64,
 }
 
-/// Resolve the ffmpeg binary path. Env override > PATH lookup.
-/// Release-mode resource_dir hook lands later; PATH-relative "ffmpeg" is
-/// acceptable for now.
+/// Resolve the ffmpeg binary path.
+/// Order: `FFMPEG_BIN` env > bundled (set at startup from `resource_dir`) > PATH.
 pub fn resolve_ffmpeg_bin() -> Result<PathBuf, AudioError> {
     if let Ok(v) = std::env::var("FFMPEG_BIN") {
         let p = PathBuf::from(v);
@@ -75,10 +88,15 @@ pub fn resolve_ffmpeg_bin() -> Result<PathBuf, AudioError> {
         }
         return Ok(p);
     }
+    if let Some(p) = BUNDLED_FFMPEG.get() {
+        if p.exists() {
+            return Ok(p.clone());
+        }
+    }
     Ok(PathBuf::from("ffmpeg"))
 }
 
-/// Resolve ffprobe sibling-of-ffmpeg. Mirrors `resolve_ffmpeg_bin`.
+/// Resolve ffprobe. Mirrors `resolve_ffmpeg_bin`, with a sibling-of-ffmpeg fallback.
 pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
     if let Ok(v) = std::env::var("FFPROBE_BIN") {
         let p = PathBuf::from(v);
@@ -95,6 +113,11 @@ pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
             if candidate.exists() {
                 return Ok(candidate);
             }
+        }
+    }
+    if let Some(p) = BUNDLED_FFPROBE.get() {
+        if p.exists() {
+            return Ok(p.clone());
         }
     }
     Ok(PathBuf::from("ffprobe"))
