@@ -93,8 +93,8 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
 }
 },
 /**
- * List the library. Loads `library.index.json` if present, else rebuilds from
- * the project store.
+ * List the library. Always rebuilds from the shared `ProjectStore` and
+ * rewrites `library.index.json` as a cold-start cache.
  */
 async cmdLibraryList() : Promise<Result<LibraryIndex, AppError>> {
     try {
