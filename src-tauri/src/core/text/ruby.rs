@@ -23,6 +23,9 @@ pub fn strip_ruby(html: &str) -> String {
             let tag_end = match find_byte(bytes, b'>', i + 1) {
                 Some(e) => e,
                 None => {
+                    // Stray '<' with no closing '>': emit it and step by one
+                    // ASCII byte. '<' is a single-byte UTF-8 codepoint so this
+                    // never lands mid-sequence.
                     out.push('<');
                     i += 1;
                     continue;

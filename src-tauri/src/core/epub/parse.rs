@@ -193,12 +193,18 @@ mod kindle {
         let mut i = 0;
         while i < bytes.len() {
             if bytes[i] == b'<' {
-                let end = bytes[i..]
-                    .iter()
-                    .position(|&b| b == b'>')
-                    .map(|p| p + i)
-                    .unwrap_or(bytes.len());
-                i = end + 1;
+                match bytes[i + 1..].iter().position(|&b| b == b'>') {
+                    Some(p) => {
+                        i = i + 1 + p + 1;
+                    }
+                    None => {
+                        // Stray '<' (single ASCII byte). Emit it and step by
+                        // one — '<' is always 1 byte in UTF-8 so we never land
+                        // mid-codepoint.
+                        out.push('<');
+                        i += 1;
+                    }
+                }
                 continue;
             }
             let ch = std::str::from_utf8(&bytes[i..])
@@ -206,7 +212,7 @@ mod kindle {
                 .and_then(|s| s.chars().next())
                 .unwrap_or('\u{FFFD}');
             out.push(ch);
-            i += ch.len_utf8();
+            i += ch.len_utf8().max(1);
         }
         decode_basic_entities(&out)
     }

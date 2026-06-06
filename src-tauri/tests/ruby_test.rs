@@ -70,3 +70,22 @@ fn no_ruby_unchanged() {
     let s = "<p>plain html</p>";
     assert_eq!(strip_ruby(s), "<p>plain html</p>");
 }
+
+#[test]
+fn stray_lt_between_cjk_does_not_corrupt_utf8() {
+    // No closing '>' after the '<' so the parser walks past the bare '<'.
+    // Must not emit U+FFFD anywhere — bytes around the '<' are all valid UTF-8.
+    let s = "漢 < 字";
+    let out = strip_ruby(s);
+    assert!(!out.contains('\u{FFFD}'), "got {out:?}");
+    assert!(out.contains('漢'));
+    assert!(out.contains('字'));
+}
+
+#[test]
+fn stray_lt_adjacent_to_multibyte_does_not_corrupt_utf8() {
+    let s = "漢<字";
+    let out = strip_ruby(s);
+    assert!(!out.contains('\u{FFFD}'));
+    assert_eq!(out, "漢<字");
+}
