@@ -29,6 +29,10 @@
         return `I/O error: ${e.message}`;
       case "Internal":
         return `Internal error: ${e.message}`;
+      case "MissingApiKey":
+        return "No LingQ API key configured.";
+      case "Unsupported":
+        return `Unsupported: ${e.message}`;
       case "Lingq":
         return `LingQ: ${"message" in e.message ? e.message.message : e.message.kind}`;
       case "Audio":
