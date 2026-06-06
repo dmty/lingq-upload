@@ -85,10 +85,8 @@ pub fn parse_opf(xml: &str) -> Result<OpfMetadata, OpfError> {
                 if s.is_empty() {
                     continue;
                 }
-                if acc.in_title {
-                    if acc.out.title.is_empty() {
-                        acc.out.title = s.into();
-                    }
+                if acc.in_title && acc.out.title.is_empty() {
+                    acc.out.title = s.into();
                 }
                 if acc.in_creator_aut {
                     acc.out.authors.push(s.into());

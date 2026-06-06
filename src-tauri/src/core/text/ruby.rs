@@ -34,17 +34,9 @@ pub fn strip_ruby(html: &str) -> String {
             match (n.as_str(), closing) {
                 ("ruby" | "rb", _) => {}
                 ("rt", false) => inside_rt += 1,
-                ("rt", true) => {
-                    if inside_rt > 0 {
-                        inside_rt -= 1;
-                    }
-                }
+                ("rt", true) => inside_rt = inside_rt.saturating_sub(1),
                 ("rp", false) => inside_rp += 1,
-                ("rp", true) => {
-                    if inside_rp > 0 {
-                        inside_rp -= 1;
-                    }
-                }
+                ("rp", true) => inside_rp = inside_rp.saturating_sub(1),
                 _ => {
                     if inside_rt == 0 && inside_rp == 0 {
                         out.push_str(&html[i..=tag_end]);

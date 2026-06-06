@@ -60,7 +60,7 @@ async fn scan_walks_calibre_layout() {
     let tmp = TempDir::new().unwrap();
     setup_library(tmp.path());
 
-    let src = CalibreLibrarySource::default();
+    let src = CalibreLibrarySource;
     let candidates = src.scan(tmp.path()).await.unwrap();
     assert_eq!(candidates.len(), 3);
 
@@ -88,7 +88,7 @@ async fn scan_walks_calibre_layout() {
 #[tokio::test]
 async fn empty_root_returns_empty() {
     let tmp = TempDir::new().unwrap();
-    let src = CalibreLibrarySource::default();
+    let src = CalibreLibrarySource;
     let candidates = src.scan(tmp.path()).await.unwrap();
     assert!(candidates.is_empty());
 }

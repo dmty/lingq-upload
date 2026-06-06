@@ -122,8 +122,8 @@ impl Default for IngestRegistry {
     fn default() -> Self {
         let mut registry = Self::new();
         registry.register(Box::new(ManualSource));
-        registry.register(Box::new(CalibreLibrarySource::default()));
-        registry.register(Box::new(LibationFolderSource::default()));
+        registry.register(Box::new(CalibreLibrarySource));
+        registry.register(Box::new(LibationFolderSource));
         registry
     }
 }
