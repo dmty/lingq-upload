@@ -6,7 +6,9 @@ use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::{
     ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
-use lingq_upload_lib::core::store::{InMemoryProjectStore, JsonProjectStore, ProjectStore};
+use lingq_upload_lib::core::store::{
+    safe_path_segment, InMemoryProjectStore, JsonProjectStore, ProjectStore,
+};
 use lingq_upload_lib::ingest::TextSource;
 use tempfile::TempDir;
 
@@ -85,7 +87,7 @@ fn empty_project_json_deserialises_via_defaults() {
     let tmp = TempDir::new().unwrap();
     let store = JsonProjectStore::new(tmp.path());
     let id = ProjectId::from_title_author("Minimal", "Author");
-    let key = id.join_key();
+    let key = safe_path_segment(&id.join_key());
     let dir = tmp.path().join("projects").join(&key);
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -115,7 +117,7 @@ fn corrupt_json_returns_corrupt_error() {
     let tmp = TempDir::new().unwrap();
     let store = JsonProjectStore::new(tmp.path());
     let id = ProjectId::from_title_author("Bad", "Author");
-    let dir = tmp.path().join("projects").join(id.join_key());
+    let dir = tmp.path().join("projects").join(safe_path_segment(&id.join_key()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("project.json"), b"{ not json }").unwrap();
 
@@ -132,7 +134,10 @@ fn atomic_write_leaves_no_tmp_files_behind() {
     let p = sample("Foo", "ja");
     store.put(&p).unwrap();
 
-    let dir = tmp.path().join("projects").join(p.id.join_key());
+    let dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&p.id.join_key()));
     let entries: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().file_name())
@@ -157,11 +162,43 @@ fn powercut_simulation_keeps_prior_file() {
     let pj = tmp
         .path()
         .join("projects")
-        .join(p1.id.join_key())
+        .join(safe_path_segment(&p1.id.join_key()))
         .join("project.json");
     let tmp_path = pj.with_extension("json.tmp");
     std::fs::write(&tmp_path, b"{ partial write before rename }").unwrap();
 
     let got = store.get(&p1.id).unwrap().unwrap();
     assert_eq!(got, p1, "prior file untouched");
+}
+
+#[test]
+fn list_skips_corrupt_entries_and_returns_good_ones() {
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+
+    let good = sample("Good Book", "ja");
+    store.put(&good).unwrap();
+
+    let bad_id = ProjectId::from_title_author("Bad Book", "Author");
+    let bad_dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&bad_id.join_key()));
+    std::fs::create_dir_all(&bad_dir).unwrap();
+    std::fs::write(bad_dir.join("project.json"), b"{ not json }").unwrap();
+
+    let list = store.list().unwrap();
+    assert_eq!(list.len(), 1, "corrupt entry skipped, good entry returned");
+    assert_eq!(list[0].title, "Good Book");
+}
+
+#[test]
+fn put_and_get_round_trip_strong_key_with_colons() {
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let mut p = sample("ASIN Book", "ja");
+    p.id = p.id.with_asin("B0CROSS01");
+    store.put(&p).unwrap();
+    let got = store.get(&p.id).unwrap().unwrap();
+    assert_eq!(got, p);
 }

@@ -29,3 +29,15 @@ pub trait ProjectStore: Send + Sync {
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError>;
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError>;
 }
+
+/// Filesystem-safe rendering of an identifier (e.g. `ProjectId::join_key()`).
+/// Strong-key keys carry `:` which is illegal in Windows path segments; this
+/// helper substitutes anything outside `[A-Za-z0-9._-]` with `_`.
+pub fn safe_path_segment(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '.' | '_' => c,
+            _ => '_',
+        })
+        .collect()
+}
