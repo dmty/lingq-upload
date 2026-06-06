@@ -1,6 +1,8 @@
 mod commands;
+mod core;
 mod error;
 mod events;
+pub mod ingest;
 mod secrets;
 
 use specta_typescript::Typescript;
