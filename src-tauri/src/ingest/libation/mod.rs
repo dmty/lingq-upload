@@ -40,7 +40,15 @@ impl LibationFolderSource {
                         .to_string(),
                 ];
 
-                let chapter_manifest = sidecar::load_for_book(&book_ent);
+                let audio_stem = match &kind {
+                    AudioKind::SingleFile(p) => p
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string()),
+                    AudioKind::Folder => None,
+                };
+                let chapter_manifest =
+                    sidecar::load_for_book_with_stem(&book_ent, audio_stem.as_deref());
 
                 let mut extras: HashMap<String, serde_json::Value> = HashMap::new();
                 if let Some(a) = asin.clone() {
@@ -107,15 +115,43 @@ fn collect_audio(dir: &Path) -> Result<(Vec<PathBuf>, AudioKind), IngestError> {
     Ok((found, kind))
 }
 
+/// Scan all `[...]` groups in `folder` and return the offset and value of the
+/// *last* one whose content matches `B0[A-Z0-9]{8}` (Audible's ASIN shape).
+/// Other bracketed annotations like `[Annotated]` or `[Unabridged]` are
+/// ignored. This lets `extract_asin` and `strip_asin_suffix` share scanning.
+fn find_asin_group(folder: &str) -> Option<(usize, String)> {
+    let bytes = folder.as_bytes();
+    let mut last: Option<(usize, String)> = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'[' {
+            if let Some(rel) = bytes[i + 1..].iter().position(|&b| b == b']') {
+                let inner = &folder[i + 1..i + 1 + rel];
+                if is_asin_shape(inner) {
+                    last = Some((i, inner.to_string()));
+                }
+                i = i + 1 + rel + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    last
+}
+
+fn is_asin_shape(s: &str) -> bool {
+    s.len() == 10
+        && s.starts_with("B0")
+        && s.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
 fn extract_asin(folder: &str) -> Option<String> {
-    let l = folder.rfind('[')?;
-    let r = folder[l + 1..].find(']')? + l + 1;
-    Some(folder[l + 1..r].to_string())
+    find_asin_group(folder).map(|(_, asin)| asin)
 }
 
 fn strip_asin_suffix(folder: &str) -> &str {
-    match folder.rfind('[') {
-        Some(i) => folder[..i].trim_end(),
+    match find_asin_group(folder) {
+        Some((at, _)) => folder[..at].trim_end(),
         None => folder,
     }
 }
@@ -127,7 +163,10 @@ fn find_cover(dir: &Path) -> Option<PathBuf> {
             return Some(p);
         }
     }
-    // Libation cover is `<title> [ASIN].jpg` — pick the first .jpg.
+    // Libation cover is `<title> [ASIN].jpg`. Prefer the .jpg whose stem
+    // contains an ASIN; otherwise fall back to the first .jpg in lexical
+    // order so behaviour is deterministic across filesystems.
+    let mut jpgs: Vec<PathBuf> = Vec::new();
     if let Ok(rd) = std::fs::read_dir(dir) {
         for ent in rd.flatten() {
             let p = ent.path();
@@ -136,11 +175,80 @@ fn find_cover(dir: &Path) -> Option<PathBuf> {
                 .map(|s| s.eq_ignore_ascii_case("jpg"))
                 .unwrap_or(false)
             {
-                return Some(p);
+                jpgs.push(p);
             }
         }
     }
-    None
+    jpgs.sort();
+    if let Some(asin_match) = jpgs.iter().find(|p| {
+        p.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| extract_asin(s).is_some())
+            .unwrap_or(false)
+    }) {
+        return Some(asin_match.clone());
+    }
+    jpgs.into_iter().next()
+}
+
+#[cfg(test)]
+mod asin_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_asin_from_trailing_group() {
+        assert_eq!(
+            extract_asin("Kafka on the Shore [B0ABCDEFGH]").as_deref(),
+            Some("B0ABCDEFGH"),
+        );
+    }
+
+    #[test]
+    fn ignores_non_asin_brackets() {
+        assert_eq!(
+            extract_asin("Title [Annotated]").as_deref(),
+            None,
+        );
+        assert_eq!(extract_asin("Plain Title").as_deref(), None);
+    }
+
+    #[test]
+    fn picks_last_asin_when_multiple() {
+        assert_eq!(
+            extract_asin("Series [B0AAAAAAAA] - Book 1 [B0BBBBBBBB]").as_deref(),
+            Some("B0BBBBBBBB"),
+        );
+    }
+
+    #[test]
+    fn strip_keeps_non_asin_brackets() {
+        assert_eq!(
+            strip_asin_suffix("Title [Annotated] [B0ABCDEFGH]"),
+            "Title [Annotated]",
+        );
+    }
+
+    #[test]
+    fn strip_returns_input_when_no_asin() {
+        assert_eq!(strip_asin_suffix("Title [Annotated]"), "Title [Annotated]");
+        assert_eq!(strip_asin_suffix("Plain Title"), "Plain Title");
+    }
+
+    #[test]
+    fn round_trip_title_and_asin() {
+        let folder = "Title [Annotated] [B0XXXXXXX1]";
+        // 10-char ASIN required: pad to shape.
+        let folder = "Title [Annotated] [B0XXXXXXX1]";
+        // ASIN above is only 10 chars by design: B0 + 8 = 10. Verify both halves.
+        assert_eq!(strip_asin_suffix(folder), "Title [Annotated]");
+        assert_eq!(extract_asin(folder).as_deref(), Some("B0XXXXXXX1"));
+    }
+
+    #[test]
+    fn lowercase_asin_is_rejected() {
+        // Audible asin is uppercase by convention; lowercase shape is not one.
+        assert_eq!(extract_asin("Title [b0abcdefgh]"), None);
+    }
 }
 
 #[allow(dead_code)]
