@@ -92,8 +92,20 @@ impl LingqClient {
         }
     }
 
-    fn auth_header(&self) -> String {
+    pub(crate) fn auth_header(&self) -> String {
         format!("Token {}", self.api_key.expose_secret())
+    }
+
+    pub(crate) fn http(&self) -> &Client {
+        &self.http
+    }
+
+    pub(crate) fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    pub(crate) fn lang(&self) -> &str {
+        &self.lang
     }
 
     /// Fetch the caller's account profile. Tries the known candidates in order:

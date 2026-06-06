@@ -5,5 +5,6 @@ pub mod lesson;
 pub mod library;
 pub mod matcher;
 pub mod project;
+pub mod queue;
 pub mod store;
 pub mod text;
