@@ -331,6 +331,60 @@ pub struct IngestRegistry { /* Vec<Box<dyn IngestSource>> */ }
 
 **Convention:** Public extension traits live under `src-tauri/src/{codecs,languages,epub/strategies,ingest}/mod.rs` and re-export via `lib.rs` so out-of-tree builds (a future plugin host) can depend on them.
 
+## AD-021 — Project identity is a multi-key tuple, not a scalar
+
+**Decision:** A project's identity is a small bag of external keys plus a derived content hash, not a single ID. All projects (Calibre-sourced, Libation-sourced, manually picked) carry the same shape; some slots may be `None`.
+
+```rust
+// src-tauri/src/core/identity.rs
+pub struct ProjectId {
+    pub content_hash: [u8; 32],         // sha256 over NFC(title) + "\x1f" + NFC(first_author)
+    pub audible_asin: Option<String>,   // present when ingested from Libation
+    pub isbn13: Option<String>,         // present when Calibre opf carries an ISBN
+    pub calibre_uuid: Option<Uuid>,     // Calibre's local UUID; last-resort fallback
+}
+
+impl ProjectId {
+    pub fn matches(&self, other: &Self) -> bool;  // any strong key agrees; None slots ignored
+    pub fn join_key(&self) -> String;             // asin > isbn13 > uuid > hex(content_hash)
+}
+```
+
+**Why:** Audible's ASIN and Calibre's ISBN/UUID name the same book in two different universes. Picking one as canonical loses the other; using `(title, author)` alone is fragile across editions and translations. The same multi-external-id pattern is what OpenLibrary, Calibre itself, and Audiobookshelf converged on.
+
+**Reconciliation rule:** at `core::library::reconcile` time, two candidates are merged if **any** strong key matches (ASIN ↔ ASIN, or ISBN13 ↔ ISBN13, or UUID ↔ UUID). If no strong key is present on either side, fall back to `content_hash` equality. Below-threshold fuzzy `(title, author)` overlap surfaces as a conflict; the user picks the winner. Silent fuzzy merge is banned.
+
+**`join_key` precedence:** ASIN beats ISBN13 beats UUID beats `hex(content_hash)`. The `join_key` is the filename for `$APP_DATA/projects/{join_key}.json` — stable across reruns, opaque to humans, debuggable as a hex string.
+
+**Consequences:**
+- Every `IngestSource::scan` result populates as many slots as it can. `LibationFolderSource` always sets `audible_asin` (extracted from the `[B0XXXXX]` folder suffix); `CalibreLibrarySource` always sets `calibre_uuid` and usually `isbn13`; `ManualSource` sets none of the strong keys and relies on `content_hash`.
+- Renaming a book inside Calibre changes `content_hash` but not `calibre_uuid` — strong-key match still holds, so reconciliation does not orphan the project.
+
+## AD-022 — Persistence is behind a `ProjectStore` trait
+
+**Decision:** Reads and writes of `project.json` go through a `ProjectStore` trait. The Sprint-2 implementation is `JsonProjectStore` writing one file per project to `$APP_DATA/projects/{join_key}.json`. Future implementations (SQLite, alternative on-disk formats, in-memory test doubles) implement the same trait.
+
+```rust
+// src-tauri/src/core/store/mod.rs
+pub trait ProjectStore: Send + Sync {
+    fn put(&self, p: &Project) -> Result<(), StoreError>;
+    fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError>;
+    fn list(&self) -> Result<Vec<ProjectSummary>, StoreError>;
+}
+```
+
+**Why:** AD-010 picked JSON-on-disk as the persistence shape; AD-020 added the library index cache. Both remain correct for the current scale (p95 ~50 projects, single-writer per project). Naming the trait now means swapping in SQLite later is additive — every call site already depends on the trait, not on `serde_json::to_writer`.
+
+**Atomic write:** `JsonProjectStore::put` writes to `{join_key}.json.tmp.{pid}.{nonce}`, `fsync`s, then renames over the destination. Rename is atomic on APFS, ext4, and NTFS. Power-cut between write and rename leaves the prior file intact; this is gated by a CI test.
+
+**Forward-compat:** `Project` uses `#[serde(default)]` on every non-id field. A `project.json` written by a future schema_version=2 with new fields deserialises cleanly as the current schema with unknown fields dropped via `#[serde(other)]` on the affected enums.
+
+**Contract test:** a single integration suite is parameterised over `JsonProjectStore` and `InMemoryProjectStore` (test double). Any future implementation must pass the same suite to ship.
+
+**SQLite migration trigger:** as named in AD-020 — when project count crosses ~500, OR when cross-project queries become rich, OR when the first multi-document transactional update bites. None of these apply today; the trait is the seam, JSON is the impl.
+
+**Anti-pattern banned:** `serde_json::to_writer` or `std::fs::write` against `project.json` outside `core/store/`. Surface them via the trait or write a new impl.
+
 ## Open architecture questions
 
 1. **Re-import / diff behaviour** — when the same Candidate is re-scanned (Calibre edit, Libation re-rip), what's the per-chapter conflict policy? Overwrite / append / skip / prompt? Current default: append-by-default, prompt on conflict.
