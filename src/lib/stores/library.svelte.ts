@@ -12,6 +12,8 @@ const state = $state<State>({
   error: null,
 });
 
+let inflight = 0;
+
 export const library = {
   get status() {
     return state.status;
@@ -23,8 +25,10 @@ export const library = {
     return state.error;
   },
   async load() {
+    const ticket = ++inflight;
     state.status = "loading";
     const result = await commands.cmdLibraryList();
+    if (ticket !== inflight) return;
     if (result.status === "ok") {
       state.index = result.data;
       state.error = null;
