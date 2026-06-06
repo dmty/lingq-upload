@@ -10,9 +10,7 @@
       : page.url.pathname.startsWith(path);
 </script>
 
-<header
-  class="sticky top-0 z-10 flex h-13 items-center gap-4 bg-canvas px-8"
->
+<header class="sticky top-0 z-10 flex h-13 items-center gap-4 bg-canvas px-8">
   <span class="text-sm font-medium text-fg-muted">LingQ Importer</span>
   <nav class="flex items-center gap-1">
     <a
@@ -38,6 +36,6 @@
   </nav>
 </header>
 
-<main class="px-8 pb-16">
+<main class="px-8 pb-8">
   {@render children?.()}
 </main>
