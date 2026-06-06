@@ -20,7 +20,7 @@
     dimmed: boolean;
   };
 
-  const projectKey = $derived(page.params.projectId);
+  const projectKey = $derived(page.params.projectId ?? "");
 
   let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
