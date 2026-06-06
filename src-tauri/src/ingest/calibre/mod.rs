@@ -44,8 +44,11 @@ impl CalibreLibrarySource {
                 if let Some(isbn) = meta.isbn13.clone() {
                     extras.insert("isbn13".into(), serde_json::Value::String(isbn));
                 }
-                if let Some(uuid) = meta.calibre_uuid.clone() {
-                    extras.insert("calibre_uuid".into(), serde_json::Value::String(uuid));
+                if let Some(uuid) = meta.calibre_uuid {
+                    extras.insert(
+                        "calibre_uuid".into(),
+                        serde_json::Value::String(uuid.to_string()),
+                    );
                 }
                 if !meta.tags.is_empty() {
                     extras.insert(
