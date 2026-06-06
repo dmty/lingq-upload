@@ -28,6 +28,7 @@
   let lang = $state<string>("");
   let collectionIdRaw = $state<string>("");
   let title = $state<string>("");
+  let titleEdited = $state(false);
 
   let busy = $state(false);
   let progress = $state<ProgressEntry[]>([]);
@@ -51,15 +52,33 @@
   );
 
   const collectionId = $derived(Number.parseInt(collectionIdRaw, 10));
+
+  const collectionPicked = $derived(
+    Number.isFinite(collectionId) && collectionId > 0,
+  );
+
   const canSubmit = $derived(
     !busy &&
       textPath.length > 0 &&
       audioPath.length > 0 &&
       lang.trim().length > 0 &&
       title.trim().length > 0 &&
-      Number.isFinite(collectionId) &&
-      collectionId > 0,
+      collectionPicked,
   );
+
+  // Latest progress percent for the bar (always reflects most recent emit).
+  const livePct = $derived(progress.at(-1)?.pct ?? 0);
+  const liveMessage = $derived(progress.at(-1)?.message ?? null);
+
+  const submitLabel = $derived.by(() => {
+    if (busy) return "Uploading…";
+    if (!lang.trim()) return "Choose a language to continue";
+    if (!collectionPicked) return "Pick a collection";
+    if (!textPath) return "Add the chapter text";
+    if (!audioPath) return "Add the audio";
+    if (!title.trim()) return "Name the lesson";
+    return "Upload lesson";
+  });
 
   function formatLanguageOption(l: Language): string {
     return l.known_words > 0
@@ -72,6 +91,12 @@
     const base = path.split(sep).pop() ?? path;
     const dot = base.lastIndexOf(".");
     return dot > 0 ? base.slice(0, dot) : base;
+  }
+
+  function shortPath(path: string): string {
+    if (!path) return "";
+    const sep = path.lastIndexOf("/") >= 0 ? "/" : "\\";
+    return path.split(sep).pop() ?? path;
   }
 
   function stageLabel(stage: Stage["kind"]): string {
@@ -198,8 +223,6 @@
 
   async function loadLanguages() {
     languagesError = null;
-    // Resolve username so /api/v2/languages/ returns the user-trimmed list
-    // (the catalogue otherwise). Profile probe is best-effort.
     let username: string | null = null;
     const profileRes = await commands.cmdAccountProfile();
     if (profileRes.status === "ok") {
@@ -207,10 +230,7 @@
     }
     const res = await commands.cmdListLanguages(username);
     if (res.status === "ok") {
-      // Sort by known words descending so the user's main languages float up.
       languages = [...res.data].sort((a, b) => b.known_words - a.known_words);
-      // Once we have the user-scoped list, the catalogue toggle becomes
-      // unnecessary noise — the API already trimmed it.
       if (username) showAllLanguages = false;
     } else {
       languagesError = appErrorMessage(res.error);
@@ -241,13 +261,11 @@
 
   onMount(() => {
     (async () => {
-      // Subscribe BEFORE any command can fire so we don't miss the Started event.
       unlisten = await listen<JobEvent>("job", (event) => {
         handleJobEvent(event.payload);
       });
       await loadLanguages();
     })();
-
     return () => {
       unlisten?.();
     };
@@ -271,11 +289,28 @@
         textPath = sel;
       } else {
         audioPath = sel;
-        if (!title.trim()) {
+        if (!titleEdited) {
           title = filenameStem(sel);
         }
       }
     }
+  }
+
+  function clearFile(kind: "text" | "audio") {
+    if (kind === "text") textPath = "";
+    else audioPath = "";
+  }
+
+  function uploadAnother() {
+    // Sally's "sticky destination": keep lang + collection.
+    textPath = "";
+    audioPath = "";
+    title = "";
+    titleEdited = false;
+    progress = [];
+    currentStage = null;
+    result = null;
+    error = null;
   }
 
   async function upload() {
@@ -308,310 +343,343 @@
   }
 </script>
 
-<section>
-  <h1>One-shot Upload</h1>
+<section class="mx-auto max-w-180 pt-12">
+  <h1 class="text-xl font-semibold text-fg">New lesson</h1>
+  <p class="mt-2 text-base text-fg-muted">
+    Pick a destination, then drop in your text and audio.
+  </p>
 
-  <div class="grid">
-    <label>
-      <span>Language</span>
-      <select
-        bind:value={lang}
-        onchange={onLanguageChange}
-        disabled={busy || visibleLanguages.length === 0}
-      >
-        <option value="" disabled>
-          {languagesError ? "Could not load languages" : "Select language…"}
-        </option>
-        {#each visibleLanguages as l (l.code)}
-          <option value={l.code}>{formatLanguageOption(l)}</option>
-        {/each}
-      </select>
-      {#if languagesError}
-        <span class="hint err">{languagesError}</span>
-      {:else if languages.length > 0}
-        <label class="toggle">
-          <input type="checkbox" bind:checked={showAllLanguages} />
-          Show all LingQ languages
-        </label>
-      {/if}
-    </label>
+  <div
+    class="mt-8 rounded-md border border-border bg-surface shadow-(--shadow-card)"
+  >
+    {#if result}
+      <div class="p-6">
+        <div class="flex items-start gap-3">
+          <span
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success-soft text-success"
+            aria-hidden="true"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 10.5l4 4 8-9" />
+            </svg>
+          </span>
+          <div class="flex-1">
+            <h2 class="text-md font-semibold text-fg">
+              Lesson added to your library.
+            </h2>
+            <p class="mt-1 text-sm text-fg-muted">
+              {title || "Untitled lesson"} · ID
+              <code class="tabular text-fg">{result.lesson_id}</code>
+            </p>
+            <div class="mt-4 flex items-center gap-2">
+              <a
+                href={result.lesson_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white no-underline transition-colors duration-180 ease-snappy hover:bg-accent-hover hover:no-underline"
+              >
+                Open in LingQ
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M7 17L17 7" />
+                  <path d="M8 7h9v9" />
+                </svg>
+              </a>
+              <button
+                type="button"
+                onclick={uploadAnother}
+                class="rounded-sm px-3 py-2 text-sm font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg"
+              >
+                Upload another
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    {:else if busy || progress.length > 0}
+      <div class="p-6">
+        <div class="flex items-baseline justify-between">
+          <h2 class="text-lg font-semibold text-fg">
+            {currentStage ?? "Working…"}
+          </h2>
+          <span class="tabular text-sm text-fg-muted">
+            {Math.round(livePct * 100)}%
+          </span>
+        </div>
+        <div
+          class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken"
+          aria-live="polite"
+        >
+          <div
+            class="h-full rounded-full bg-accent transition-[width] duration-180 ease-snappy"
+            style:width="{Math.max(2, livePct * 100)}%"
+          ></div>
+        </div>
+        {#if liveMessage}
+          <p class="mt-2 text-sm text-fg-muted">{liveMessage}</p>
+        {/if}
+      </div>
+    {:else}
+      <!-- Destination -->
+      <div class="p-6">
+        <h2
+          class="text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+        >
+          Destination
+        </h2>
+        <div class="mt-4 grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-sm text-fg-muted">Language</span>
+            <select
+              bind:value={lang}
+              onchange={onLanguageChange}
+              disabled={busy || visibleLanguages.length === 0}
+              class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken disabled:text-fg-subtle"
+            >
+              <option value="" disabled>
+                {languagesError
+                  ? "Could not load languages"
+                  : "Select language…"}
+              </option>
+              {#each visibleLanguages as l (l.code)}
+                <option value={l.code}>{formatLanguageOption(l)}</option>
+              {/each}
+            </select>
+            {#if languagesError}
+              <span class="mt-1 block text-xs text-error">
+                {languagesError}
+              </span>
+            {:else if languages.length > 0}
+              <label
+                class="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted"
+              >
+                <input
+                  type="checkbox"
+                  bind:checked={showAllLanguages}
+                  class="h-3.5 w-3.5 accent-accent"
+                />
+                Show all LingQ languages
+              </label>
+            {/if}
+          </label>
 
-    <label>
-      <span>Collection</span>
-      <select
-        bind:value={collectionIdRaw}
-        disabled={busy || loadingCollections || collections.length === 0}
-      >
-        <option value="" disabled>
-          {#if !lang}
-            Pick a language first
-          {:else if loadingCollections}
-            Loading…
-          {:else if collectionsError}
-            Could not load collections
-          {:else if collections.length === 0}
-            No collections in this language
-          {:else}
-            Select collection…
+          <label class="block">
+            <span class="text-sm text-fg-muted">Collection</span>
+            <select
+              bind:value={collectionIdRaw}
+              disabled={busy || loadingCollections || collections.length === 0}
+              class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken disabled:text-fg-subtle"
+            >
+              <option value="" disabled>
+                {#if !lang}
+                  Pick a language first
+                {:else if loadingCollections}
+                  Loading…
+                {:else if collectionsError}
+                  Could not load collections
+                {:else if collections.length === 0}
+                  No collections in this language
+                {:else}
+                  Select collection…
+                {/if}
+              </option>
+              {#each collections as c (c.id)}
+                <option value={String(c.id)}>{c.title}</option>
+              {/each}
+            </select>
+            {#if collectionsError}
+              <span class="mt-1 block text-xs text-error">
+                {collectionsError}
+              </span>
+            {/if}
+          </label>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="border-t border-border p-6">
+        <h2
+          class="text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+        >
+          Content
+        </h2>
+
+        <label class="mt-4 block">
+          <span class="text-sm text-fg-muted">Lesson title</span>
+          <input
+            type="text"
+            bind:value={title}
+            oninput={() => (titleEdited = true)}
+            disabled={busy}
+            placeholder="Auto-fills from audio filename"
+            class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken"
+          />
+          {#if !titleEdited && audioPath}
+            <span class="mt-1 block text-xs text-fg-subtle">
+              Auto-filled from audio · edit freely
+            </span>
           {/if}
-        </option>
-        {#each collections as c (c.id)}
-          <option value={String(c.id)}>{c.title} ({c.id})</option>
-        {/each}
-      </select>
-      {#if collectionsError}<span class="hint err">{collectionsError}</span>{/if}
-    </label>
+        </label>
 
-    <label class="span2">
-      <span>Lesson title</span>
-      <input
-        type="text"
-        bind:value={title}
-        disabled={busy}
-        placeholder="Auto-fills from audio filename"
-      />
-    </label>
+        <div class="mt-4 grid gap-3">
+          <button
+            type="button"
+            onclick={() => pick("text")}
+            disabled={busy}
+            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {textPath
+              ? 'border-success bg-success-soft'
+              : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class={textPath ? "text-success" : "text-fg-muted"}
+              aria-hidden="true"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="9" y1="14" x2="15" y2="14" />
+              <line x1="9" y1="18" x2="13" y2="18" />
+            </svg>
+            <div class="flex-1">
+              {#if textPath}
+                <div class="text-sm font-medium text-fg">
+                  {shortPath(textPath)}
+                </div>
+                <div class="text-xs text-fg-subtle">Click to choose a different file</div>
+              {:else}
+                <div class="text-sm font-medium text-fg">
+                  Drop chapter text or click to choose
+                </div>
+                <div class="text-xs text-fg-subtle">.xhtml, .html, .txt</div>
+              {/if}
+            </div>
+            {#if textPath}
+              <span
+                role="button"
+                tabindex="0"
+                aria-label="Clear chapter text"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  clearFile("text");
+                }}
+                onkeydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    clearFile("text");
+                  }
+                }}
+                class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
+              >
+                ×
+              </span>
+            {/if}
+          </button>
 
-    <div class="span2 picker">
-      <span class="picker-label">Chapter text</span>
-      <div class="picker-row">
+          <button
+            type="button"
+            onclick={() => pick("audio")}
+            disabled={busy}
+            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {audioPath
+              ? 'border-success bg-success-soft'
+              : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class={audioPath ? "text-success" : "text-fg-muted"}
+              aria-hidden="true"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+            <div class="flex-1">
+              {#if audioPath}
+                <div class="text-sm font-medium text-fg">
+                  {shortPath(audioPath)}
+                </div>
+                <div class="text-xs text-fg-subtle">Click to choose a different file</div>
+              {:else}
+                <div class="text-sm font-medium text-fg">
+                  Drop audio or click to choose
+                </div>
+                <div class="text-xs text-fg-subtle">.m4b, .m4a, .mp3</div>
+              {/if}
+            </div>
+            {#if audioPath}
+              <span
+                role="button"
+                tabindex="0"
+                aria-label="Clear audio"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  clearFile("audio");
+                }}
+                onkeydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    clearFile("audio");
+                  }
+                }}
+                class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
+              >
+                ×
+              </span>
+            {/if}
+          </button>
+        </div>
+
+        {#if error}
+          <div
+            role="alert"
+            class="mt-4 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
+          >
+            {error}
+          </div>
+        {/if}
+
         <button
           type="button"
-          onclick={() => pick("text")}
-          disabled={busy}
-          class="secondary"
+          onclick={upload}
+          disabled={!canSubmit}
+          class="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-accent text-base font-medium text-white transition-colors duration-180 ease-snappy hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-fg-subtle"
         >
-          Choose file…
+          {submitLabel}
         </button>
-        <code class="path">{textPath || "(none)"}</code>
       </div>
-    </div>
-
-    <div class="span2 picker">
-      <span class="picker-label">Audio</span>
-      <div class="picker-row">
-        <button
-          type="button"
-          onclick={() => pick("audio")}
-          disabled={busy}
-          class="secondary"
-        >
-          Choose file…
-        </button>
-        <code class="path">{audioPath || "(none)"}</code>
-      </div>
-    </div>
+    {/if}
   </div>
-
-  <div class="actions">
-    <button onclick={upload} disabled={!canSubmit}>
-      {busy ? "Uploading…" : "Upload"}
-    </button>
-  </div>
-
-  {#if currentStage || progress.length > 0}
-    <div class="progress" aria-live="polite">
-      <h2>Progress</h2>
-      {#if currentStage}
-        <p class="stage">{currentStage}</p>
-      {/if}
-      <ul>
-        {#each progress as p, i (i)}
-          <li>
-            <strong>{stageLabel(p.stage)}</strong>
-            <span class="pct">{Math.round(p.pct * 100)}%</span>
-            {#if p.message}<span class="msg">{p.message}</span>{/if}
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if result}
-    <div class="result" role="status">
-      <h2>Uploaded</h2>
-      <p>
-        Lesson ID: <code>{result.lesson_id}</code>
-      </p>
-      <p>
-        <a href={result.lesson_url} target="_blank" rel="noopener noreferrer">
-          Open course in LingQ
-        </a>
-      </p>
-    </div>
-  {/if}
-
-  {#if error}
-    <p class="error" role="alert">{error}</p>
-  {/if}
 </section>
-
-<style>
-  section {
-    max-width: 720px;
-    margin: 0 auto;
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem 1rem;
-  }
-
-  .span2 {
-    grid-column: 1 / -1;
-  }
-
-  label {
-    display: block;
-  }
-
-  label span,
-  .picker-label {
-    display: block;
-    font-size: 0.85rem;
-    margin-bottom: 0.25rem;
-    color: #333;
-  }
-
-  input,
-  select {
-    width: 100%;
-    padding: 0.5rem;
-    border-radius: 4px;
-    border: 1px solid #888;
-    font: inherit;
-    box-sizing: border-box;
-    background: white;
-  }
-
-  .hint {
-    display: block;
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
-  }
-
-  .hint.err {
-    color: #c00;
-  }
-
-  .toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
-    color: #555;
-    cursor: pointer;
-  }
-
-  .toggle input {
-    width: auto;
-  }
-
-  .picker-row {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-
-  .path {
-    flex: 1;
-    background: #f4f4f4;
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .actions {
-    margin-top: 1rem;
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  button {
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    border: 1px solid #535bf2;
-    background: #535bf2;
-    color: white;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  button.secondary {
-    background: transparent;
-    color: inherit;
-    border-color: #888;
-  }
-
-  button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .progress {
-    margin-top: 1.5rem;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
-    background: #fafafa;
-  }
-
-  .progress h2,
-  .result h2 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1rem;
-  }
-
-  .progress ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    max-height: 220px;
-    overflow: auto;
-    font-size: 0.85rem;
-  }
-
-  .progress li {
-    padding: 0.2rem 0;
-    border-bottom: 1px dashed #eee;
-  }
-
-  .progress li:last-child {
-    border-bottom: none;
-  }
-
-  .pct {
-    margin-left: 0.5rem;
-    color: #555;
-  }
-
-  .msg {
-    margin-left: 0.5rem;
-    color: #777;
-  }
-
-  .stage {
-    font-weight: 500;
-    color: #444;
-    margin: 0 0 0.5rem 0;
-  }
-
-  .result {
-    margin-top: 1.5rem;
-    border: 1px solid #cfd;
-    background: #f4fff7;
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
-  }
-
-  .error {
-    margin-top: 1rem;
-    color: #c00;
-    font-size: 0.9rem;
-  }
-</style>

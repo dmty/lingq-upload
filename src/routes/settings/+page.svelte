@@ -96,14 +96,14 @@
   });
 </script>
 
-<section class="mx-auto max-w-[560px] pt-12">
+<section class="mx-auto max-w-140 pt-12">
   <h1 class="text-xl font-semibold text-fg">Settings</h1>
   <p class="mt-2 text-base text-fg-muted">
     Where this app keeps your keys and preferences.
   </p>
 
   <div
-    class="mt-8 rounded-[var(--radius-md)] border border-border bg-surface p-6 shadow-(--shadow-card)"
+    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
   >
     <h2 class="text-md font-semibold text-fg">LingQ API key</h2>
     <p class="mt-1 text-sm text-fg-subtle">
@@ -128,13 +128,13 @@
           bind:value={key}
           disabled={busy}
           placeholder="Paste your LingQ API key"
-          class="h-10 w-full rounded-sm border border-border bg-surface px-3 pr-16 text-base text-fg outline-none transition-[box-shadow,border-color] duration-[180ms] ease-(--ease-snappy) placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
+          class="h-10 w-full rounded-sm border border-border bg-surface px-3 pr-16 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
         />
         <button
           type="button"
           onclick={pasteFromClipboard}
           disabled={busy}
-          class="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors duration-[120ms] hover:bg-surface-sunken hover:text-fg disabled:opacity-50"
+          class="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg disabled:opacity-50"
         >
           Paste
         </button>
@@ -143,7 +143,7 @@
 
     <div class="mt-4 flex items-center gap-2 text-sm">
       <span
-        class="inline-block h-2 w-2 rounded-full transition-colors duration-[180ms] ease-(--ease-snappy)"
+        class="inline-block h-2 w-2 rounded-full transition-colors duration-180 ease-snappy"
         class:bg-fg-subtle={!savedTail}
         class:bg-success={!!savedTail}
       ></span>
@@ -170,7 +170,7 @@
         type="button"
         onclick={clear}
         disabled={busy || !savedTail}
-        class="rounded-sm px-3 py-2 text-sm font-medium text-fg-muted transition-colors duration-[120ms] hover:bg-surface-sunken hover:text-fg disabled:opacity-40"
+        class="rounded-sm px-3 py-2 text-sm font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg disabled:opacity-40"
       >
         Clear
       </button>
@@ -178,7 +178,7 @@
         type="button"
         onclick={save}
         disabled={busy || key.length === 0}
-        class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white transition-colors duration-[180ms] ease-(--ease-snappy) hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+        class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white transition-colors duration-180 ease-snappy hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
       >
         {#if justSaved}
           <svg
