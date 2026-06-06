@@ -7,6 +7,12 @@ use specta::Type;
 use thiserror::Error;
 use tokio::process::Command;
 
+pub mod batch;
+pub mod track;
+
+pub use batch::{transcode_batch_sequential, TranscodeJob};
+pub use track::AudioTrack;
+
 /// Bundled binary paths set at app startup from `app.path().resource_dir()`.
 /// Release builds use these; dev builds fall through to `FFMPEG_BIN` or PATH.
 static BUNDLED_FFMPEG: OnceLock<PathBuf> = OnceLock::new();

@@ -1,0 +1,151 @@
+use std::path::Path;
+
+use lingq_upload_lib::core::audio::AudioTrack;
+use lingq_upload_lib::core::epub::Chapter;
+use lingq_upload_lib::core::matcher::{
+    allowed, auto_match, classify, MatchOutcome, MismatchCondition, MismatchResponse,
+};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct Fixture {
+    chapters: usize,
+    tracks: usize,
+    expected_outcome: String,
+    expected_condition: Option<String>,
+    expected_options: Option<Vec<String>>,
+    expected_preselect: Option<String>,
+}
+
+fn condition_str(c: MismatchCondition) -> &'static str {
+    match c {
+        MismatchCondition::OneToMany => "OneToMany",
+        MismatchCondition::ManyToOne => "ManyToOne",
+        MismatchCondition::CountOff => "CountOff",
+        MismatchCondition::Unalignable => "Unalignable",
+    }
+}
+
+fn response_str(r: MismatchResponse) -> &'static str {
+    match r {
+        MismatchResponse::PairAccept => "PairAccept",
+        MismatchResponse::PairDrop => "PairDrop",
+        MismatchResponse::SingleLesson => "SingleLesson",
+        MismatchResponse::Cancel => "Cancel",
+    }
+}
+
+fn check_fixture(path: &Path) {
+    let raw = std::fs::read_to_string(path).expect("read fixture");
+    let f: Fixture = serde_json::from_str(&raw).expect("parse fixture");
+    let outcome = auto_match_for_counts(f.chapters, f.tracks);
+    match (&f.expected_outcome[..], outcome) {
+        ("Paired", MatchOutcome::Paired { pairs }) => {
+            assert_eq!(pairs.len(), f.chapters);
+        }
+        (
+            "Mismatch",
+            MatchOutcome::Mismatch {
+                condition,
+                options,
+                preselect,
+            },
+        ) => {
+            assert_eq!(
+                Some(condition_str(condition).to_string()),
+                f.expected_condition,
+                "{}",
+                path.display()
+            );
+            let got: Vec<String> = options.iter().copied().map(|r| response_str(r).into()).collect();
+            assert_eq!(Some(got), f.expected_options, "{}", path.display());
+            assert_eq!(
+                Some(response_str(preselect).to_string()),
+                f.expected_preselect,
+                "{}",
+                path.display()
+            );
+        }
+        (other, outcome) => panic!(
+            "unexpected outcome for {}: expected {other}, got {outcome:?}",
+            path.display()
+        ),
+    }
+}
+
+fn auto_match_for_counts(c: usize, t: usize) -> MatchOutcome {
+    let chapters: Vec<Chapter> = (0..c)
+        .map(|i| Chapter {
+            order: i,
+            title: format!("c{i}"),
+            body: String::new(),
+        })
+        .collect();
+    let tracks: Vec<AudioTrack> = (0..t)
+        .map(|i| AudioTrack {
+            order: i,
+            path: std::path::PathBuf::from(format!("/tmp/t{i}.mp3")),
+            duration_sec: None,
+            title: None,
+        })
+        .collect();
+    auto_match(&chapters, &tracks)
+}
+
+#[test]
+fn fixtures_clean_pair() {
+    check_fixture(Path::new("tests/fixtures/matcher/clean_pair.json"));
+}
+#[test]
+fn fixtures_one_to_many() {
+    check_fixture(Path::new("tests/fixtures/matcher/one_to_many.json"));
+}
+#[test]
+fn fixtures_many_to_one() {
+    check_fixture(Path::new("tests/fixtures/matcher/many_to_one.json"));
+}
+#[test]
+fn fixtures_count_off_plus_one() {
+    check_fixture(Path::new("tests/fixtures/matcher/count_off_plus_one.json"));
+}
+#[test]
+fn fixtures_count_off_minus_two() {
+    check_fixture(Path::new("tests/fixtures/matcher/count_off_minus_two.json"));
+}
+#[test]
+fn fixtures_unalignable() {
+    check_fixture(Path::new("tests/fixtures/matcher/unalignable.json"));
+}
+
+#[test]
+fn equal_counts_returns_paired_by_index() {
+    let outcome = auto_match_for_counts(3, 3);
+    match outcome {
+        MatchOutcome::Paired { pairs } => {
+            assert_eq!(pairs, vec![(0, 0), (1, 1), (2, 2)]);
+        }
+        _ => panic!("expected Paired"),
+    }
+}
+
+#[test]
+fn manual_pair_is_not_a_response() {
+    for c in [MismatchCondition::OneToMany, MismatchCondition::ManyToOne, MismatchCondition::CountOff, MismatchCondition::Unalignable] {
+        let (opts, _) = allowed(c);
+        for opt in opts {
+            // No "ManualPair" variant exists; ensure preselect/options are within enum.
+            assert!(matches!(opt, MismatchResponse::PairAccept | MismatchResponse::PairDrop | MismatchResponse::SingleLesson | MismatchResponse::Cancel));
+        }
+    }
+}
+
+#[test]
+fn classify_boundary_cases() {
+    assert_eq!(classify(0, 0), None);
+    assert_eq!(classify(1, 1), None);
+    assert_eq!(classify(1, 2), Some(MismatchCondition::CountOff));
+    assert_eq!(classify(1, 3), Some(MismatchCondition::OneToMany));
+    assert_eq!(classify(3, 1), Some(MismatchCondition::ManyToOne));
+    assert_eq!(classify(5, 20), Some(MismatchCondition::Unalignable));
+    assert_eq!(classify(20, 5), Some(MismatchCondition::Unalignable));
+}
