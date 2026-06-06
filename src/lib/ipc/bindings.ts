@@ -59,7 +59,7 @@ async cmdClearLingqKey() : Promise<Result<null, AppError>> {
 
 /** user-defined types **/
 
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "Secrets"; message: SecretError }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
@@ -72,6 +72,7 @@ export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
  */
 export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | { kind: "MissingEntry" } | { kind: "Backend"; message: string }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
+export type TextError = { kind: "Io"; message: string }
 
 /** tauri-specta globals **/
 

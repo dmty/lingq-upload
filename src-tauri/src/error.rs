@@ -2,6 +2,7 @@ use serde::Serialize;
 use specta::Type;
 use thiserror::Error;
 
+use crate::core::text::TextError;
 use crate::secrets::SecretError;
 
 #[derive(Error, Debug, Serialize, Type)]
@@ -14,6 +15,8 @@ pub enum AppError {
     Internal(String),
     #[error("secrets error: {0}")]
     Secrets(SecretError),
+    #[error("text error: {0}")]
+    Text(#[from] TextError),
 }
 
 impl From<std::io::Error> for AppError {
