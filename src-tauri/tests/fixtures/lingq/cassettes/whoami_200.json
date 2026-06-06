@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v3/ja/collections/my/",
+  "url_query": "page_size=1",
+  "status": 200,
+  "response_body": "{\"count\":1,\"next\":null,\"previous\":null,\"results\":[{\"id\":42,\"title\":\"Sample Collection\",\"language\":\"ja\"}]}",
+  "response_content_type": "application/json"
+}

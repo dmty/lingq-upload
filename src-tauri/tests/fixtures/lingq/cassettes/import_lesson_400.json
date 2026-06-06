@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "url_path": "/api/v3/ja/lessons/import/",
+  "url_query": "",
+  "status": 400,
+  "response_body": "{\"detail\":\"text field is required.\"}",
+  "response_content_type": "application/json"
+}

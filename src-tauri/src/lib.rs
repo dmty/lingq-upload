@@ -3,6 +3,7 @@ mod core;
 mod error;
 mod events;
 pub mod ingest;
+pub mod lingq;
 mod secrets;
 
 use specta_typescript::Typescript;
@@ -26,6 +27,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<events::JobEvent>()
         .typ::<events::Stage>()
         .typ::<events::LogLevel>()
+        .typ::<lingq::LingqError>()
+        .typ::<lingq::WhoAmI>()
+        .typ::<lingq::LessonOpts>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.

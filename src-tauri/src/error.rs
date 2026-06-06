@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::core::audio::AudioError;
 use crate::core::text::TextError;
+use crate::lingq::LingqError;
 use crate::secrets::SecretError;
 
 #[derive(Error, Debug, Serialize, Type)]
@@ -20,6 +21,8 @@ pub enum AppError {
     Text(#[from] TextError),
     #[error("audio error: {0}")]
     Audio(#[from] AudioError),
+    #[error("lingq error: {0}")]
+    Lingq(#[from] LingqError),
 }
 
 impl From<std::io::Error> for AppError {
