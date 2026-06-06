@@ -92,7 +92,9 @@ pub async fn reconcile(
     Ok(report)
 }
 
-fn candidate_to_id(c: &Candidate) -> ProjectId {
+/// Build a `ProjectId` from a `Candidate`, honouring every strong key the
+/// candidate carries. Shared by reconcile and the manual-create path.
+pub fn candidate_to_id(c: &Candidate) -> ProjectId {
     let author = c.authors.first().map(|s| s.as_str()).unwrap_or("");
     let mut id = ProjectId::from_title_author(&c.title, author);
     if let Some(asin) = c

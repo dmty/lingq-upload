@@ -45,24 +45,26 @@ impl From<StoreError> for LibraryError {
     }
 }
 
-/// Load the index from disk if valid; otherwise rebuild from the store.
+/// Build a fresh `LibraryIndex` from the store and persist it to disk.
 ///
-/// Corrupt index → silent full rebuild (per AC2).
+/// The on-disk index is just a cold-start cache; the store is the source of
+/// truth. Always rebuild here so callers see writes from other commands
+/// (e.g. project creation) without manual invalidation. The cached file is
+/// rewritten atomically so cross-process readers still see a consistent
+/// snapshot.
 pub fn load_or_rebuild(
     index_path: &Path,
     store: &dyn ProjectStore,
 ) -> Result<LibraryIndex, LibraryError> {
-    if let Ok(bytes) = fs::read(index_path) {
-        if let Ok(idx) = serde_json::from_slice::<LibraryIndex>(&bytes) {
-            if idx.schema_version == INDEX_SCHEMA_V1 {
-                return Ok(idx);
-            }
-        }
-    }
-    rebuild_from_store(store)
+    let idx = rebuild_from_store(store)?;
+    // Best-effort cache write; surface only hard errors. A read-only data
+    // dir shouldn't block list calls, but corruption-causing failures
+    // should still propagate so the caller can react.
+    write_atomic(&idx, index_path)?;
+    Ok(idx)
 }
 
-fn rebuild_from_store(store: &dyn ProjectStore) -> Result<LibraryIndex, LibraryError> {
+pub fn rebuild_from_store(store: &dyn ProjectStore) -> Result<LibraryIndex, LibraryError> {
     let summaries = store.list()?;
     let entries = summaries
         .into_iter()
