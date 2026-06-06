@@ -12,7 +12,8 @@
     type UploadResult,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
-  import { basename, extOf, filenameStem } from "$lib/paths";
+  import { extOf, filenameStem } from "$lib/paths";
+  import DropZone from "$lib/components/DropZone.svelte";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -516,140 +517,24 @@
         </label>
 
         <div class="mt-4 grid gap-3">
-          <button
-            type="button"
-            bind:this={textDropEl}
-            onclick={() => pick("text")}
+          <DropZone
+            variant="text"
+            path={textPath}
+            hovered={hoverZone === "text"}
             disabled={busy}
-            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hoverZone ===
-            'text'
-              ? 'border-accent bg-accent-soft'
-              : textPath
-                ? 'border-success bg-success-soft'
-                : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class={textPath ? "text-success" : "text-fg-muted"}
-              aria-hidden="true"
-            >
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="9" y1="14" x2="15" y2="14" />
-              <line x1="9" y1="18" x2="13" y2="18" />
-            </svg>
-            <div class="flex-1">
-              {#if textPath}
-                <div class="text-sm font-medium text-fg">
-                  {basename(textPath)}
-                </div>
-                <div class="text-xs text-fg-subtle">
-                  Click to choose a different file
-                </div>
-              {:else}
-                <div class="text-sm font-medium text-fg">
-                  Drop chapter text or click to choose
-                </div>
-                <div class="text-xs text-fg-subtle">.xhtml, .html, .txt</div>
-              {/if}
-            </div>
-            {#if textPath}
-              <span
-                role="button"
-                tabindex="0"
-                aria-label="Clear chapter text"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  clearFile("text");
-                }}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    clearFile("text");
-                  }
-                }}
-                class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
-              >
-                ×
-              </span>
-            {/if}
-          </button>
-
-          <button
-            type="button"
-            bind:this={audioDropEl}
-            onclick={() => pick("audio")}
+            onPick={() => pick("text")}
+            onClear={() => clearFile("text")}
+            ref={(el) => (textDropEl = el)}
+          />
+          <DropZone
+            variant="audio"
+            path={audioPath}
+            hovered={hoverZone === "audio"}
             disabled={busy}
-            class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hoverZone ===
-            'audio'
-              ? 'border-accent bg-accent-soft'
-              : audioPath
-                ? 'border-success bg-success-soft'
-                : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class={audioPath ? "text-success" : "text-fg-muted"}
-              aria-hidden="true"
-            >
-              <path d="M9 18V5l12-2v13" />
-              <circle cx="6" cy="18" r="3" />
-              <circle cx="18" cy="16" r="3" />
-            </svg>
-            <div class="flex-1">
-              {#if audioPath}
-                <div class="text-sm font-medium text-fg">
-                  {basename(audioPath)}
-                </div>
-                <div class="text-xs text-fg-subtle">
-                  Click to choose a different file
-                </div>
-              {:else}
-                <div class="text-sm font-medium text-fg">
-                  Drop audio or click to choose
-                </div>
-                <div class="text-xs text-fg-subtle">.m4b, .m4a, .mp3</div>
-              {/if}
-            </div>
-            {#if audioPath}
-              <span
-                role="button"
-                tabindex="0"
-                aria-label="Clear audio"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  clearFile("audio");
-                }}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    clearFile("audio");
-                  }
-                }}
-                class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
-              >
-                ×
-              </span>
-            {/if}
-          </button>
+            onPick={() => pick("audio")}
+            onClear={() => clearFile("audio")}
+            ref={(el) => (audioDropEl = el)}
+          />
         </div>
 
         {#if error}
