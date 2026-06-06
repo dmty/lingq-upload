@@ -29,6 +29,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::library::cmd_library_list,
             commands::add_project::cmd_create_project,
             commands::matcher::cmd_matcher_resolve,
+            commands::project::cmd_project_load,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.

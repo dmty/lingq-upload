@@ -126,6 +126,23 @@ async cmdMatcherResolve(projectId: ProjectId, condition: MismatchCondition, resp
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Load a persisted project by its `join_key`.
+ * 
+ * The frontend reaches Match and Run routes with a stringified key in the URL
+ * (e.g. `asin:B0...`, `isbn13:978...`, `uuid:...`, `ch:<hex>`). This command
+ * resolves that key back to the full [`Project`] so the UI can render
+ * receipts, settings, and rebuild a ProjectId for typed downstream commands
+ * (notably `cmd_matcher_resolve`).
+ */
+async cmdProjectLoad(key: string) : Promise<Result<Project, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_project_load", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

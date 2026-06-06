@@ -5,5 +5,6 @@ pub mod library;
 pub mod lingq;
 pub mod matcher;
 pub mod ping;
+pub mod project;
 pub mod secrets;
 pub mod upload;
