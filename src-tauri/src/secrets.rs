@@ -2,7 +2,9 @@ use serde::Serialize;
 use specta::Type;
 use thiserror::Error;
 
-const SERVICE: &str = "nz.verum.lingq-importer";
+// Match tauri.conf.json bundle identifier so macOS displays the app's real
+// identity in the keychain prompt instead of a stale namespace.
+const SERVICE: &str = "com.lingq.upload";
 const ACCOUNT: &str = "lingq_api_key";
 
 /// Errors raised by the secrets layer, lifted from the keyring backend.

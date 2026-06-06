@@ -91,7 +91,7 @@ Emitted on a single channel `"job"`; frontend routes by `job_id` and `kind`.
 
 ## AD-009 — Secrets: keyring-rs, never project.json
 
-**Decision:** Use the `keyring-rs` crate behind a `KeyringBackend` trait (so CI can stub it). The LingQ API key is the only secret today; it lives under service `nz.verum.lingq-importer`, account `lingq_api_key`. The crate handles macOS Keychain, Windows Credential Manager, and `libsecret` on Linux.
+**Decision:** Use the `keyring-rs` crate behind a `KeyringBackend` trait (so CI can stub it). The LingQ API key is the only secret today; it lives under service `com.lingq.upload` (matches `tauri.conf.json` bundle identifier), account `lingq_api_key`. The crate handles macOS Keychain, Windows Credential Manager, and `libsecret` on Linux.
 
 **Banned:** Writing the API key to `project.json`, environment variables, or any log output. `tracing` redacts the `Authorization` header by default.
 

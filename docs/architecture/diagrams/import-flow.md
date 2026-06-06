@@ -20,7 +20,7 @@ sequenceDiagram
   IPC->>CmdUp: invoke('upload_one_shot', args)
 
   CmdUp->>Sec: load_lingq_key()
-  Sec->>Keychain: read 'nz.verum.lingq-importer / lingq_api_key'
+  Sec->>Keychain: read 'com.lingq.upload / lingq_api_key'
   Keychain-->>Sec: Some(key)
   Sec-->>CmdUp: Ok(key)
 
