@@ -1,0 +1,9 @@
+{
+  "name": "count_off_minus_two_22_20",
+  "chapters": 22,
+  "tracks": 20,
+  "expected_outcome": "Mismatch",
+  "expected_condition": "CountOff",
+  "expected_options": ["PairAccept", "PairDrop", "Cancel"],
+  "expected_preselect": "PairAccept"
+}

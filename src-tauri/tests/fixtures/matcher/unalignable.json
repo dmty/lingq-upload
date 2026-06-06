@@ -1,0 +1,9 @@
+{
+  "name": "unalignable_5_20",
+  "chapters": 5,
+  "tracks": 20,
+  "expected_outcome": "Mismatch",
+  "expected_condition": "Unalignable",
+  "expected_options": ["SingleLesson", "Cancel"],
+  "expected_preselect": "Cancel"
+}

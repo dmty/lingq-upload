@@ -1,0 +1,9 @@
+{
+  "name": "many_to_one_27_1",
+  "chapters": 27,
+  "tracks": 1,
+  "expected_outcome": "Mismatch",
+  "expected_condition": "ManyToOne",
+  "expected_options": ["SingleLesson", "Cancel"],
+  "expected_preselect": "SingleLesson"
+}
