@@ -1,48 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { commands, type AppError, type SecretError } from "$lib/ipc/bindings";
+  import { commands } from "$lib/ipc/bindings";
+  import { appErrorMessage } from "$lib/errors";
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
   let busy = $state(false);
   let error = $state<string | null>(null);
   let justSaved = $state(false);
-
-  function secretMessage(e: SecretError): string {
-    switch (e.kind) {
-      case "LockedKeychain":
-        return "Your OS keychain is locked. Unlock it and try again.";
-      case "UserDenied":
-        return "Access to the keychain was denied. Approve the prompt and retry.";
-      case "MissingEntry":
-        return "No saved key was found.";
-      case "Backend":
-        return `Keychain error: ${e.message}`;
-    }
-  }
-
-  function appErrorMessage(e: AppError): string {
-    switch (e.kind) {
-      case "Secrets":
-        return secretMessage(e.message);
-      case "Io":
-        return `I/O error: ${e.message}`;
-      case "Internal":
-        return `Internal error: ${e.message}`;
-      case "MissingApiKey":
-        return "No LingQ API key configured.";
-      case "Unsupported":
-        return `Unsupported: ${e.message}`;
-      case "Lingq":
-        return `LingQ: ${"message" in e.message ? e.message.message : e.message.kind}`;
-      case "Audio":
-        return `Audio: ${"message" in e.message ? e.message.message : e.message.kind}`;
-      case "Text":
-        return `Text: ${e.message.message}`;
-      case "Ingest":
-        return `Ingest: ${"message" in e.message ? e.message.message : e.message.kind}`;
-    }
-  }
 
   async function refresh() {
     error = null;
