@@ -245,6 +245,10 @@
         return `I/O error: ${e.message}`;
       case "Internal":
         return e.message;
+      case "MissingApiKey":
+        return "No LingQ API key configured. Open Settings to add one.";
+      case "Unsupported":
+        return e.message;
       case "Secrets":
         return secretMessage(e.message);
       case "Lingq":
