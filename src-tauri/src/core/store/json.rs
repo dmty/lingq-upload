@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use super::{ProjectStore, StoreError};
+use super::{safe_path_segment, ProjectStore, StoreError};
 use crate::core::identity::ProjectId;
 use crate::core::project::{Project, ProjectSummary};
 
@@ -20,7 +20,11 @@ impl JsonProjectStore {
     }
 
     fn dir_for(&self, id: &ProjectId) -> PathBuf {
-        self.root.join("projects").join(id.join_key())
+        // `join_key()` contains `:`, which is illegal in Windows path
+        // segments. Sanitize before touching the filesystem.
+        self.root
+            .join("projects")
+            .join(safe_path_segment(&id.join_key()))
     }
 
     fn project_path(&self, id: &ProjectId) -> PathBuf {
@@ -95,13 +99,18 @@ impl ProjectStore for JsonProjectStore {
             let bytes = match fs::read(&pj) {
                 Ok(b) => b,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(io_err(&pj, e)),
+                Err(e) => {
+                    tracing::warn!(path = %pj.display(), error = %e, "skipping unreadable project.json");
+                    continue;
+                }
             };
-            let p: Project = serde_json::from_slice(&bytes).map_err(|e| StoreError::Corrupt {
-                path: pj.clone(),
-                message: e.to_string(),
-            })?;
-            out.push((&p).into());
+            match serde_json::from_slice::<Project>(&bytes) {
+                Ok(p) => out.push((&p).into()),
+                Err(e) => {
+                    tracing::warn!(path = %pj.display(), error = %e, "skipping corrupt project.json");
+                    continue;
+                }
+            }
         }
         out.sort_by(|a: &ProjectSummary, b| a.title.cmp(&b.title));
         Ok(out)
