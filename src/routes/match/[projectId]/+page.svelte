@@ -33,15 +33,30 @@
   async function confirm() {
     busy = true;
     error = null;
-    // ProjectId is opaque on the route; the Mismatch route is reached with the
-    // strong-key form in the URL. For Sprint 2 we accept the user's selection
-    // and route ahead — backend stores the decision when invoked from the
-    // live Run flow with the full ProjectId payload.
     if (selected === "cancel") {
       goto("/library");
       return;
     }
-    goto(`/run/${page.params.projectId}`);
+    const projectKey = page.params.projectId;
+    const loaded = await commands.cmdProjectLoad(projectKey);
+    if (loaded.status === "error") {
+      error = appErrorMessage(loaded.error);
+      busy = false;
+      return;
+    }
+    const resolved = await commands.cmdMatcherResolve(
+      loaded.data.id,
+      condition,
+      selected,
+      chapters,
+      tracks,
+    );
+    if (resolved.status === "error") {
+      error = appErrorMessage(resolved.error);
+      busy = false;
+      return;
+    }
+    goto(`/run/${projectKey}`);
   }
 </script>
 
