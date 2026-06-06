@@ -2,7 +2,13 @@
   import { onDestroy, onMount } from "svelte";
   import { page } from "$app/state";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import type { JobEvent } from "$lib/ipc/bindings";
+  import {
+    commands,
+    type ChapterReceipt,
+    type JobEvent,
+    type Project,
+  } from "$lib/ipc/bindings";
+  import { appErrorMessage } from "$lib/errors";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
 
   type Row = {
@@ -16,22 +22,41 @@
 
   const projectKey = $derived(page.params.projectId);
 
+  let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
+  let error = $state<string | null>(null);
   let unlisten: UnlistenFn | undefined;
   let running = $state(false);
 
-  onMount(async () => {
-    // For Sprint 2 the row set is bootstrapped from a future
-    // cmd_project_load(projectId). Until that lands, render an empty
-    // resumable list and reflect live JobEvent streams.
-    rows = [];
+  function receiptRow(r: ChapterReceipt): Row {
+    return {
+      index: r.chapter_index,
+      title: `Chapter ${r.chapter_index + 1}`,
+      status: "done",
+      timestamp: r.uploaded_at ?? null,
+      degraded: !!r.degraded,
+      dimmed: false,
+    };
+  }
 
+  onMount(async () => {
+    const result = await commands.cmdProjectLoad(projectKey);
+    if (result.status === "error") {
+      error = appErrorMessage(result.error);
+    } else {
+      project = result.data;
+      const receipts = project.receipts ?? [];
+      rows = receipts.map(receiptRow);
+    }
+
+    // JobEvent kinds are PascalCase (Started/Progress/Result/Cancelled — see
+    // events::JobEvent). Channel is the global "job" emitter; concurrent
+    // multi-project runs would interleave here. Live per-row updates land in
+    // a future iteration.
     unlisten = await listen<JobEvent>("job", (e) => {
       const ev = e.payload;
       if (ev.kind === "Started") {
         running = true;
-      } else if (ev.kind === "Progress") {
-        // pct tracked per stage — we surface message text on rows.
       } else if (ev.kind === "Result" || ev.kind === "Cancelled") {
         running = false;
       }
@@ -56,7 +81,13 @@
     {/if}
   </header>
 
-  {#if rows.length === 0}
+  {#if error}
+    <p
+      class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm text-fg"
+    >
+      {error}
+    </p>
+  {:else if rows.length === 0}
     <p class="rounded-sm border border-border bg-surface p-4 text-sm text-fg-muted">
       No chapter receipts yet. Once a job starts, per-chapter rows stream here in
       order.
