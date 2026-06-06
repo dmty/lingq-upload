@@ -93,6 +93,77 @@ async fn empty_root_returns_empty() {
     assert!(candidates.is_empty());
 }
 
+#[tokio::test]
+async fn editor_and_translator_creators_are_not_authors() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Role-Aware Book</dc:title>
+    <dc:creator opf:role="aut">Real Author</dc:creator>
+    <dc:creator opf:role="edt">Some Editor</dc:creator>
+    <dc:creator opf:role="trl">Some Translator</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+</package>"#;
+    let tmp = TempDir::new().unwrap();
+    let book = tmp.path().join("Real Author").join("Role-Aware Book");
+    fs::create_dir_all(&book).unwrap();
+    fs::write(book.join("metadata.opf"), opf).unwrap();
+    fs::write(book.join("book.epub"), b"PK\x03\x04").unwrap();
+
+    let src = CalibreLibrarySource;
+    let candidates = src.scan(tmp.path()).await.unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].authors, vec!["Real Author"]);
+}
+
+#[tokio::test]
+async fn calibre_uuid_invalid_dropped_from_extras() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Bad UUID Book</dc:title>
+    <dc:creator opf:role="aut">A</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:identifier opf:scheme="calibre">not-a-uuid</dc:identifier>
+  </metadata>
+</package>"#;
+    let tmp = TempDir::new().unwrap();
+    let book = tmp.path().join("A").join("Bad UUID Book");
+    fs::create_dir_all(&book).unwrap();
+    fs::write(book.join("metadata.opf"), opf).unwrap();
+    fs::write(book.join("b.epub"), b"PK\x03\x04").unwrap();
+
+    let src = CalibreLibrarySource;
+    let cs = src.scan(tmp.path()).await.unwrap();
+    assert!(cs[0].metadata_extras.get("calibre_uuid").is_none());
+}
+
+#[tokio::test]
+async fn calibre_uuid_valid_present_in_extras() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Good UUID Book</dc:title>
+    <dc:creator opf:role="aut">A</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:identifier opf:scheme="calibre">aaaa1111-bbbb-2222-cccc-333344445555</dc:identifier>
+  </metadata>
+</package>"#;
+    let tmp = TempDir::new().unwrap();
+    let book = tmp.path().join("A").join("Good UUID Book");
+    fs::create_dir_all(&book).unwrap();
+    fs::write(book.join("metadata.opf"), opf).unwrap();
+    fs::write(book.join("b.epub"), b"PK\x03\x04").unwrap();
+
+    let src = CalibreLibrarySource;
+    let cs = src.scan(tmp.path()).await.unwrap();
+    assert_eq!(
+        cs[0].metadata_extras.get("calibre_uuid").and_then(|v| v.as_str()),
+        Some("aaaa1111-bbbb-2222-cccc-333344445555")
+    );
+}
+
 #[test]
 fn registry_default_includes_calibre_and_libation_and_manual() {
     let reg = IngestRegistry::default();
