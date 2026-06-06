@@ -6,7 +6,7 @@ pub mod ingest;
 pub mod lingq;
 mod secrets;
 
-use specta_typescript::Typescript;
+use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri_specta::{collect_commands, Builder};
 
 /// Build the tauri-specta Builder with all registered commands and exported types.
@@ -21,6 +21,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_save_lingq_key,
             commands::secrets::cmd_load_lingq_key,
             commands::secrets::cmd_clear_lingq_key,
+            commands::ingest::manual_source_from_files,
+            commands::upload::upload_one_shot,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.
@@ -30,14 +32,25 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<lingq::LingqError>()
         .typ::<lingq::WhoAmI>()
         .typ::<lingq::LessonOpts>()
+        .typ::<ingest::Candidate>()
+        .typ::<ingest::TextSource>()
+        .typ::<ingest::AudioSource>()
+        .typ::<ingest::ChapterManifest>()
+        .typ::<ingest::ChapterEntry>()
+        .typ::<ingest::SeriesRef>()
+        .typ::<ingest::IngestError>()
+        .typ::<commands::upload::UploadResult>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.
 pub fn export_bindings() -> Result<(), Box<dyn std::error::Error>> {
+    // LingQ collection / lesson IDs fit in JS Number range; map i64 -> number.
     specta_builder().export(
-        Typescript::default().header(
-            "// @ts-nocheck\n// AUTO-GENERATED. Do not edit. specta from #[tauri::command]\n",
-        ),
+        Typescript::default()
+            .bigint(BigIntExportBehavior::Number)
+            .header(
+                "// @ts-nocheck\n// AUTO-GENERATED. Do not edit. specta from #[tauri::command]\n",
+            ),
         "../src/lib/ipc/bindings.ts",
     )?;
     Ok(())
@@ -56,6 +69,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

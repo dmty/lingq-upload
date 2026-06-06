@@ -34,6 +34,8 @@
         return `Audio: ${"message" in e.message ? e.message.message : e.message.kind}`;
       case "Text":
         return `Text: ${e.message.message}`;
+      case "Ingest":
+        return `Ingest: ${"message" in e.message ? e.message.message : e.message.kind}`;
     }
   }
 

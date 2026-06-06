@@ -3,7 +3,7 @@
 </script>
 
 <nav>
-  <a href="/">Library</a>
+  <a href="/">Upload</a>
   <a href="/settings">Settings</a>
 </nav>
 

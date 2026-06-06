@@ -16,15 +16,17 @@ pub struct SeriesRef {
     pub index: Option<f32>,
 }
 
+// Adjacently tagged: required because newtype variants (e.g. `Epub(PathBuf)`)
+// are not representable as internally tagged in serde.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum TextSource {
     Epub(PathBuf),
     LooseFiles { paths: Vec<PathBuf> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum AudioSource {
     SingleFile(PathBuf),
     Folder(PathBuf),
