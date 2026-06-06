@@ -2,6 +2,7 @@ use serde::Serialize;
 use specta::Type;
 use thiserror::Error;
 
+use crate::core::audio::AudioError;
 use crate::core::text::TextError;
 use crate::secrets::SecretError;
 
@@ -17,6 +18,8 @@ pub enum AppError {
     Secrets(SecretError),
     #[error("text error: {0}")]
     Text(#[from] TextError),
+    #[error("audio error: {0}")]
+    Audio(#[from] AudioError),
 }
 
 impl From<std::io::Error> for AppError {
