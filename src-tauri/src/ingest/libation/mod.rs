@@ -191,66 +191,6 @@ fn find_cover(dir: &Path) -> Option<PathBuf> {
     jpgs.into_iter().next()
 }
 
-#[cfg(test)]
-mod asin_tests {
-    use super::*;
-
-    #[test]
-    fn extracts_asin_from_trailing_group() {
-        assert_eq!(
-            extract_asin("Kafka on the Shore [B0ABCDEFGH]").as_deref(),
-            Some("B0ABCDEFGH"),
-        );
-    }
-
-    #[test]
-    fn ignores_non_asin_brackets() {
-        assert_eq!(
-            extract_asin("Title [Annotated]").as_deref(),
-            None,
-        );
-        assert_eq!(extract_asin("Plain Title").as_deref(), None);
-    }
-
-    #[test]
-    fn picks_last_asin_when_multiple() {
-        assert_eq!(
-            extract_asin("Series [B0AAAAAAAA] - Book 1 [B0BBBBBBBB]").as_deref(),
-            Some("B0BBBBBBBB"),
-        );
-    }
-
-    #[test]
-    fn strip_keeps_non_asin_brackets() {
-        assert_eq!(
-            strip_asin_suffix("Title [Annotated] [B0ABCDEFGH]"),
-            "Title [Annotated]",
-        );
-    }
-
-    #[test]
-    fn strip_returns_input_when_no_asin() {
-        assert_eq!(strip_asin_suffix("Title [Annotated]"), "Title [Annotated]");
-        assert_eq!(strip_asin_suffix("Plain Title"), "Plain Title");
-    }
-
-    #[test]
-    fn round_trip_title_and_asin() {
-        let folder = "Title [Annotated] [B0XXXXXXX1]";
-        // 10-char ASIN required: pad to shape.
-        let folder = "Title [Annotated] [B0XXXXXXX1]";
-        // ASIN above is only 10 chars by design: B0 + 8 = 10. Verify both halves.
-        assert_eq!(strip_asin_suffix(folder), "Title [Annotated]");
-        assert_eq!(extract_asin(folder).as_deref(), Some("B0XXXXXXX1"));
-    }
-
-    #[test]
-    fn lowercase_asin_is_rejected() {
-        // Audible asin is uppercase by convention; lowercase shape is not one.
-        assert_eq!(extract_asin("Title [b0abcdefgh]"), None);
-    }
-}
-
 #[allow(dead_code)]
 fn parse_libation_chapters(chapters: &[serde_json::Value]) -> Vec<ChapterEntry> {
     chapters
@@ -287,5 +227,58 @@ impl IngestSource for LibationFolderSource {
         _c: &'a mut Candidate,
     ) -> BoxFuture<'a, Result<(), IngestError>> {
         Box::pin(future::ready(Ok(())))
+    }
+}
+
+#[cfg(test)]
+mod asin_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_asin_from_trailing_group() {
+        assert_eq!(
+            extract_asin("Kafka on the Shore [B0ABCDEFGH]").as_deref(),
+            Some("B0ABCDEFGH"),
+        );
+    }
+
+    #[test]
+    fn ignores_non_asin_brackets() {
+        assert_eq!(extract_asin("Title [Annotated]").as_deref(), None);
+        assert_eq!(extract_asin("Plain Title").as_deref(), None);
+    }
+
+    #[test]
+    fn picks_last_asin_when_multiple() {
+        assert_eq!(
+            extract_asin("Series [B0AAAAAAAA] - Book 1 [B0BBBBBBBB]").as_deref(),
+            Some("B0BBBBBBBB"),
+        );
+    }
+
+    #[test]
+    fn strip_keeps_non_asin_brackets() {
+        assert_eq!(
+            strip_asin_suffix("Title [Annotated] [B0ABCDEFGH]"),
+            "Title [Annotated]",
+        );
+    }
+
+    #[test]
+    fn strip_returns_input_when_no_asin() {
+        assert_eq!(strip_asin_suffix("Title [Annotated]"), "Title [Annotated]");
+        assert_eq!(strip_asin_suffix("Plain Title"), "Plain Title");
+    }
+
+    #[test]
+    fn round_trip_title_and_asin() {
+        let folder = "Title [Annotated] [B0XXXXXXX1]";
+        assert_eq!(strip_asin_suffix(folder), "Title [Annotated]");
+        assert_eq!(extract_asin(folder).as_deref(), Some("B0XXXXXXX1"));
+    }
+
+    #[test]
+    fn lowercase_asin_is_rejected() {
+        assert_eq!(extract_asin("Title [b0abcdefgh]"), None);
     }
 }
