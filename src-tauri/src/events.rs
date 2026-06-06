@@ -1,5 +1,6 @@
 use serde::Serialize;
 use specta::Type;
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 #[derive(Serialize, Type, Clone, Debug, PartialEq)]
@@ -30,6 +31,10 @@ pub enum JobEvent {
         job_id: Uuid,
         stage: Stage,
     },
+    StageChanged {
+        job_id: Uuid,
+        stage: Stage,
+    },
     Progress {
         job_id: Uuid,
         pct: f32,
@@ -50,45 +55,112 @@ pub enum JobEvent {
     },
 }
 
+pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
+    let mut seen_started = false;
+    let mut seen_terminal = false;
+    for ev in seq {
+        match ev {
+            JobEvent::Started { .. } => {
+                if seen_started {
+                    return Err("duplicate Started");
+                }
+                if seen_terminal {
+                    return Err("Started after terminal");
+                }
+                seen_started = true;
+            }
+            JobEvent::StageChanged { .. }
+            | JobEvent::Progress { .. }
+            | JobEvent::Log { .. } => {
+                if !seen_started {
+                    return Err("non-Started before Started");
+                }
+                if seen_terminal {
+                    return Err("non-terminal after terminal");
+                }
+            }
+            JobEvent::Result { .. } | JobEvent::Cancelled { .. } => {
+                if !seen_started {
+                    return Err("terminal before Started");
+                }
+                if seen_terminal {
+                    return Err("duplicate terminal");
+                }
+                seen_terminal = true;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Single-job event emitter that enforces the validate() invariant at runtime.
+///
+/// In debug builds a duplicate `Started`, out-of-order Progress, or post-terminal
+/// emission trips a `debug_assert!`. In release the violating event is dropped
+/// (and logged) so we don't break a user's upload, but the bug is loud in tests.
+pub struct JobEmitter<'a> {
+    app: &'a AppHandle,
+    job_id: Uuid,
+    history: Vec<JobEvent>,
+}
+
+impl<'a> JobEmitter<'a> {
+    pub fn new(app: &'a AppHandle, job_id: Uuid) -> Self {
+        Self {
+            app,
+            job_id,
+            history: Vec::with_capacity(8),
+        }
+    }
+
+    pub fn started(&mut self, stage: Stage) {
+        self.emit(JobEvent::Started {
+            job_id: self.job_id,
+            stage,
+        });
+    }
+
+    pub fn stage(&mut self, stage: Stage) {
+        self.emit(JobEvent::StageChanged {
+            job_id: self.job_id,
+            stage,
+        });
+    }
+
+    pub fn progress(&mut self, pct: f32, message: Option<String>) {
+        self.emit(JobEvent::Progress {
+            job_id: self.job_id,
+            pct,
+            message,
+        });
+    }
+
+    pub fn result(&mut self, ok: bool, payload: serde_json::Value) {
+        self.emit(JobEvent::Result {
+            job_id: self.job_id,
+            ok,
+            payload,
+        });
+    }
+
+    fn emit(&mut self, event: JobEvent) {
+        let mut next = self.history.clone();
+        next.push(event.clone());
+        if let Err(why) = validate(&next) {
+            debug_assert!(false, "JobEvent invariant broken: {why}");
+            tracing::error!(why = %why, "JobEvent invariant broken; dropping event");
+            return;
+        }
+        self.history = next;
+        if let Err(e) = self.app.emit("job", event) {
+            tracing::warn!(error = %e, "JobEvent emit dropped");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
-        let mut seen_started = false;
-        let mut seen_terminal = false;
-        for ev in seq {
-            match ev {
-                JobEvent::Started { .. } => {
-                    if seen_started {
-                        return Err("duplicate Started");
-                    }
-                    if seen_terminal {
-                        return Err("Started after terminal");
-                    }
-                    seen_started = true;
-                }
-                JobEvent::Progress { .. } | JobEvent::Log { .. } => {
-                    if !seen_started {
-                        return Err("Progress/Log before Started");
-                    }
-                    if seen_terminal {
-                        return Err("Progress/Log after terminal");
-                    }
-                }
-                JobEvent::Result { .. } | JobEvent::Cancelled { .. } => {
-                    if !seen_started {
-                        return Err("terminal before Started");
-                    }
-                    if seen_terminal {
-                        return Err("duplicate terminal");
-                    }
-                    seen_terminal = true;
-                }
-            }
-        }
-        Ok(())
-    }
 
     #[test]
     fn valid_sequence_passes() {
@@ -174,7 +246,7 @@ mod tests {
                 stage: Stage::Transcoding,
             },
         ];
-        assert_eq!(validate(&seq), Err("Progress/Log before Started"));
+        assert_eq!(validate(&seq), Err("non-Started before Started"));
     }
 
     #[test]
@@ -229,7 +301,7 @@ mod tests {
                 message: None,
             },
         ];
-        assert_eq!(validate(&seq), Err("Progress/Log after terminal"));
+        assert_eq!(validate(&seq), Err("non-terminal after terminal"));
     }
 
     #[test]
@@ -246,6 +318,51 @@ mod tests {
                 message: None,
             },
             JobEvent::Cancelled { job_id: id },
+        ];
+        assert!(validate(&seq).is_ok());
+    }
+
+    #[test]
+    fn upload_one_shot_sequence_is_valid() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::Parsing,
+            },
+            JobEvent::Progress {
+                job_id: id,
+                pct: 0.0,
+                message: Some("Reading text".into()),
+            },
+            JobEvent::StageChanged {
+                job_id: id,
+                stage: Stage::Transcoding,
+            },
+            JobEvent::Progress {
+                job_id: id,
+                pct: 0.0,
+                message: Some("Transcoding audio".into()),
+            },
+            JobEvent::Progress {
+                job_id: id,
+                pct: 1.0,
+                message: Some("Transcode complete".into()),
+            },
+            JobEvent::StageChanged {
+                job_id: id,
+                stage: Stage::Uploading,
+            },
+            JobEvent::Progress {
+                job_id: id,
+                pct: 0.0,
+                message: Some("Uploading to LingQ".into()),
+            },
+            JobEvent::Result {
+                job_id: id,
+                ok: true,
+                payload: serde_json::json!({"lesson_id": 1}),
+            },
         ];
         assert!(validate(&seq).is_ok());
     }

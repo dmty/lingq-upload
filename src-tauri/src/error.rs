@@ -16,6 +16,10 @@ pub enum AppError {
     Io(String),
     #[error("internal error: {0}")]
     Internal(String),
+    #[error("no LingQ API key configured")]
+    MissingApiKey,
+    #[error("unsupported: {0}")]
+    Unsupported(String),
     #[error("secrets error: {0}")]
     Secrets(SecretError),
     #[error("text error: {0}")]
