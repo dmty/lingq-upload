@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -45,31 +45,36 @@ impl Queue {
         }
     }
 
+    /// Single funnel for `.lock().expect(...)`. Single-process queue;
+    /// a poisoned mutex means real corruption — propagate the panic.
+    fn lock(&self) -> MutexGuard<'_, VecDeque<Job>> {
+        self.inner.lock().expect("queue mutex poisoned")
+    }
+
     pub fn push(&self, project_id: ProjectId) -> JobId {
         let job = Job {
             id: JobId::new(),
             project_id,
         };
         let id = job.id.clone();
-        // Single-process queue; a poisoned mutex means real corruption — panic.
-        self.inner.lock().expect("queue mutex poisoned").push_back(job);
+        self.lock().push_back(job);
         id
     }
 
     pub fn current(&self) -> Option<Job> {
-        self.inner.lock().expect("queue mutex poisoned").front().cloned()
+        self.lock().front().cloned()
     }
 
     pub fn advance(&self) -> Option<JobId> {
-        self.inner.lock().expect("queue mutex poisoned").pop_front().map(|j| j.id)
+        self.lock().pop_front().map(|j| j.id)
     }
 
     pub fn len(&self) -> usize {
-        self.inner.lock().expect("queue mutex poisoned").len()
+        self.lock().len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.lock().expect("queue mutex poisoned").is_empty()
+        self.lock().is_empty()
     }
 
     /// Scan the store for projects with outstanding work and re-enqueue
