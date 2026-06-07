@@ -8,9 +8,11 @@ use thiserror::Error;
 use tokio::process::Command;
 
 pub mod batch;
+pub mod probe;
 pub mod track;
 
 pub use batch::{transcode_batch_sequential, TranscodeJob};
+pub use probe::{probe_chapters, ChapterAtom};
 pub use track::AudioTrack;
 
 /// Bundled binary paths set at app startup from `app.path().resource_dir()`.
@@ -44,10 +46,7 @@ pub enum AudioError {
     #[error("ffprobe parse error: {0}")]
     Probe(String),
     #[error("duration mismatch (delta {delta_sec}s > {threshold_sec}s)")]
-    DurationMismatch {
-        delta_sec: f64,
-        threshold_sec: f64,
-    },
+    DurationMismatch { delta_sec: f64, threshold_sec: f64 },
     #[error("io: {0}")]
     Io(String),
     #[error("cancelled")]
@@ -115,7 +114,11 @@ pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
     if let Ok(v) = std::env::var("FFMPEG_BIN") {
         let p = PathBuf::from(v);
         if let Some(parent) = p.parent() {
-            let candidate = parent.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+            let candidate = parent.join(if cfg!(windows) {
+                "ffprobe.exe"
+            } else {
+                "ffprobe"
+            });
             if candidate.exists() {
                 return Ok(candidate);
             }
@@ -130,9 +133,8 @@ pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
 }
 
 pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {
-    let bin = resolve_ffprobe_bin()?;
-    let output = Command::new(&bin)
-        .args([
+    let stdout = run_ffprobe(
+        &[
             "-hide_banner",
             "-v",
             "error",
@@ -140,7 +142,24 @@ pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {
             "format=duration",
             "-of",
             "default=nw=1:nk=1",
-        ])
+        ],
+        path,
+    )
+    .await?;
+    let s = String::from_utf8_lossy(&stdout);
+    let trimmed = s.trim();
+    trimmed
+        .parse::<f64>()
+        .map_err(|e| AudioError::Probe(format!("expected float, got {trimmed:?}: {e}")))
+}
+
+/// Spawn `ffprobe` with `args + path`, returning stdout on success. Captures
+/// stderr tail into `AudioError::FfmpegFailed` on non-zero exit. Shared by
+/// every ffprobe caller in this module.
+pub(crate) async fn run_ffprobe(args: &[&str], path: &Path) -> Result<Vec<u8>, AudioError> {
+    let bin = resolve_ffprobe_bin()?;
+    let output = Command::new(&bin)
+        .args(args)
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -152,20 +171,13 @@ pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {
             std::io::ErrorKind::NotFound => AudioError::FfmpegNotFound(bin.display().to_string()),
             _ => AudioError::Io(e.to_string()),
         })?;
-
     if !output.status.success() {
-        let stderr = tail_lossy(&output.stderr, STDERR_CAPTURE_BYTES);
         return Err(AudioError::FfmpegFailed {
             status: output.status.code().unwrap_or(-1),
-            stderr,
+            stderr: tail_lossy(&output.stderr, STDERR_CAPTURE_BYTES),
         });
     }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let trimmed = stdout.trim();
-    trimmed
-        .parse::<f64>()
-        .map_err(|e| AudioError::Probe(format!("expected float, got {trimmed:?}: {e}")))
+    Ok(output.stdout)
 }
 
 pub async fn transcode(

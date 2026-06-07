@@ -51,7 +51,7 @@ Implementation shells out to `ffprobe -v error -show_chapters -show_format -prin
 
 After parsing, filter the raw atom list before exposing to the matcher.
 
-1. **Duration threshold.** Drop atoms whose duration is below `max(60.0, total_duration / atom_count / 10)` seconds. This catches tiny intro / branding atoms (observed: a 41 s "第1章" preamble in a 21,961 s file where every real chapter is > 2,000 s). The threshold is dynamic so we don't accidentally filter every atom of a short Drama-CD (some real atoms are ~200 s).
+1. **Duration threshold.** Drop atoms whose duration is below `max(6.0, total_duration / atom_count / 10)` seconds. The dynamic term catches tiny intro / branding atoms (observed: a 41 s "第1章" preamble in a 21,961 s file where every real chapter is > 2,000 s; dynamic threshold ≈ 244 s drops it). On real-world audiobooks (≥ 6 atoms × ≥ 600 s) the dynamic term is always > 60 s and the floor is a no-op. The floor only bites on very short files (synthetic fixtures, short Drama-CDs where some real atoms are ~200 s) and is set to 6.0 s so it filters obvious sub-10 s branding atoms without consuming legitimate short atoms.
 2. **Contiguity check, epsilon-tolerant.** The last surviving atom's `end` must be within `0.05 s` of `format.duration`. Float drift up to 0.014 s observed in a 56,402 s file. If the gap exceeds the epsilon, **do not drop atoms** — emit a `AudioWarning::AtomCoverageGap` event so the user sees it. The atoms are still usable; the gap is just informational.
 3. **No re-ordering, no merging.** Atoms come out of ffprobe in file order; that order is the contract. Adjacent atoms with the same title are not merged (they may represent intentional sub-sections).
 
