@@ -155,6 +155,14 @@ pub async fn run_project_job(
     };
     tracing::info!(collection = collection.0, "job: collection resolved");
 
+    // Pin the resolved collection on the project so library list & external
+    // links can deep-link without re-querying the LingQ API.
+    if project.lingq_collection_id != Some(collection.0) {
+        project.lingq_collection_id = Some(collection.0);
+        project.last_activity_at = Some(Utc::now());
+        persist_project(store.as_ref(), &project)?;
+    }
+
     let staging = tempfile::tempdir()?;
     let enc = EncoderSettings::default();
     let total = plan.steps.len();
@@ -265,6 +273,7 @@ pub async fn run_project_job(
         }
         project.queue_cursor = step.chapter_index + 1;
         project.completed_lesson_ids.push(lesson_id);
+        project.last_activity_at = Some(Utc::now());
         persist_project(store.as_ref(), &project)?;
 
         sink.chapter_done(step.chapter_index, lesson_id, step.degraded);

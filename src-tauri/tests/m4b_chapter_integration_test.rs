@@ -186,6 +186,11 @@ fn build_project(
         queue_cursor: 0,
         completed_lesson_ids: vec![],
         matcher_decision: None,
+        cover_path: None,
+        authors: vec![],
+        series: None,
+        lingq_collection_id: None,
+        last_activity_at: None,
     };
     (id, project)
 }

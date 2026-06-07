@@ -449,6 +449,18 @@ pub struct AudioTrack {
 
 See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, edge cases, and synthetic fixtures.
 
+## AD-024 — Trash subsystem: soft-delete by directory move
+
+**Decision:** Removing a project from the library is a *move*, not an unlink. `core::library::trash::trash_project` renames `<app_data>/projects/<slug>/` to `<app_data>/projects/.trash/<slug>-<unix_ts>/`. `restore_project` reverses the move; `purge_project` runs `fs::remove_dir_all`. The trash root lives inside `projects/` so any backup tool that copies `projects/` also captures the trash.
+
+**Listing:** `list_trash` decodes `project.json` from each `.trash/*/` dir and returns `TrashEntry { trash_id, project_id, title, language, trashed_at }`. `trashed_at` reconstructs from the trash dir's filesystem mtime — slugs may contain `-`, so parsing the trash_id suffix is unsound.
+
+**Read-side invariant:** Every reader of `projects/` except `cmd_list_trash` skips the `.trash` entry. `JsonProjectStore::scan` filters it before the corrupt-file path so trashed projects never count toward dedup, list, or health metrics. `cmd_create_project`'s collision check rides on `store.get` / `store.list`, both of which traverse the filtered scan — re-adding a previously-trashed source path succeeds with no manual cleanup.
+
+**Why soft-delete:** A two-button click ("Trash" then realising it was the wrong row) must not destroy data. With 30-80 projects in a typical library and most actions reversible, an irreversible delete is the wrong default. Soft-delete survives every misclick until the user explicitly purges from the Trash settings panel.
+
+**Why directory move (not OS trash):** A `fs::rename` on the same filesystem is atomic and platform-uniform. `tauri-plugin-trash` adds a dependency and is unaware of project semantics — it would scatter `<id>/project.json` files into the user's recycle bin with no coherent restore path, and Linux recycle-bin behaviour varies. The in-project trash is fully owned by the app, ships zero extra plugins, and round-trips through a single `rename` in either direction.
+
 ## Open architecture questions
 
 1. **Re-import / diff behaviour** — when the same Candidate is re-scanned (Calibre edit, Libation re-rip), what's the per-chapter conflict policy? Overwrite / append / skip / prompt? Current default: append-by-default, prompt on conflict.
