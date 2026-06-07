@@ -15,6 +15,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct ProjectId {
     #[serde(with = "hex_array_32")]
+    #[specta(type = String)]
     pub content_hash: [u8; 32],
     #[serde(default)]
     pub audible_asin: Option<String>,

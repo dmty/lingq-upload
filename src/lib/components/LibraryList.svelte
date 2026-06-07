@@ -6,12 +6,7 @@
   let { entries }: { entries: LibraryEntry[] } = $props();
 
   function open(entry: LibraryEntry) {
-    const key = joinKey(entry.id);
-    if (entry.receipt_count > 0) {
-      goto(`/run/${encodeURIComponent(key)}`);
-    } else {
-      goto(`/add?prefill=${encodeURIComponent(key)}`);
-    }
+    goto(`/run/${encodeURIComponent(joinKey(entry.id))}`);
   }
 </script>
 
