@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::core::identity::ProjectId;
 use crate::core::project::{Project, ProjectSummary};
 
-pub use json::JsonProjectStore;
+pub use json::{JsonProjectStore, ListHealth};
 pub use memory::InMemoryProjectStore;
 
 #[derive(Debug, Error, Serialize, Deserialize, Type)]
