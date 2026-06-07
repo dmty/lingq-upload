@@ -71,6 +71,10 @@ jobs:
       - name: bun run build (frontend smoke)
         run: bun run build
 
+      - name: Generate synth m4b fixtures
+        shell: bash
+        run: scripts/fixtures/synth_m4b_chapters.sh
+
       - name: cargo build (locked)
         working-directory: src-tauri
         run: cargo build --locked
@@ -129,6 +133,10 @@ jobs:
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate synth m4b fixtures
+        shell: bash
+        run: scripts/fixtures/synth_m4b_chapters.sh
 
       - name: cargo llvm-cov (lcov)
         working-directory: src-tauri
