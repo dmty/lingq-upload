@@ -119,15 +119,27 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: cargo llvm-cov
+      - name: cargo llvm-cov (lcov)
         working-directory: src-tauri
-        run: cargo llvm-cov --locked --lcov --output-path lcov.info
+        run: cargo llvm-cov --locked --workspace --lcov --output-path lcov.info
+
+      - name: cargo llvm-cov (summary)
+        working-directory: src-tauri
+        run: cargo llvm-cov report --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload lcov artefact
         uses: actions/upload-artifact@v4
         with:
           name: lcov
           path: src-tauri/lcov.info
+
+      # Codecov upload is no-op without CODECOV_TOKEN, which is fine for forks.
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: src-tauri/lcov.info
+          fail_ci_if_error: false
+        continue-on-error: true
 
   deny:
     name: cargo-deny
