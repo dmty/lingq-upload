@@ -1,9 +1,21 @@
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
 use crate::error::AppError;
 use crate::ingest::{
     CalibreLibrarySource, Candidate, IngestSource, LibationFolderSource, ManualSource,
 };
+
+/// Bookshelf source for `cmd_ingest_scan`. Modelled as an enum so specta
+/// emits a TS union and the frontend can't pass a misspelled string.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LibrarySource {
+    Calibre,
+    Libation,
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -17,15 +29,19 @@ pub fn manual_source_from_files(
 }
 
 /// Scan a Calibre or Libation library root and return all candidates.
-///
-/// `source` is `"calibre"` or `"libation"`.
 #[tauri::command]
 #[specta::specta]
-pub async fn cmd_ingest_scan(source: String, root: String) -> Result<Vec<Candidate>, AppError> {
+pub async fn cmd_ingest_scan(
+    source: LibrarySource,
+    root: String,
+) -> Result<Vec<Candidate>, AppError> {
     let root_path = Path::new(&root);
-    match source.as_str() {
-        "calibre" => CalibreLibrarySource.scan(root_path).await.map_err(AppError::from),
-        "libation" => LibationFolderSource.scan(root_path).await.map_err(AppError::from),
-        other => Err(AppError::Other(format!("unknown source: {other}"))),
+    match source {
+        LibrarySource::Calibre => {
+            CalibreLibrarySource.scan(root_path).await.map_err(AppError::from)
+        }
+        LibrarySource::Libation => {
+            LibationFolderSource.scan(root_path).await.map_err(AppError::from)
+        }
     }
 }
