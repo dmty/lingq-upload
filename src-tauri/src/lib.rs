@@ -22,12 +22,14 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_load_lingq_key,
             commands::secrets::cmd_clear_lingq_key,
             commands::ingest::manual_source_from_files,
+            commands::ingest::cmd_ingest_scan,
             commands::lingq::cmd_account_profile,
             commands::lingq::cmd_list_languages,
             commands::lingq::cmd_list_collections,
             commands::upload::upload_one_shot,
             commands::library::cmd_library_list,
             commands::add_project::cmd_create_project,
+            commands::add_project::cmd_create_project_with_resolution,
             commands::matcher::cmd_matcher_resolve,
             commands::project::cmd_project_load,
             commands::jobs::cmd_start_project_job,
@@ -61,6 +63,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::matcher::MismatchResponse>()
         .typ::<core::library::LibraryIndex>()
         .typ::<core::library::LibraryEntry>()
+        .typ::<commands::add_project::CreateProjectResult>()
+        .typ::<commands::add_project::ConflictResolution>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.
