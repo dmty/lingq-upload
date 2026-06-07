@@ -1,6 +1,8 @@
 # m4b embedded chapter atoms
 
-> Status: **planned**. Captures the runtime contract that AD-023 commits to. Probe behaviour, filter rules, packer algorithm, and edge cases are frozen here so the implementation can be checked against a single source of truth.
+> Status: **implemented**. Captures the runtime contract that AD-023 commits to. Probe behaviour, filter rules, packer algorithm, and edge cases are frozen here so the implementation can be checked against a single source of truth.
+>
+> Implementation lives across `core::audio::probe`, `core::matcher::pack`, `core::job::resolve_audio_tracks`, `core::job::plan_from_decision`, and the `/match` Svelte route.
 
 ## What this spec covers
 
@@ -202,15 +204,19 @@ Unit tests on `proportional_pack` (pure function, no fixtures needed):
 | Degenerate oversize chapter | `atoms_share = [0.1, 0.1, 0.8]`, `text = [1000, 100]` | `[0..1, 1..1, 1..2]` (bucket 1 empty; surface as warning, do not panic) |
 | Empty atom list rejected by caller | n/a | Caller must not invoke packer when atoms.is_empty() |
 
-Integration tests over the synthetic fixtures:
+Integration tests shipped in `src-tauri/tests/m4b_chapter_integration_test.rs`:
 
-| Fixture | Scenario | Expected `resolve_audio_tracks` result + matcher behaviour |
-|---|---|---|
-| `synth_chapters_generic.m4b` | Drop file + 6-chapter text | Yields 3 `AudioTrack` with `window: Some`. `classify(6, 3)` — delta=3 fails CountOff, then `2*6 > 3*3` (12 > 9) → `ManyToFew`. Pack yields `[0..2, 2..4, 4..6]`. |
-| `synth_chapters_intro.m4b` | Drop file + 4-chapter text | Filter drops the 5 s intro atom; yields 2 `AudioTrack` with `window: Some`. `classify(4, 2)` — delta=2 hits CountOff under the current rule, but `2*4 > 3*2` (8 > 6) is true; the precedence puts CountOff first, so this case **resolves as CountOff**, not ManyToFew. That's intentional — at delta=2 the user gets `PairAccept` (pair-by-index, drop the 2 extras) as the preselect. For a true `ManyToFew` integration test use a 6-chapter text source against this fixture instead: `classify(6, 2)` → delta=4 skips CountOff, `2*6 > 3*2` → `ManyToFew`, pack yields `[0..3, 3..6]`. |
-| `synth_chapters_narrative.m4b` | Drop file + 3-chapter text | Probe yields 3 atoms with `window: Some`. `classify(3, 3) == None` → clean pair. No packer involvement. |
+| Test | Fixture | Scenario | Asserts |
+|---|---|---|---|
+| `chaptered_m4b_routes_to_many_to_few_with_preview` | `synth_chapters_generic.m4b` (3 atoms) + 7 loose `.txt` chapters | Orchestrator pauses on the `NeedsMatch` signal | `condition == ManyToFew`, `preselect == SplitProportional`, `options == [SplitProportional, SingleLesson, Cancel]`, `bucket_preview.len() == 3` with contiguous text ranges over `0..7`, every `chars_per_sec` finite + non-negative, and no chapter uploads fire before the user resolves the match |
+| `libation_folder_does_not_invoke_atom_probe` | 3 copies of `probe_3min.mp3` in a temp folder + 3 loose `.txt` chapters | `AudioSource::Folder` skips probe (population A) | No `NeedsMatch` event, 3 non-degraded uploads, 3 receipts persisted |
+| `atomless_single_m4b_falls_back_to_whole_file` | `silence.m4a` (no atoms) + 1 loose `.txt` chapter | Population D fallback | No `NeedsMatch` event, exactly 1 non-degraded upload, 1 receipt persisted |
+| `windowed_transcode_catches_duration_mismatch` | `synth_chapters_generic.m4b` | `audio::transcode` with `Some((start, end))` | Honest 0..10 s window succeeds with `dst_duration_sec` within 1 s of 10; bogus 0..999 s window against a 60 s source returns `AudioError::DurationMismatch` |
 
-Manual smoke (optional, depends on having user-side fixtures): drop `時をかける少女.m4b` (6 atoms) against an 85-chapter EPUB text — verify `SplitProportional` preselected, preview shows 6 buckets approximately `0..14, 14..28, …, 71..85`.
+Manual smoke (out of scope for the automated suite — requires live LingQ API or a browser):
+
+- LingQ collection contains the expected number of lessons after a real `SplitProportional` run (e.g. `時をかける少女.m4b` with 6 atoms against an 85-chapter EPUB → 6 lessons in the collection, preview rows approximately `0..14, 14..28, …, 71..85`).
+- Drift indicator render + tooltip on the Mismatch UI's bucket preview rows.
 
 ## Out of scope
 
