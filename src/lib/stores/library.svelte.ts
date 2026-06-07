@@ -1,4 +1,10 @@
-import { commands, type LibraryIndex, type AppError } from "$lib/ipc/bindings";
+import {
+  commands,
+  type LibraryIndex,
+  type AppError,
+  type ProjectId,
+} from "$lib/ipc/bindings";
+import { joinKey } from "$lib/identity";
 
 type State = {
   status: "idle" | "loading" | "ready" | "error";
@@ -46,5 +52,12 @@ export const library = {
       };
       state.status = "error";
     }
+  },
+  removeById(id: ProjectId) {
+    if (!state.index) return;
+    const target = joinKey(id);
+    state.index.entries = state.index.entries.filter(
+      (e) => joinKey(e.id) !== target,
+    );
   },
 };
