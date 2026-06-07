@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use tauri::Manager;
-
 use crate::core::project::Project;
-use crate::core::store::{JsonProjectStore, ProjectStore};
+use crate::core::store::ProjectStore;
 use crate::error::AppError;
 
 /// Load a persisted project by its `join_key`.
@@ -15,12 +13,10 @@ use crate::error::AppError;
 /// (notably `cmd_matcher_resolve`).
 #[tauri::command]
 #[specta::specta]
-pub async fn cmd_project_load(app: tauri::AppHandle, key: String) -> Result<Project, AppError> {
-    let root = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Other(format!("app_data_dir: {e}")))?;
-    let store: Arc<dyn ProjectStore> = Arc::new(JsonProjectStore::new(root));
+pub async fn cmd_project_load(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    key: String,
+) -> Result<Project, AppError> {
     let summaries = store
         .list()
         .map_err(|e| AppError::Other(format!("store.list: {e}")))?;
