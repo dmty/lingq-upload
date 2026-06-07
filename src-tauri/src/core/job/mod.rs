@@ -553,7 +553,7 @@ async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppE
     };
     match source {
         AudioSource::SingleFile(p) | AudioSource::LibationManifest(p) => {
-            Ok(vec![track_for(p, 0).await])
+            expand_single_file(p).await
         }
         AudioSource::Folder(dir) => {
             let mut paths = list_audio_in_dir(dir)?;
@@ -565,6 +565,32 @@ async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppE
             Ok(out)
         }
     }
+}
+
+/// Probe the file for embedded chapter atoms. If two or more survive the
+/// filter, fan out into one virtual track per atom with the slice window
+/// pinned. Zero atoms (population D) and one atom (degenerate) fall back to
+/// the whole-file track so behaviour matches pre-atom builds. See AD-023 and
+/// `docs/specs/m4b-chapters.md`.
+async fn expand_single_file(path: &Path) -> Result<Vec<AudioTrack>, AppError> {
+    let atoms = audio::probe_chapters(path).await.unwrap_or_else(|e| {
+        tracing::warn!(path = %path.display(), error = %e, "probe_chapters failed; treating as one track");
+        Vec::new()
+    });
+    if atoms.len() < 2 {
+        return Ok(vec![track_for(path, 0).await]);
+    }
+    Ok(atoms
+        .into_iter()
+        .enumerate()
+        .map(|(i, a)| AudioTrack {
+            order: i,
+            path: path.to_path_buf(),
+            duration_sec: Some(a.end - a.start),
+            title: a.title,
+            window: Some((a.start, a.end)),
+        })
+        .collect())
 }
 
 async fn track_for(path: &Path, order: usize) -> AudioTrack {
