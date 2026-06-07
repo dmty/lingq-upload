@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
@@ -92,7 +90,7 @@ impl ProjectId {
         if let Some(uuid) = &self.calibre_uuid {
             return format!("uuid:{uuid}");
         }
-        format!("ch:{}", hex_encode(&self.content_hash))
+        format!("ch:{}", hex::encode(self.content_hash))
     }
 
     /// Two IDs match when their `join_key()`s are equal, OR when any strong-key
@@ -162,20 +160,11 @@ fn normalise(s: &str) -> String {
         .to_lowercase()
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        // write! into a String never fails.
-        let _ = write!(&mut s, "{b:02x}");
-    }
-    s
-}
-
 mod hex_array_32 {
     use serde::{de::Error, Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&super::hex_encode(bytes))
+        s.serialize_str(&hex::encode(bytes))
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
