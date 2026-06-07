@@ -247,8 +247,8 @@ export type LibrarySource = "calibre" | "libation"
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
-export type MismatchCondition = "one_to_many" | "many_to_one" | "count_off" | "unalignable"
-export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "cancel"
+export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
+export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
 export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null }
 /**
  * Canonical project identity (AD-021).
