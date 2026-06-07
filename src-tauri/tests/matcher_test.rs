@@ -91,6 +91,7 @@ fn auto_match_for_counts(c: usize, t: usize) -> MatchOutcome {
             path: std::path::PathBuf::from(format!("/tmp/t{i}.mp3")),
             duration_sec: None,
             title: None,
+            window: None,
         })
         .collect();
     auto_match(&chapters, &tracks)

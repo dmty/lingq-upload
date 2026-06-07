@@ -78,10 +78,10 @@ where
                             cancelled_at: i,
                         });
                     }
-                    r = transcode(&job.src, &job.dst, &job.enc) => r,
+                    r = transcode(&job.src, &job.dst, &job.enc, None) => r,
                 }
             }
-            None => transcode(&job.src, &job.dst, &job.enc).await,
+            None => transcode(&job.src, &job.dst, &job.enc, None).await,
         };
         match result {
             Ok(report) => {

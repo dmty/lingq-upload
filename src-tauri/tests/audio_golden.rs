@@ -129,7 +129,7 @@ async fn silence_transcode_matches_golden() {
     let dst = tmp.path().join("silence.mp3");
     let enc = audio::EncoderSettings::default();
 
-    let report = audio::transcode(&fixture_src, &dst, &enc)
+    let report = audio::transcode(&fixture_src, &dst, &enc, None)
         .await
         .expect("transcode");
 
@@ -199,7 +199,7 @@ async fn m4b_extension_is_accepted() {
 
     let dst = tmp.path().join("out.mp3");
     let enc = audio::EncoderSettings::default();
-    audio::transcode(&renamed, &dst, &enc)
+    audio::transcode(&renamed, &dst, &enc, None)
         .await
         .expect("m4b transcode");
     assert!(dst.exists());

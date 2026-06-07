@@ -177,7 +177,7 @@ pub async fn run_project_job(
         let dst = staging
             .path()
             .join(format!("chapter_{:03}.mp3", step.chapter_index));
-        let transcode_fut = audio::transcode(&track.path, &dst, &enc);
+        let transcode_fut = audio::transcode(&track.path, &dst, &enc, track.window);
         let report = tokio::select! {
             biased;
             _ = cancel.cancelled() => {
@@ -515,6 +515,7 @@ async fn track_for(path: &Path, order: usize) -> AudioTrack {
             .file_stem()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string()),
+        window: None,
     }
 }
 
