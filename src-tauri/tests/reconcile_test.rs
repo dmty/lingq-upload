@@ -23,7 +23,7 @@ fn seed_root(root: &Path) {
 
     let libation = root
         .join("Same Author")
-        .join("Crossover Book [B0CROSS01]");
+        .join("Crossover Book [B0ABCDEFGH]");
     fs::create_dir_all(&libation).unwrap();
     fs::write(libation.join("audio.m4b"), b"fake").unwrap();
 }
