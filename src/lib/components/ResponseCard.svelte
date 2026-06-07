@@ -24,9 +24,17 @@
       title: "Single lesson",
       body: "Concatenate all chapters into one lesson.",
     },
+    split_proportional: {
+      title: "Split by embedded chapters",
+      body: "Group text chapters proportionally so each audio chapter gets its share.",
+    },
     cancel: {
       title: "Cancel",
       body: "Stop the job and return to Library.",
+    },
+    unknown: {
+      title: "Unknown response",
+      body: "Can't proceed on this build.",
     },
   };
 

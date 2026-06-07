@@ -61,6 +61,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::project::MatcherDecision>()
         .typ::<core::matcher::MismatchCondition>()
         .typ::<core::matcher::MismatchResponse>()
+        .typ::<core::matcher::BucketPreview>()
         .typ::<core::library::LibraryIndex>()
         .typ::<core::library::LibraryEntry>()
         .typ::<commands::add_project::CreateProjectResult>()

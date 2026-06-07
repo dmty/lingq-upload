@@ -19,10 +19,14 @@
         return `1 text chapter but ${tracks} audio tracks.`;
       case "many_to_one":
         return `${chapters} text chapters but only 1 audio file.`;
+      case "many_to_few":
+        return `${tracks} audio chapters found in the file, but the text has ${chapters} chapters.`;
       case "count_off":
         return `${chapters} text chapters vs ${tracks} audio tracks — close, but not equal.`;
       case "unalignable":
         return `${chapters} text chapters vs ${tracks} audio tracks — too far apart to safely auto-pair.`;
+      case "unknown":
+        return "Unknown condition from a newer build — cannot proceed.";
     }
   });
 </script>

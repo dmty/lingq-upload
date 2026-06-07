@@ -1,9 +1,28 @@
+use serde::{Deserialize, Serialize};
+
 use crate::core::audio::ChapterAtom;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bucket {
     pub audio: ChapterAtom,
     pub text_range: std::ops::Range<usize>,
+}
+
+/// Read-only preview row for the Mismatch UI's `SplitProportional` card.
+/// One row per audio atom: text-chapter index range that the proportional
+/// packer assigned, the atom's title and duration, and the bucket's
+/// chars-per-second density. The frontend uses `chars_per_sec` to flag
+/// buckets that deviate from the corpus median by more than ±30%, hinting at
+/// narrator skips or extra material at the boundary. See AD-023 and
+/// `docs/specs/m4b-chapters.md`.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BucketPreview {
+    pub text_range_start: usize,
+    pub text_range_end: usize,
+    pub atom_title: Option<String>,
+    pub atom_duration_sec: f64,
+    pub chars_per_sec: f64,
 }
 
 /// Pack N text chapters into M audio chapter atoms by proportional duration vs
@@ -97,6 +116,32 @@ pub fn proportional_pack(atoms: &[ChapterAtom], text_chars: &[usize]) -> Vec<Buc
         .collect()
 }
 
+/// Build a UI-friendly preview from packer output. Empty buckets get
+/// `chars_per_sec == 0.0`; a degenerate `atom.end == atom.start` also yields
+/// `0.0` so the helper never divides by zero even if a future caller breaks
+/// the probe-filter contract.
+pub fn build_preview(buckets: &[Bucket], text_chars: &[usize]) -> Vec<BucketPreview> {
+    buckets
+        .iter()
+        .map(|b| {
+            let duration = b.audio.end - b.audio.start;
+            let chars: u64 = b.text_range.clone().map(|i| text_chars[i] as u64).sum();
+            let chars_per_sec = if duration > 0.0 {
+                chars as f64 / duration
+            } else {
+                0.0
+            };
+            BucketPreview {
+                text_range_start: b.text_range.start,
+                text_range_end: b.text_range.end,
+                atom_title: b.audio.title.clone(),
+                atom_duration_sec: duration,
+                chars_per_sec,
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +201,53 @@ mod tests {
         let text = vec![5usize, 5, 5];
         let out = proportional_pack(&atoms, &text);
         assert_eq!(ranges(&out), vec![0..3]);
+    }
+
+    #[test]
+    fn build_preview_normal_buckets_compute_chars_per_sec() {
+        let atoms = vec![atom(0.0, 10.0), atom(10.0, 30.0)];
+        let text = vec![50usize, 50, 400];
+        let buckets = proportional_pack(&atoms, &text);
+        let preview = build_preview(&buckets, &text);
+        assert_eq!(preview.len(), 2);
+        // Bucket 0 spans chapter 0 only (100 chars total ≤ boundary 0.20 of 500 → no, cum_0=50 ≤ 100, cum_1=100 ≤ 100, so bucket 0 = 0..2). 100 chars / 10 s = 10.0.
+        // Bucket 1 = 2..3, 400 chars / 20 s = 20.0.
+        assert_eq!(preview[0].text_range_start, 0);
+        assert_eq!(preview[0].text_range_end, 2);
+        assert_eq!(preview[0].atom_duration_sec, 10.0);
+        assert!((preview[0].chars_per_sec - 10.0).abs() < 1e-9);
+        assert_eq!(preview[1].text_range_start, 2);
+        assert_eq!(preview[1].text_range_end, 3);
+        assert_eq!(preview[1].atom_duration_sec, 20.0);
+        assert!((preview[1].chars_per_sec - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn build_preview_empty_bucket_yields_zero_chars_per_sec() {
+        let atoms = vec![atom(0.0, 10.0), atom(10.0, 20.0), atom(20.0, 100.0)];
+        let text = vec![1000usize, 100];
+        let buckets = proportional_pack(&atoms, &text);
+        // Per the existing degenerate_oversize_chapter test, ranges are [0..1, 1..1, 1..2].
+        let preview = build_preview(&buckets, &text);
+        assert_eq!(preview.len(), 3);
+        assert_eq!(preview[1].text_range_start, 1);
+        assert_eq!(preview[1].text_range_end, 1);
+        assert_eq!(preview[1].chars_per_sec, 0.0);
+    }
+
+    #[test]
+    fn build_preview_preserves_atom_title_and_duration() {
+        let atoms = vec![ChapterAtom {
+            start: 5.0,
+            end: 25.0,
+            title: Some("第一章".to_string()),
+        }];
+        let text = vec![100usize];
+        let buckets = proportional_pack(&atoms, &text);
+        let preview = build_preview(&buckets, &text);
+        assert_eq!(preview[0].atom_title.as_deref(), Some("第一章"));
+        assert_eq!(preview[0].atom_duration_sec, 20.0);
+        assert!((preview[0].chars_per_sec - 5.0).abs() < 1e-9);
     }
 
     #[test]

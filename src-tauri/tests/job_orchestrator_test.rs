@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::{run_project_job, JobSink};
-use lingq_upload_lib::core::matcher::{MismatchCondition, MismatchResponse};
+use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 use lingq_upload_lib::core::project::{
     ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
@@ -90,6 +90,7 @@ impl JobSink for RecordingSink {
         _condition: MismatchCondition,
         _options: Vec<MismatchResponse>,
         _preselect: MismatchResponse,
+        _bucket_preview: Option<Vec<BucketPreview>>,
     ) {
         self.events.lock().unwrap().push(RecordedEvent::NeedsMatch);
     }
