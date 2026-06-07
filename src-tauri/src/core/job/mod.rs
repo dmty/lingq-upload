@@ -10,10 +10,11 @@ use std::sync::Arc;
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::audio::{self, AudioTrack, EncoderSettings};
+use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{parse_epub, Chapter, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
+use crate::core::matcher::pack::proportional_pack;
 use crate::core::matcher::{auto_match, MatchOutcome, MismatchCondition, MismatchResponse};
 use crate::core::project::{ChapterReceipt, MatcherDecision, Project};
 use crate::core::store::ProjectStore;
@@ -455,12 +456,63 @@ fn plan_from_decision(
                     .collect(),
             })
         }
-        // No producer surfaces ManyToFew in this build (the m4b chapter-atom
-        // splice isn't wired), so the UI cannot let the user pick this. The
-        // arm exists for exhaustiveness only.
         SplitProportional => {
-            let _ = (chapters, tracks);
-            unreachable!("SplitProportional reached plan_from_decision without an atom splice")
+            // Pack N text chapters into M audio atoms (M < N) using the
+            // publisher's chapter boundaries as the truth signal. See AD-023
+            // and `docs/specs/m4b-chapters.md`.
+            if tracks.is_empty() || chapters.is_empty() {
+                return PlanOrPause::Failed("split-proportional needs chapters and tracks".into());
+            }
+            let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
+            let atoms: Vec<ChapterAtom> = tracks
+                .iter()
+                .map(|t| {
+                    let (start, end) = t
+                        .window
+                        .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
+                    ChapterAtom {
+                        start,
+                        end,
+                        title: t.title.clone(),
+                    }
+                })
+                .collect();
+            let buckets = proportional_pack(&atoms, &text_chars);
+            let steps: Vec<Step> = buckets
+                .into_iter()
+                .enumerate()
+                .map(|(bucket_index, bucket)| {
+                    if bucket.text_range.start == bucket.text_range.end {
+                        tracing::warn!(
+                            bucket_index,
+                            "split-proportional produced an empty bucket; uploading audio-only"
+                        );
+                        let title = bucket
+                            .audio
+                            .title
+                            .clone()
+                            .unwrap_or_else(|| format!("Atom {}", bucket_index + 1));
+                        Step {
+                            chapter_index: bucket_index,
+                            track_index: bucket_index,
+                            degraded: true,
+                            // LingQ rejects empty `text`; a single space satisfies the field.
+                            text_override: Some(" ".to_string()),
+                            title_override: Some(title),
+                        }
+                    } else {
+                        let slice = &chapters[bucket.text_range.clone()];
+                        Step {
+                            chapter_index: bucket_index,
+                            track_index: bucket_index,
+                            degraded: false,
+                            text_override: Some(single_lesson_concat(slice)),
+                            title_override: Some(slice[0].title.clone()),
+                        }
+                    }
+                })
+                .collect();
+            PlanOrPause::Plan(Plan { steps })
         }
         // Unknown only deserialises from a foreign response tag written by a
         // newer build. The classifier + UI in this build cannot produce it.
@@ -565,5 +617,63 @@ mod tests {
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, vec!["a.mp3", "b.m4b", "c.m4a"]);
+    }
+
+    #[test]
+    fn plan_from_decision_split_proportional_buckets_chapters_into_atoms() {
+        let chapters: Vec<Chapter> = [(0, "c0", 100), (1, "c1", 50), (2, "c2", 60), (3, "c3", 90)]
+            .iter()
+            .map(|(order, title, n)| Chapter {
+                order: *order,
+                title: (*title).to_string(),
+                body: "a".repeat(*n),
+            })
+            .collect();
+        let tracks = vec![
+            AudioTrack {
+                order: 0,
+                path: PathBuf::from("/x/atom0.mp3"),
+                duration_sec: Some(50.0),
+                title: Some("Atom 0".into()),
+                window: Some((0.0, 50.0)),
+            },
+            AudioTrack {
+                order: 1,
+                path: PathBuf::from("/x/atom1.mp3"),
+                duration_sec: Some(100.0),
+                title: Some("Atom 1".into()),
+                window: Some((50.0, 150.0)),
+            },
+        ];
+        let decision = MatcherDecision {
+            condition: MismatchCondition::ManyToFew,
+            response: MismatchResponse::SplitProportional,
+            chapter_count: chapters.len(),
+            track_count: tracks.len(),
+            user_overrode: false,
+            decided_at: Utc::now(),
+        };
+
+        let plan = match plan_from_decision(&decision, &chapters, &tracks) {
+            PlanOrPause::Plan(p) => p,
+            _ => panic!("expected Plan"),
+        };
+        assert_eq!(plan.steps.len(), 2);
+        for (i, step) in plan.steps.iter().enumerate() {
+            assert!(!step.degraded, "step {i} should not be degraded");
+            assert_eq!(step.chapter_index, i);
+            assert_eq!(step.track_index, i);
+            let body = step.text_override.as_deref().expect("text_override set");
+            assert!(!body.is_empty(), "step {i} body must be non-empty");
+        }
+        // First bucket starts at chapter 0, so its title is c0. The second
+        // bucket starts wherever the packer split the run, so we only assert
+        // it matches one of the remaining chapter titles.
+        assert_eq!(plan.steps[0].title_override.as_deref(), Some("c0"));
+        let second = plan.steps[1].title_override.as_deref().unwrap();
+        assert!(
+            ["c1", "c2", "c3"].contains(&second),
+            "second bucket title was {second}"
+        );
     }
 }
