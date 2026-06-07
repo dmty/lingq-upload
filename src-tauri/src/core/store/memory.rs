@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use super::{ProjectStore, StoreError};
 use crate::core::identity::ProjectId;
@@ -15,6 +15,12 @@ impl InMemoryProjectStore {
             inner: Mutex::new(BTreeMap::new()),
         }
     }
+
+    /// Single funnel for `.lock().expect(...)`. Single-process store;
+    /// a poisoned mutex means real corruption — propagate the panic.
+    fn lock(&self) -> MutexGuard<'_, BTreeMap<String, Project>> {
+        self.inner.lock().expect("project store mutex poisoned")
+    }
 }
 
 impl Default for InMemoryProjectStore {
@@ -25,28 +31,17 @@ impl Default for InMemoryProjectStore {
 
 impl ProjectStore for InMemoryProjectStore {
     fn put(&self, p: &Project) -> Result<(), StoreError> {
-        // Single-process store; a poisoned mutex means real corruption — panic.
-        self.inner
-            .lock()
-            .expect("project store mutex poisoned")
-            .insert(p.id.join_key(), p.clone());
+        self.lock().insert(p.id.join_key(), p.clone());
         Ok(())
     }
 
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError> {
-        Ok(self
-            .inner
-            .lock()
-            .expect("project store mutex poisoned")
-            .get(&id.join_key())
-            .cloned())
+        Ok(self.lock().get(&id.join_key()).cloned())
     }
 
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
         let mut out: Vec<ProjectSummary> = self
-            .inner
             .lock()
-            .expect("project store mutex poisoned")
             .values()
             .map(ProjectSummary::from)
             .collect();
