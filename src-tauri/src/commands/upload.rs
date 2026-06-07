@@ -59,7 +59,7 @@ pub async fn upload_one_shot(
             job.stage(Stage::Transcoding);
             job.progress(0.0, Some("Transcoding audio".into()));
             let dst = staging.path().join("upload.mp3");
-            let _report = audio::transcode(&audio_path, &dst, &Default::default()).await?;
+            let _report = audio::transcode(&audio_path, &dst, &Default::default(), None).await?;
             job.progress(1.0, Some("Transcode complete".into()));
             dst
         };

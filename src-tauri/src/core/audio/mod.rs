@@ -184,12 +184,23 @@ pub async fn transcode(
     src: &Path,
     dst: &Path,
     enc: &EncoderSettings,
+    window: Option<(f64, f64)>,
 ) -> Result<TranscodeReport, AudioError> {
-    let src_duration = probe_duration(src).await?;
+    let src_duration = match window {
+        Some((start, end)) => end - start,
+        None => probe_duration(src).await?,
+    };
 
     let bin = resolve_ffmpeg_bin()?;
-    let output = Command::new(&bin)
-        .args(["-y", "-hide_banner", "-v", "error", "-i"])
+    let mut cmd = Command::new(&bin);
+    cmd.args(["-y", "-hide_banner", "-v", "error"]);
+    // Input-side seek + re-encode: m4b containers reject output-side seek
+    // accuracy; ffprobe-reported atom boundaries match input-side -ss/-to.
+    if let Some((start, end)) = window {
+        cmd.args(["-ss", &start.to_string(), "-to", &end.to_string()]);
+    }
+    let output = cmd
+        .arg("-i")
         .arg(src)
         .args([
             "-vn",
@@ -297,6 +308,6 @@ mod tests {
         // Race the future against a tiny timeout; if it returns an error
         // first (because ffmpeg/ffprobe rejects the input), that's also fine —
         // the point is the drop path doesn't panic or leak.
-        let _ = timeout(Duration::from_millis(50), transcode(&src, &dst, &enc)).await;
+        let _ = timeout(Duration::from_millis(50), transcode(&src, &dst, &enc, None)).await;
     }
 }
