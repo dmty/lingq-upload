@@ -11,6 +11,10 @@ use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::ingest::Candidate;
 
+/// Upper bound on copy-name allocation attempts. A book with 100 colliding
+/// titles in the store is almost certainly a bug, not a legitimate user state.
+const MAX_COPY_ATTEMPTS: usize = 100;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CreateProjectResult {
@@ -73,6 +77,20 @@ fn rebuild_library_index(
     Ok(())
 }
 
+/// Persist a project and refresh the on-disk library index in one shot.
+/// Centralises the put + reindex + atomic-write triple so each conflict
+/// resolution branch can't drift from the others.
+fn persist_and_reindex(
+    app: &tauri::AppHandle,
+    store: &Arc<dyn ProjectStore>,
+    project: &Project,
+) -> Result<(), AppError> {
+    store
+        .put(project)
+        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
+    rebuild_library_index(app, store.as_ref())
+}
+
 /// Persist a Candidate as a Project. Returns `Created` with the stable
 /// `ProjectId`, or `Conflict { existing, conflict_title }` if a project
 /// with the derived id already exists. On conflict no write occurs — the
@@ -99,20 +117,22 @@ pub async fn cmd_create_project(
         });
     }
 
-    store
-        .put(&project)
-        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
-    rebuild_library_index(&app, store.inner().as_ref())?;
+    persist_and_reindex(&app, store.inner(), &project)?;
 
     Ok(CreateProjectResult::Created { id })
 }
 
 /// Resolve a create-project conflict by user choice.
 ///
-/// - `Replace` writes blindly (same as legacy behavior).
-/// - `Skip` returns the existing project's id without writing.
-/// - `NewProject` appends `" (copy)"` to the title (loops until unique)
-///   so the derived `content_hash` differs, then writes.
+/// - `Replace` overwrites the existing project at the conflict id.
+/// - `Skip` returns the conflict id directly without re-reading the store
+///   (the conflict was already detected in `cmd_create_project`; a second
+///   `store.get` would race against a delete).
+/// - `NewProject` mutates the candidate's *title* and re-derives the id
+///   until it lands on an unused content hash. The id is hashed from
+///   `candidate.title + authors[0]`, so mutating `collection_title` alone
+///   keeps the hash constant and loops forever — append `" (copy)"` to
+///   `candidate.title` instead, capped at `MAX_COPY_ATTEMPTS`.
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_create_project_with_resolution(
@@ -127,42 +147,28 @@ pub async fn cmd_create_project_with_resolution(
         ConflictResolution::Replace => {
             let project = build_project(&candidate, language, collection_title);
             let id = project.id.clone();
-            store
-                .put(&project)
-                .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
-            rebuild_library_index(&app, store.inner().as_ref())?;
+            persist_and_reindex(&app, store.inner(), &project)?;
             Ok(id)
         }
-        ConflictResolution::Skip => {
-            let probe = build_project(&candidate, language, collection_title);
-            match store
-                .get(&probe.id)
-                .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-            {
-                Some(existing) => Ok(existing.id),
-                None => Err(AppError::Other(
-                    "skip requested but no existing project found".into(),
-                )),
-            }
-        }
+        ConflictResolution::Skip => Ok(candidate_to_id(&candidate)),
         ConflictResolution::NewProject => {
-            let mut title = format!("{collection_title} (copy)");
-            loop {
-                let project = build_project(&candidate, language.clone(), title.clone());
+            let mut copy = candidate.clone();
+            for _ in 0..MAX_COPY_ATTEMPTS {
+                copy.title.push_str(" (copy)");
+                let project = build_project(&copy, language.clone(), copy.title.clone());
                 let exists = store
                     .get(&project.id)
                     .map_err(|e| AppError::Other(format!("store.get: {e}")))?
                     .is_some();
                 if !exists {
                     let id = project.id.clone();
-                    store
-                        .put(&project)
-                        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
-                    rebuild_library_index(&app, store.inner().as_ref())?;
+                    persist_and_reindex(&app, store.inner(), &project)?;
                     return Ok(id);
                 }
-                title.push_str(" (copy)");
             }
+            Err(AppError::Other(
+                "could not allocate copy name".into(),
+            ))
         }
     }
 }
