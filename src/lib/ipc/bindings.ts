@@ -55,6 +55,19 @@ async manualSourceFromFiles(epub: string, audio: string, lang: string, title: st
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Scan a Calibre or Libation library root and return all candidates.
+ * 
+ * `source` is `"calibre"` or `"libation"`.
+ */
+async cmdIngestScan(source: string, root: string) : Promise<Result<Candidate[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_ingest_scan", { source, root }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async cmdAccountProfile() : Promise<Result<AccountProfile, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_account_profile") };
@@ -105,12 +118,30 @@ async cmdLibraryList() : Promise<Result<LibraryIndex, AppError>> {
 }
 },
 /**
- * Persist a Candidate as a Project. Returns the stable `ProjectId`.
- * If a matching project already exists the existing project is replaced.
+ * Persist a Candidate as a Project. Returns `Created` with the stable
+ * `ProjectId`, or `Conflict { existing, conflict_title }` if a project
+ * with the derived id already exists. On conflict no write occurs — the
+ * caller resolves via `cmd_create_project_with_resolution`.
  */
-async cmdCreateProject(candidate: Candidate, language: string, collectionTitle: string) : Promise<Result<ProjectId, AppError>> {
+async cmdCreateProject(candidate: Candidate, language: string, collectionTitle: string) : Promise<Result<CreateProjectResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_create_project", { candidate, language, collectionTitle }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Resolve a create-project conflict by user choice.
+ * 
+ * - `Replace` writes blindly (same as legacy behavior).
+ * - `Skip` returns the existing project's id without writing.
+ * - `NewProject` appends `" (copy)"` to the title (loops until unique)
+ * so the derived `content_hash` differs, then writes.
+ */
+async cmdCreateProjectWithResolution(candidate: Candidate, language: string, collectionTitle: string, resolution: ConflictResolution) : Promise<Result<ProjectId, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_create_project_with_resolution", { candidate, language, collectionTitle, resolution }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -189,6 +220,8 @@ export type ChapterEntry = { title: string; start_sec: number; end_sec: number |
 export type ChapterManifest = { chapters: ChapterEntry[] }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
+export type ConflictResolution = "replace" | "skip" | "new_project"
+export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
