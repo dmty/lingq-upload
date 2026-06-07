@@ -23,14 +23,26 @@
       "Libation layout: <root>/<Author>/<Book Title [ASIN]>/ with an audio file.",
   };
 
-  function normTitle(c: Candidate): string {
-    return c.title.normalize("NFC").toLowerCase();
-  }
+  // Switching source must reset everything in here — the parent only clears
+  // its own pickedCandidate/conflict; stale rootPath/candidates from the
+  // previous source would otherwise persist.
+  $effect(() => {
+    source;
+    rootPath = "";
+    candidates = [];
+    search = "";
+    error = null;
+    loading = false;
+  });
+
+  const normalisedTitles = $derived(
+    candidates.map((c) => c.title.normalize("NFC").toLowerCase()),
+  );
 
   const filtered = $derived.by(() => {
     const q = search.normalize("NFC").toLowerCase().trim();
     if (!q) return candidates;
-    return candidates.filter((c) => normTitle(c).includes(q));
+    return candidates.filter((_, i) => normalisedTitles[i].includes(q));
   });
 
   async function chooseFolder() {
@@ -141,7 +153,7 @@
       <ul
         class="max-h-72 divide-y divide-border overflow-y-auto rounded-sm border border-border bg-surface"
       >
-        {#each filtered as c (c.title + "|" + c.authors.join(","))}
+        {#each filtered as c (JSON.stringify([c.text_source, c.audio_source]))}
           {@const isSelected = selectedCandidate === c}
           <li>
             <button
