@@ -1,6 +1,8 @@
 pub mod mismatch;
+pub mod pack;
 
 pub use mismatch::{allowed, classify, MismatchCondition, MismatchResponse};
+pub use pack::{proportional_pack, Bucket};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;

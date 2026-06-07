@@ -122,7 +122,8 @@ pub fn proportional_pack(atoms: &[ChapterAtom], text_chars: &[usize]) -> Vec<Buc
 2. **Text shares.** Compute prefix sum `cum_text_j / total_chars` per chapter `j`.
 3. **Walk and bucket.** Walk text chapters in order. Push chapter `j` into bucket `i` while `cum_text_j ≤ audio_boundaries[i]`.
 4. **Snap rule for boundary-straddling chapters.** If chapter `j` straddles boundary `i` (i.e. `cum_text_{j-1} < audio_boundaries[i] < cum_text_j`), assign it to whichever side absorbs more of it (`> 0.5` overlap → that side). Tie-break: earlier bucket. **A text chapter is never split.**
-5. **Final bucket.** The last bucket gets all remaining chapters regardless of cum_text overshoot.
+5. **Oversized-head exception.** If chapter `j` is the *first* chapter that the current bucket would take (`bucket has no chapters yet`) and it overflows immediately, force-keep it in the current bucket even when the majority-overlap rule would send it forward. Without this carve-out a single chapter larger than several atom buckets' combined share would skip past every starved bucket and starve them all of any text; with the carve-out only one bucket (the one that owns the chapter) absorbs it and downstream buckets keep moving.
+6. **Final bucket.** The last bucket gets all remaining chapters regardless of cum_text overshoot.
 
 ### Output guarantees
 
