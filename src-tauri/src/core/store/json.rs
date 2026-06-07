@@ -84,11 +84,14 @@ impl ProjectStore for JsonProjectStore {
     }
 
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
+        use std::collections::HashSet;
+
         let projects = self.root.join("projects");
         if !projects.exists() {
             return Ok(Vec::new());
         }
         let mut out = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
         let entries = fs::read_dir(&projects).map_err(|e| io_err(&projects, e))?;
         for ent in entries {
             let ent = ent.map_err(|e| io_err(&projects, e))?;
@@ -105,7 +108,18 @@ impl ProjectStore for JsonProjectStore {
                 }
             };
             match serde_json::from_slice::<Project>(&bytes) {
-                Ok(p) => out.push((&p).into()),
+                Ok(p) => {
+                    // Path sanitisation (`:` -> `_`) can leave the same
+                    // logical project under two on-disk directories after
+                    // upgrade. Keep the first; warn about the rest so the
+                    // user can prune.
+                    let key = p.id.join_key();
+                    if !seen.insert(key.clone()) {
+                        tracing::warn!(path = %pj.display(), id = %key, "skipping duplicate project.json with already-seen id");
+                        continue;
+                    }
+                    out.push((&p).into());
+                }
                 Err(e) => {
                     tracing::warn!(path = %pj.display(), error = %e, "skipping corrupt project.json");
                     continue;

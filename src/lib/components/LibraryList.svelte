@@ -16,7 +16,7 @@
 </script>
 
 <ul class="divide-y divide-border">
-  {#each entries as entry (entry.id.content_hash)}
+  {#each entries as entry (joinKey(entry.id))}
     <li>
       <button
         type="button"
