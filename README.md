@@ -27,6 +27,20 @@ docs/                Evergreen architecture + specs
 static/              Static frontend assets
 ```
 
+## End-to-end smoke
+
+Playwright lives at the repo root (`playwright.config.ts`, tests under `e2e/`).
+The live LingQ flow is gated behind env vars so CI stays green without
+credentials.
+
+```sh
+bun run e2e                                                  # skipped (no live key)
+LINGQ_LIVE=1 LINGQ_STAGING_KEY=… bun run e2e                 # runs the smoke
+```
+
+Playwright boots `bun run dev` via its `webServer` hook; no separate dev
+server needed.
+
 ## License
 
 MIT.

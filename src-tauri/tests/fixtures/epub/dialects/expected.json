@@ -1,0 +1,3 @@
+{
+    "_comment": "Populated after seed-epub.sh has linked raw fixtures and snapshot tests have been run. Keys are basenames of EPUB files under dialects/; values describe per-fixture parse expectations (chapter count, heading strategy, hash of body text). Empty until then."
+}

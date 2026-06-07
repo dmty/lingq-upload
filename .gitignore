@@ -13,3 +13,10 @@ vite.config.ts.timestamp-*
 # Generated audio fixtures (deterministic; produced at test setup).
 src-tauri/tests/fixtures/audio/*.m4a
 src-tauri/tests/fixtures/audio/*.m4b
+
+# Personal EPUB / Calibre / Libation samples — seeded locally via
+# scripts/fixtures/. Never shipped.
+src-tauri/tests/fixtures/epub/*.epub
+src-tauri/tests/fixtures/epub/dialects/*.epub
+src-tauri/tests/fixtures/calibre/
+src-tauri/tests/fixtures/libation/
