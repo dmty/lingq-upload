@@ -26,8 +26,14 @@
   let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
   let error = $state<string | null>(null);
+  let info = $state<string | null>(null);
   let unlisten: UnlistenFn | undefined;
   let running = $state(false);
+  // jobId is set only AFTER cmdStartProjectJob resolves. Events arriving
+  // before that (e.g. from a concurrent run of the same project in another
+  // tab) MUST be dropped — without the server id we can't tell ours from
+  // theirs. The orchestrator persists receipts, so a drop here is recovered
+  // by reloadProject() on terminal events.
   let jobId = $state<string | null>(null);
   let starting = $state(false);
 
@@ -76,16 +82,24 @@
 
   async function start() {
     error = null;
+    info = null;
     starting = true;
-    const res = await commands.cmdStartProjectJob({
-      content_hash: project!.id.content_hash,
-      audible_asin: project!.id.audible_asin ?? null,
-      isbn13: project!.id.isbn13 ?? null,
-      calibre_uuid: project!.id.calibre_uuid ?? null,
-    });
+    const res = await commands.cmdStartProjectJob(project!.id);
     starting = false;
     if (res.status === "error") {
-      error = appErrorMessage(res.error);
+      const msg = appErrorMessage(res.error);
+      // Backend rejects concurrent starts for the same project. Surface as
+      // info rather than a red error — the user almost certainly clicked
+      // twice; events from the existing run will keep streaming below.
+      if (
+        res.error.kind === "Other" &&
+        msg.toLowerCase().includes("already running")
+      ) {
+        info = "This project is already running. Watch the chapter list update below.";
+        running = true;
+      } else {
+        error = msg;
+      }
       return;
     }
     jobId = res.data;
@@ -100,31 +114,29 @@
     }
   }
 
-  function handleResultPayload(payload: unknown): void {
-    if (typeof payload !== "object" || payload === null) return;
-    const p = payload as Record<string, unknown>;
-    if (p.needs_match === true) {
-      const params = new URLSearchParams();
-      if (typeof p.title === "string") params.set("title", p.title);
-      if (typeof p.chapters === "number")
-        params.set("chapters", String(p.chapters));
-      if (typeof p.tracks === "number") params.set("tracks", String(p.tracks));
-      if (typeof p.condition === "string") params.set("condition", p.condition);
-      if (Array.isArray(p.options))
-        params.set("options", (p.options as string[]).join(","));
-      if (typeof p.preselect === "string") params.set("preselect", p.preselect);
-      goto(`/match/${projectKey}?${params.toString()}`);
-    }
+  function goToMatch(ev: Extract<JobEvent, { kind: "NeedsMatch" }>): void {
+    const url =
+      `/match/${encodeURIComponent(projectKey)}` +
+      `?title=${encodeURIComponent(ev.title)}` +
+      `&chapters=${ev.chapters}` +
+      `&tracks=${ev.tracks}` +
+      `&condition=${ev.condition}` +
+      `&options=${ev.options.join(",")}` +
+      `&preselect=${ev.preselect}`;
+    goto(url);
   }
+
+  const hasReceipts = $derived((project?.receipts?.length ?? 0) > 0);
 
   onMount(async () => {
     await reloadProject();
 
     unlisten = await listen<JobEvent>("job", async (e) => {
       const ev = e.payload;
-      // Filter by jobId once we have one — concurrent project events would
-      // otherwise interleave through this same global "job" channel.
-      if (jobId && "job_id" in ev && ev.job_id !== jobId) return;
+      // Invariant: never accept an event unless we have a server-issued
+      // jobId AND it matches. Drops cover the start-race window and any
+      // crosstalk from concurrent project jobs on the same "job" channel.
+      if (jobId === null || ev.job_id !== jobId) return;
 
       if (ev.kind === "Started") {
         running = true;
@@ -138,9 +150,10 @@
         running = false;
         if (ev.ok) {
           await reloadProject();
-        } else {
-          handleResultPayload(ev.payload);
         }
+      } else if (ev.kind === "NeedsMatch") {
+        running = false;
+        goToMatch(ev);
       } else if (ev.kind === "Cancelled") {
         running = false;
         await reloadProject();
@@ -175,14 +188,14 @@
         >
           Cancel
         </button>
-      {:else if project && rows.length === 0}
+      {:else if project}
         <button
           type="button"
           onclick={start}
           disabled={starting}
           class="rounded-sm bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
         >
-          {starting ? "Starting..." : "Start"}
+          {starting ? "Starting..." : hasReceipts ? "Resume" : "Start"}
         </button>
       {/if}
     </div>
@@ -194,7 +207,17 @@
     >
       {error}
     </p>
-  {:else if rows.length === 0}
+  {/if}
+
+  {#if info}
+    <p
+      class="rounded-sm border border-accent-soft bg-accent-soft/40 px-4 py-2 text-sm text-fg"
+    >
+      {info}
+    </p>
+  {/if}
+
+  {#if rows.length === 0}
     <p class="rounded-sm border border-border bg-surface p-4 text-sm text-fg-muted">
       No chapter receipts yet. Press Start to begin uploading; per-chapter rows
       will stream here in order.
