@@ -385,6 +385,70 @@ pub trait ProjectStore: Send + Sync {
 
 **Anti-pattern banned:** `serde_json::to_writer` or `std::fs::write` against `project.json` outside `core/store/`. Surface them via the trait or write a new impl.
 
+## AD-023 — m4b chapter atoms are a track source; ManyToFew uses proportional packing
+
+**Decision:** A single m4b file dropped by the user is **not always one track**. If the file carries embedded chapter atoms (`nb_chapters >= 2` per `ffprobe`), the audio probe expands those atoms into N virtual tracks and the matcher sees the audio as having N tracks, not 1. When the resulting track count is *less* than the text-chapter count (both ≥ 2) the matcher emits a new `MismatchCondition::ManyToFew` and offers a new `MismatchResponse::SplitProportional` that packs text chapters into audio buckets proportional to atom duration.
+
+```rust
+// src-tauri/src/core/matcher/mismatch.rs
+#[serde(rename_all = "snake_case")]
+pub enum MismatchCondition {
+    OneToMany,
+    ManyToOne,
+    ManyToFew,           // NEW: chapters > tracks, both >= 2, ratio > 1.5, ratio <= 30
+    CountOff,
+    Unalignable,
+    #[serde(other)]
+    Unknown,             // NEW: serde forward-compat fallback (see "Serde forward-compat")
+}
+
+#[serde(rename_all = "snake_case")]
+pub enum MismatchResponse {
+    PairAccept,
+    PairDrop,
+    SingleLesson,
+    SplitProportional,   // NEW: pack text proportionally across audio atoms
+    Cancel,
+    #[serde(other)]
+    Unknown,             // NEW: serde forward-compat fallback (see "Serde forward-compat")
+}
+```
+
+**`allowed` rule:** `ManyToFew → ([SplitProportional, SingleLesson, Cancel], SplitProportional)`. Preselect is `SplitProportional` because the embedded atoms are the publisher's own chapter boundaries — almost always the right answer. `Unknown` is **not** a value `allowed()` can be called with — it only appears during deserialisation of unknown-tagged data; treat it as `Unalignable` with response set `[Cancel]` and preselect `Cancel` (force the user to redo the match step on a build that understands the new variant).
+
+**`classify` precedence update:** equal-nonzero → empty-vs-content (Unalignable) → OneToMany → ManyToOne → CountOff → **ManyToFew (chapters > tracks, both ≥ 2, 2·chapters > 3·tracks, chapters ≤ 30·tracks)** → Unalignable. CountOff still wins on the small-delta near-miss case (`|c − t| ≤ 2` with ratio close to 1) so e.g. `classify(22, 20)` keeps returning CountOff — pair-accept of 20 + drop-2 stays the right answer there. ManyToFew is for *genuinely* coarser audio than text: it triggers only when the ratio exceeds 1.5×, which captures (4, 2), (5, 3), (6, 3), (85, 6) but excludes (22, 20), (10, 8), (5, 4). The integer form `2·chapters > 3·tracks` avoids floats; the upper bound `chapters ≤ 30·tracks` is the same sanity guard as before (beyond 30× the packer output quality degrades enough that `SingleLesson` is a better fallback).
+
+**Audio probe is per-file, always.** Same-series files differ — a single Drama-CD folder can mix files with 5 atoms and files with 0. The probe does not cache by folder.
+
+**Atom representation:** `core::audio::ChapterAtom { start: f64, end: f64, title: Option<String> }`. Times are seconds. The integer `start` / `end` + `time_base` triple from ffprobe is discarded; the float `start_time` / `end_time` fields are the contract surface. This isolates the rest of the codebase from `time_base` variance (`1/1000` on Lavf-encoded sources, `1/44100` on Audible delivery).
+
+**`IngestSource` extension is unchanged.** The `IngestSource::audio_tracks` shape per AD-019 + AD-018 stays `Vec<PathBuf>` — adding a slice variant would break every existing impl and consumer. The atom probe + fanout happens **inside** the job orchestrator's `resolve_audio_tracks` step (the single place that converts `AudioSource::SingleFile` and `AudioSource::LibationManifest` into `AudioTrack` records). For a single-file audio source that probes to N ≥ 2 atoms, `resolve_audio_tracks` emits N `AudioTrack` records — one per atom — instead of the current one-per-path. `AudioSource::Folder` stays as-is (one `AudioTrack` per file, no probe).
+
+**`AudioTrack` grows a window field.** `AudioTrack` is the universal track handle across the matcher, transcode, and upload pipeline. Rather than introducing a parallel `TrackRef` type next to it, `AudioTrack` gains `window: Option<(f64, f64)>` where `None` means whole-file (current behaviour, default for all `AudioSource::Folder` entries) and `Some((start, end))` names the slice. This is the single struct change; every downstream caller that already handles `AudioTrack` keeps working with `None`.
+
+```rust
+// src-tauri/src/core/audio/mod.rs
+pub struct AudioTrack {
+    pub order: usize,
+    pub path: PathBuf,
+    pub duration_sec: f64,
+    pub title: Option<String>,
+    pub window: Option<(f64, f64)>, // NEW: None = whole file, Some = atom slice
+}
+```
+
+**Transcode integration:** `core::audio::transcode` gains a fourth arg, `window: Option<(f64, f64)>`. `None` calls the existing path. `Some((start, end))` prepends `-ss <start> -to <end>` to the input. The per-slice mp3 output is still verified against the slice duration (`|slice_dur − mp3_dur| < 1.0 s`) by the existing duration-check codepath. The signature change ripples to 5 call sites (`core/audio/batch.rs`, `core/audio/mod.rs` test, `core/job/mod.rs` production caller, `commands/upload.rs`) — four of them pass `None`; the production caller in `core/job/mod.rs` passes `track.window`.
+
+**Why:** The previous matcher pushed every "single m4b file with internal chapters" case into `SingleLesson` (concat all text into one lesson, audio not chapter-aligned). That's a lossy fallback — the publisher already encoded chapter boundaries; ignoring them produces a worse learning experience. Proportional packing reclaims chapter-alignment whenever the publisher gave it to us.
+
+**Why not re-slice audio:** The packer never splits an audio atom. Atoms are the publisher's own boundaries and the only ground truth we have; subdividing them by text length would introduce mid-sentence cuts. The packer instead concatenates text into buckets sized to match the atoms.
+
+**Why character-count over word-count for text length:** Japanese has no word boundaries. Character count (codepoints, whitespace + markup stripped) is the only portable proxy for narration duration across CJK + Latin-script source material. Variance from dialog vs prose narration is bounded enough for one-pass packing; closer alignment would require speech transcription (out of scope).
+
+**Serde forward-compat:** Both `MismatchCondition` and `MismatchResponse` are persisted inside `MatcherDecision` in `project.json`. Adding `ManyToFew` / `SplitProportional` is a forward-incompat change for older builds reading newer files (the `serde(rename_all = "snake_case")` enums would error on unknown tags) — violating AD-022's "forward-compat" promise. The fix is the `#[serde(other)] Unknown` variants shown in the code snippet above. Old builds reading a `project.json` written by a new build deserialise the unknown tag as `Unknown` and the matcher UI re-prompts the user for a decision the old build understands. **No `SCHEMA_V1` bump is needed**, because the structural shape of `MatcherDecision` is unchanged — only the enum tag set widens. `Unknown` is **not** emitted by the new build's own classifier or UI; it can only enter memory via deserialisation of a file written by an even-newer build.
+
+See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, edge cases, and synthetic fixtures.
+
 ## Open architecture questions
 
 1. **Re-import / diff behaviour** — when the same Candidate is re-scanned (Calibre edit, Libation re-rip), what's the per-chapter conflict policy? Overwrite / append / skip / prompt? Current default: append-by-default, prompt on conflict.
