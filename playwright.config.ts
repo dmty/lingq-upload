@@ -3,6 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 // Headless, single-worker, zero-retries by default. The webServer hook spins
 // up Vite (`bun run dev`) on port 1420 — the Tauri dev port. CI can override
 // retries via the CI env var.
+//
+// Vite has no Tauri runtime, so any `commands.*` call from the page would
+// throw on mount. Specs install an init script (`e2e/setup/tauri-stub.ts`)
+// via `test.beforeEach` to stub the IPC for the empty-state path. Extend the
+// stub's handler map as the test surface grows.
 export default defineConfig({
     testDir: "e2e",
     fullyParallel: false,
