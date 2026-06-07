@@ -1,8 +1,6 @@
 <script lang="ts">
   type Source = "manual" | "calibre" | "libation";
-  let {
-    value = $bindable<Source>("manual"),
-  }: { value?: Source } = $props();
+  let { value = $bindable<Source>("manual") }: { value?: Source } = $props();
 </script>
 
 <fieldset class="space-y-2">

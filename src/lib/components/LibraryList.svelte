@@ -1,31 +1,40 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import type { LibraryEntry } from "$lib/ipc/bindings";
   import { joinKey } from "$lib/identity";
+  import { lingqCollectionUrl } from "$lib/lingq";
+  import LibraryRow from "./LibraryRow.svelte";
 
   let { entries }: { entries: LibraryEntry[] } = $props();
 
-  function open(entry: LibraryEntry) {
-    goto(`/run/${encodeURIComponent(joinKey(entry.id))}`);
+  function primaryActionFor(entry: LibraryEntry) {
+    const status = entry.status ?? "idle";
+    const key = encodeURIComponent(joinKey(entry.id));
+    if (status === "done") {
+      if (entry.lingq_collection_id == null) return;
+      void openUrl(
+        lingqCollectionUrl(entry.language, entry.lingq_collection_id),
+      );
+      return;
+    }
+    if (status === "needs_match") {
+      void goto(`/match/${key}`);
+      return;
+    }
+    void goto(`/run/${key}`);
   }
 </script>
 
 <ul class="divide-y divide-border">
-  {#each entries as entry (joinKey(entry.id))}
-    <li>
-      <button
-        type="button"
-        class="flex w-full items-center justify-between py-3 px-2 text-left hover:bg-surface-sunken transition-colors duration-120"
-        onclick={() => open(entry)}
-      >
-        <span class="flex flex-col">
-          <span class="text-sm font-medium text-fg">{entry.title}</span>
-          <span class="text-xs text-fg-muted">{entry.language}</span>
-        </span>
-        <span class="text-xs text-fg-muted">
-          {entry.completed_lesson_count}/{entry.receipt_count}
-        </span>
-      </button>
+  {#each entries as entry, i (joinKey(entry.id))}
+    <li class="relative grid grid-cols-[1fr_auto] gap-4 px-2">
+      <LibraryRow
+        {entry}
+        prev={entries[i - 1] ?? null}
+        next={entries[i + 1] ?? null}
+        onPrimary={primaryActionFor}
+      />
     </li>
   {/each}
 </ul>

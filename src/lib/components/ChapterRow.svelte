@@ -36,7 +36,9 @@
     {index + 1}
   </span>
   {#if status === "done"}
-    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success text-white text-[10px]">
+    <span
+      class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success text-white text-[10px]"
+    >
       ✓
     </span>
   {:else if status === "in_flight"}
@@ -45,7 +47,8 @@
       aria-label="in flight"
     ></span>
   {:else}
-    <span class="inline-block h-4 w-4 rounded-full border border-fg-subtle"></span>
+    <span class="inline-block h-4 w-4 rounded-full border border-fg-subtle"
+    ></span>
   {/if}
 
   <span class="flex-1 text-sm text-fg">{title}</span>
