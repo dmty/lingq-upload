@@ -14,7 +14,7 @@ use crate::core::audio::{self, AudioTrack, EncoderSettings};
 use crate::core::epub::{parse_epub, Chapter, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
-use crate::core::matcher::{auto_match, MatchOutcome, MismatchResponse};
+use crate::core::matcher::{auto_match, MatchOutcome, MismatchCondition, MismatchResponse};
 use crate::core::project::{ChapterReceipt, MatcherDecision, Project};
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
@@ -33,6 +33,18 @@ pub trait JobSink: Send {
     fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool);
     fn cancelled(&mut self);
     fn result(&mut self, ok: bool, payload: serde_json::Value);
+    /// Terminal signal: orchestrator paused because chapter/track counts
+    /// don't pair cleanly and there's no recorded `MatcherDecision`. The UI
+    /// consumes this to navigate to `/match` and record the user's choice.
+    fn needs_match(
+        &mut self,
+        title: String,
+        chapters: usize,
+        tracks: usize,
+        condition: MismatchCondition,
+        options: Vec<MismatchResponse>,
+        preselect: MismatchResponse,
+    );
 }
 
 /// Run a project end to end: resolve audio/text, optionally pause for matcher
@@ -85,7 +97,10 @@ pub async fn run_project_job(
         "job: resolved inputs",
     );
 
-    // Decide pairing. If decision is missing AND counts mismatch, ask the UI.
+    // Decide pairing. If decision is missing AND counts mismatch, ask the UI
+    // via the dedicated `NeedsMatch` terminal event. Don't reuse
+    // `Result { ok: false }` — that's reserved for "job finished" and
+    // breaks downstream consumers that key off the terminal kind.
     let plan = match build_plan(&project, &chapters, &tracks) {
         PlanOrPause::Plan(p) => p,
         PlanOrPause::NeedsMatch {
@@ -93,20 +108,23 @@ pub async fn run_project_job(
             options,
             preselect,
         } => {
-            let payload = serde_json::json!({
-                "needs_match": true,
-                "condition": condition,
-                "options": options,
-                "preselect": preselect,
-                "title": project.settings.collection_title,
-                "chapters": chapters.len(),
-                "tracks": tracks.len(),
-            });
-            sink.result(false, payload);
+            sink.needs_match(
+                project.settings.collection_title.clone(),
+                chapters.len(),
+                tracks.len(),
+                condition,
+                options,
+                preselect,
+            );
             return Ok(());
         }
         PlanOrPause::Cancelled => {
             let err = AppError::Other("matcher decision was Cancel".into());
+            sink.result(false, serde_json::json!({"error": err.to_string()}));
+            return Err(err);
+        }
+        PlanOrPause::Failed(msg) => {
+            let err = AppError::Other(msg);
             sink.result(false, serde_json::json!({"error": err.to_string()}));
             return Err(err);
         }
@@ -211,26 +229,22 @@ pub async fn run_project_job(
         };
         tracing::info!(chapter = step.chapter_index, lesson_id, "job: imported lesson");
 
-        // Update receipts in place if one already exists for this chapter.
-        let now = Utc::now();
+        // Upsert a receipt for this chapter. Build the freshly-uploaded
+        // receipt once, then either replace an existing slot or append.
+        let receipt = ChapterReceipt {
+            chapter_index: step.chapter_index,
+            track_index: Some(step.track_index),
+            lesson_id: Some(lesson_id),
+            degraded: step.degraded,
+            uploaded_at: Some(Utc::now()),
+        };
         match project
             .receipts
             .iter_mut()
             .find(|r| r.chapter_index == step.chapter_index)
         {
-            Some(existing) => {
-                existing.track_index = Some(step.track_index);
-                existing.lesson_id = Some(lesson_id);
-                existing.degraded = step.degraded;
-                existing.uploaded_at = Some(now);
-            }
-            None => project.receipts.push(ChapterReceipt {
-                chapter_index: step.chapter_index,
-                track_index: Some(step.track_index),
-                lesson_id: Some(lesson_id),
-                degraded: step.degraded,
-                uploaded_at: Some(now),
-            }),
+            Some(slot) => *slot = receipt,
+            None => project.receipts.push(receipt),
         }
         project.queue_cursor = step.chapter_index + 1;
         project.completed_lesson_ids.push(lesson_id);
@@ -296,11 +310,12 @@ struct Plan {
 enum PlanOrPause {
     Plan(Plan),
     NeedsMatch {
-        condition: crate::core::matcher::MismatchCondition,
+        condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
     },
     Cancelled,
+    Failed(String),
 }
 
 fn build_plan(project: &Project, chapters: &[Chapter], tracks: &[AudioTrack]) -> PlanOrPause {
@@ -343,14 +358,18 @@ fn plan_from_decision(
         SingleLesson => {
             // Concatenate all chapters into one lesson body, pair with the
             // first available track. Marked degraded so the UI can flag it.
+            if tracks.is_empty() {
+                // The user picked SingleLesson, not Cancel — this is a hard
+                // failure (no audio to attach), not a quiet cancellation.
+                return PlanOrPause::Failed(
+                    "single-lesson upload needs at least one audio file".into(),
+                );
+            }
             let text = single_lesson_concat(chapters);
             let title = chapters
                 .first()
                 .map(|c| c.title.clone())
                 .unwrap_or_else(|| "Lesson".to_string());
-            if tracks.is_empty() {
-                return PlanOrPause::Cancelled;
-            }
             PlanOrPause::Plan(Plan {
                 steps: vec![Step {
                     chapter_index: 0,
@@ -364,7 +383,14 @@ fn plan_from_decision(
         PairAccept => {
             // Pair chapters[i] ↔ tracks[i] for i in 0..chapters.len().
             // Any extra tracks beyond chapters.len() ship as audio-only
-            // lessons (degraded, synthetic chapter_index = chapters.len()+k).
+            // lessons (degraded). For leftover tracks the receipt's
+            // `chapter_index` is set to the track's own index `k` — this is
+            // a synthetic placeholder, not a real chapter index. The
+            // orchestrator's resume-skip logic only cares that the value
+            // is unique per receipt, which is satisfied because real
+            // chapters occupy indices 0..chapters.len() and leftovers
+            // start at chapters.len(). Future refactor: model leftover
+            // receipts with `chapter_index: Option<usize>`.
             let mut steps: Vec<Step> = (0..chapters.len())
                 .map(|i| Step {
                     chapter_index: i,
@@ -377,7 +403,10 @@ fn plan_from_decision(
             for (k, track) in tracks.iter().enumerate().skip(chapters.len()) {
                 let title = audio_only_title(track, k);
                 steps.push(Step {
-                    chapter_index: chapters.len() + (k - chapters.len()),
+                    // k >= chapters.len() so this never collides with the
+                    // 0..chapters.len() block above. Equivalent to `k` but
+                    // written this way to flag the leftover semantics.
+                    chapter_index: k,
                     track_index: k,
                     degraded: true,
                     // LingQ rejects empty `text`; a single space satisfies the
