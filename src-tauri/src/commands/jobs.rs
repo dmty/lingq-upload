@@ -4,7 +4,7 @@
 //! tauri-agnostic so it can be unit-tested without a running app handle.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use secrecy::SecretString;
 use tauri::AppHandle;
@@ -13,14 +13,52 @@ use uuid::Uuid;
 
 use crate::core::identity::ProjectId;
 use crate::core::job::{run_project_job, JobSink};
+use crate::core::matcher::{MismatchCondition, MismatchResponse};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::lingq::LingqClient;
 use crate::secrets::{RealKeyring, SecretsStore};
 
+/// Each entry pins both the cancellation token AND the project id so we can
+/// answer "is this project already running?" without scanning the store.
+type JobCancelEntry = (ProjectId, CancellationToken);
+
 /// Singleton map of active job cancellation tokens. Managed in `lib.rs::run`.
-pub type JobCancelMap = Arc<Mutex<HashMap<Uuid, CancellationToken>>>;
+pub type JobCancelMap = Arc<Mutex<HashMap<Uuid, JobCancelEntry>>>;
+
+/// Single funnel for locking the cancel map. The map is single-process and
+/// a poisoned mutex means real corruption — propagate the panic.
+fn lock_cancels(map: &JobCancelMap) -> MutexGuard<'_, HashMap<Uuid, JobCancelEntry>> {
+    map.lock().expect("job cancel map mutex poisoned")
+}
+
+fn is_project_active(
+    map: &HashMap<Uuid, JobCancelEntry>,
+    project_id: &ProjectId,
+) -> bool {
+    map.values().any(|(pid, _)| pid == project_id)
+}
+
+/// RAII guard that removes a job from the cancel map on drop. A panic inside
+/// the spawned task would otherwise leak the entry forever — the explicit
+/// `.remove()` only runs on the happy / Err return paths.
+struct JobMapGuard {
+    map: JobCancelMap,
+    job_id: Uuid,
+}
+
+impl JobMapGuard {
+    fn new(map: JobCancelMap, job_id: Uuid) -> Self {
+        Self { map, job_id }
+    }
+}
+
+impl Drop for JobMapGuard {
+    fn drop(&mut self) {
+        lock_cancels(&self.map).remove(&self.job_id);
+    }
+}
 
 /// Start an end-to-end project job. Returns immediately with the new job id;
 /// the actual work runs on the tokio runtime and streams `JobEvent`s.
@@ -44,16 +82,23 @@ pub async fn cmd_start_project_job(
 
     let job_id = Uuid::new_v4();
     let token = CancellationToken::new();
-    cancels
-        .lock()
-        .expect("job cancel map mutex poisoned")
-        .insert(job_id, token.clone());
+    {
+        // Reject duplicate-start. Two rapid clicks would otherwise race on
+        // the same project.json and trash receipts.
+        let mut guard = lock_cancels(cancels.inner());
+        if is_project_active(&guard, &project_id) {
+            return Err(AppError::Other("project already running".into()));
+        }
+        guard.insert(job_id, (project_id.clone(), token.clone()));
+    }
 
     let store_ref: Arc<dyn ProjectStore> = store.inner().clone();
     let cancels_ref: JobCancelMap = cancels.inner().clone();
     let app_for_task = app.clone();
 
     tauri::async_runtime::spawn(async move {
+        // Guarantee map cleanup even if the future panics.
+        let _guard = JobMapGuard::new(cancels_ref, job_id);
         let mut emitter = JobEmitter::new(&app_for_task, job_id);
         let mut sink = EmitterSink { inner: &mut emitter };
         if let Err(e) =
@@ -61,10 +106,6 @@ pub async fn cmd_start_project_job(
         {
             tracing::error!(job_id = %job_id, error = %e, "project job failed");
         }
-        cancels_ref
-            .lock()
-            .expect("job cancel map mutex poisoned")
-            .remove(&job_id);
     });
 
     Ok(job_id)
@@ -78,11 +119,9 @@ pub async fn cmd_cancel_job(
     cancels: tauri::State<'_, JobCancelMap>,
     job_id: Uuid,
 ) -> Result<(), AppError> {
-    let maybe = cancels
-        .lock()
-        .expect("job cancel map mutex poisoned")
+    let maybe = lock_cancels(cancels.inner())
         .get(&job_id)
-        .cloned();
+        .map(|(_, tok)| tok.clone());
     if let Some(tok) = maybe {
         tok.cancel();
         tracing::info!(job_id = %job_id, "cancel signalled");
@@ -113,5 +152,17 @@ impl<'a, 'b> JobSink for EmitterSink<'a, 'b> {
     }
     fn result(&mut self, ok: bool, payload: serde_json::Value) {
         self.inner.result(ok, payload);
+    }
+    fn needs_match(
+        &mut self,
+        title: String,
+        chapters: usize,
+        tracks: usize,
+        condition: MismatchCondition,
+        options: Vec<MismatchResponse>,
+        preselect: MismatchResponse,
+    ) {
+        self.inner
+            .needs_match(title, chapters, tracks, condition, options, preselect);
     }
 }
