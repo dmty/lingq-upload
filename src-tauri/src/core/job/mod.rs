@@ -455,6 +455,16 @@ fn plan_from_decision(
                     .collect(),
             })
         }
+        // No producer surfaces ManyToFew in this build (the m4b chapter-atom
+        // splice isn't wired), so the UI cannot let the user pick this. The
+        // arm exists for exhaustiveness only.
+        SplitProportional => {
+            let _ = (chapters, tracks);
+            unreachable!("SplitProportional reached plan_from_decision without an atom splice")
+        }
+        // Unknown only deserialises from a foreign response tag written by a
+        // newer build. The classifier + UI in this build cannot produce it.
+        Unknown => unreachable!("Unknown response cannot be emitted by this build"),
     }
 }
 

@@ -21,8 +21,10 @@ fn condition_str(c: MismatchCondition) -> &'static str {
     match c {
         MismatchCondition::OneToMany => "OneToMany",
         MismatchCondition::ManyToOne => "ManyToOne",
+        MismatchCondition::ManyToFew => "ManyToFew",
         MismatchCondition::CountOff => "CountOff",
         MismatchCondition::Unalignable => "Unalignable",
+        MismatchCondition::Unknown => "Unknown",
     }
 }
 
@@ -31,7 +33,9 @@ fn response_str(r: MismatchResponse) -> &'static str {
         MismatchResponse::PairAccept => "PairAccept",
         MismatchResponse::PairDrop => "PairDrop",
         MismatchResponse::SingleLesson => "SingleLesson",
+        MismatchResponse::SplitProportional => "SplitProportional",
         MismatchResponse::Cancel => "Cancel",
+        MismatchResponse::Unknown => "Unknown",
     }
 }
 
@@ -150,8 +154,10 @@ fn manual_pair_is_not_a_response() {
     for c in [
         MismatchCondition::OneToMany,
         MismatchCondition::ManyToOne,
+        MismatchCondition::ManyToFew,
         MismatchCondition::CountOff,
         MismatchCondition::Unalignable,
+        MismatchCondition::Unknown,
     ] {
         let (opts, _) = allowed(c);
         for opt in opts {
@@ -161,7 +167,9 @@ fn manual_pair_is_not_a_response() {
                 MismatchResponse::PairAccept
                     | MismatchResponse::PairDrop
                     | MismatchResponse::SingleLesson
+                    | MismatchResponse::SplitProportional
                     | MismatchResponse::Cancel
+                    | MismatchResponse::Unknown
             ));
         }
     }
@@ -178,5 +186,20 @@ fn classify_boundary_cases() {
     assert_eq!(classify(1, 3), Some(MismatchCondition::OneToMany));
     assert_eq!(classify(3, 1), Some(MismatchCondition::ManyToOne));
     assert_eq!(classify(5, 20), Some(MismatchCondition::Unalignable));
-    assert_eq!(classify(20, 5), Some(MismatchCondition::Unalignable));
+    // (20, 5) is chapters-heavy with ratio 4.0 — within the ManyToFew band
+    // (>1.5, ≤30×). The text-side Unalignable branch only fires when neither
+    // ManyToFew arm matches; here ManyToFew correctly wins.
+    assert_eq!(classify(20, 5), Some(MismatchCondition::ManyToFew));
+
+    // ManyToFew: chapters > tracks, both >= 2, ratio strictly above 1.5, <= 30×.
+    assert_eq!(classify(6, 3), Some(MismatchCondition::ManyToFew));
+    assert_eq!(classify(85, 6), Some(MismatchCondition::ManyToFew));
+
+    // CountOff wins over ManyToFew when |c - t| <= 2 (precedence guard).
+    assert_eq!(classify(4, 2), Some(MismatchCondition::CountOff));
+    assert_eq!(classify(5, 3), Some(MismatchCondition::CountOff));
+    assert_eq!(classify(22, 20), Some(MismatchCondition::CountOff));
+
+    // tracks == 1 still wins ManyToOne even at extreme ratios.
+    assert_eq!(classify(85, 1), Some(MismatchCondition::ManyToOne));
 }
