@@ -25,22 +25,28 @@ impl Default for InMemoryProjectStore {
 
 impl ProjectStore for InMemoryProjectStore {
     fn put(&self, p: &Project) -> Result<(), StoreError> {
+        // Single-process store; a poisoned mutex means real corruption — panic.
         self.inner
             .lock()
-            .unwrap()
+            .expect("project store mutex poisoned")
             .insert(p.id.join_key(), p.clone());
         Ok(())
     }
 
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError> {
-        Ok(self.inner.lock().unwrap().get(&id.join_key()).cloned())
+        Ok(self
+            .inner
+            .lock()
+            .expect("project store mutex poisoned")
+            .get(&id.join_key())
+            .cloned())
     }
 
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
         let mut out: Vec<ProjectSummary> = self
             .inner
             .lock()
-            .unwrap()
+            .expect("project store mutex poisoned")
             .values()
             .map(ProjectSummary::from)
             .collect();
