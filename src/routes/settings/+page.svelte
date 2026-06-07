@@ -1,13 +1,85 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { commands } from "$lib/ipc/bindings";
+  import { commands, type TrashEntry } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import { formatRelative } from "$lib/format";
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
   let busy = $state(false);
   let error = $state<string | null>(null);
   let justSaved = $state(false);
+
+  let trashEntries = $state<TrashEntry[]>([]);
+  let trashError = $state<string | null>(null);
+  let trashLoaded = $state(false);
+  let purgeConfirmId = $state<string | null>(null);
+  let purgeTimer: ReturnType<typeof setTimeout> | null = null;
+  let rowBusyId = $state<string | null>(null);
+  let rowErrors = $state<Record<string, string>>({});
+
+  async function loadTrash() {
+    const res = await commands.cmdListTrash();
+    if (res.status === "ok") {
+      trashEntries = res.data;
+      trashError = null;
+    } else {
+      trashError = appErrorMessage(res.error);
+    }
+    trashLoaded = true;
+  }
+
+  function setRowError(id: string, msg: string | null) {
+    if (msg == null) {
+      const { [id]: _drop, ...rest } = rowErrors;
+      rowErrors = rest;
+    } else {
+      rowErrors = { ...rowErrors, [id]: msg };
+    }
+  }
+
+  async function restore(entry: TrashEntry) {
+    if (rowBusyId) return;
+    rowBusyId = entry.trash_id;
+    setRowError(entry.trash_id, null);
+    const res = await commands.cmdRestoreProject(entry.trash_id);
+    rowBusyId = null;
+    if (res.status === "ok") {
+      trashEntries = trashEntries.filter((t) => t.trash_id !== entry.trash_id);
+    } else {
+      setRowError(entry.trash_id, appErrorMessage(res.error));
+    }
+  }
+
+  function startPurgeConfirm(entry: TrashEntry) {
+    if (purgeTimer != null) clearTimeout(purgeTimer);
+    purgeConfirmId = entry.trash_id;
+    setRowError(entry.trash_id, null);
+    purgeTimer = setTimeout(() => {
+      purgeConfirmId = null;
+      purgeTimer = null;
+    }, 5000);
+  }
+
+  function cancelPurge() {
+    if (purgeTimer != null) clearTimeout(purgeTimer);
+    purgeTimer = null;
+    purgeConfirmId = null;
+  }
+
+  async function purge(entry: TrashEntry) {
+    if (rowBusyId) return;
+    rowBusyId = entry.trash_id;
+    setRowError(entry.trash_id, null);
+    const res = await commands.cmdPurgeProject(entry.trash_id);
+    rowBusyId = null;
+    if (res.status === "ok") {
+      cancelPurge();
+      trashEntries = trashEntries.filter((t) => t.trash_id !== entry.trash_id);
+    } else {
+      setRowError(entry.trash_id, appErrorMessage(res.error));
+    }
+  }
 
   async function refresh() {
     error = null;
@@ -62,6 +134,7 @@
 
   onMount(() => {
     void refresh();
+    void loadTrash();
   });
 </script>
 
@@ -170,6 +243,110 @@
       </button>
     </div>
   </div>
+
+  <details
+    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
+    open={trashEntries.length > 0}
+  >
+    <summary class="cursor-pointer text-md font-semibold text-fg">
+      Trash
+      {#if trashLoaded && trashEntries.length > 0}
+        <span class="ml-2 text-xs font-normal text-fg-muted">
+          ({trashEntries.length})
+        </span>
+      {/if}
+    </summary>
+    <p class="mt-2 text-sm text-fg-muted">
+      Projects you've moved to trash. Restore them or delete permanently.
+    </p>
+
+    {#if trashError}
+      <div
+        role="alert"
+        class="mt-3 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
+      >
+        {trashError}
+      </div>
+    {/if}
+
+    {#if !trashLoaded}
+      <p class="mt-4 text-sm text-fg-subtle">Loading trash…</p>
+    {:else if trashEntries.length === 0}
+      <p class="mt-4 text-sm text-fg-muted">Trash is empty.</p>
+    {:else}
+      <ul class="mt-4 divide-y divide-border">
+        {#each trashEntries as entry (entry.trash_id)}
+          <li class="py-3">
+            {#if purgeConfirmId === entry.trash_id}
+              <div
+                role="alertdialog"
+                aria-live="assertive"
+                class="flex items-center justify-between gap-3"
+              >
+                <span class="text-sm text-fg-muted">
+                  Permanently delete
+                  <span class="font-medium text-fg">"{entry.title}"</span>?
+                </span>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onclick={cancelPurge}
+                    class="rounded-sm px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => purge(entry)}
+                    disabled={rowBusyId === entry.trash_id}
+                    class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-50"
+                  >
+                    Delete permanently
+                  </button>
+                </div>
+              </div>
+            {:else}
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-fg">
+                    {entry.title}
+                  </p>
+                  <p class="text-xs text-fg-muted">
+                    {entry.language} · trashed {formatRelative(
+                      entry.trashed_at,
+                    )}
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onclick={() => restore(entry)}
+                    disabled={rowBusyId === entry.trash_id}
+                    class="rounded-sm px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg disabled:opacity-50"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => startPurgeConfirm(entry)}
+                    disabled={rowBusyId === entry.trash_id}
+                    class="rounded-sm px-3 py-1.5 text-sm font-medium text-error hover:bg-error-soft disabled:opacity-50"
+                  >
+                    Delete permanently
+                  </button>
+                </div>
+              </div>
+            {/if}
+            {#if rowErrors[entry.trash_id]}
+              <p class="mt-2 text-xs text-error">
+                {rowErrors[entry.trash_id]}
+              </p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </details>
 
   <details class="mt-8 rounded-md border border-border bg-surface p-4 text-sm">
     <summary

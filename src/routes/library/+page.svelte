@@ -4,7 +4,13 @@
   import { library } from "$lib/stores/library.svelte";
   import { libraryBanner } from "$lib/stores/library-banner.svelte";
   import { appErrorMessage } from "$lib/errors";
-  import { commands, type LibraryEntry } from "$lib/ipc/bindings";
+  import { joinKey } from "$lib/identity";
+  import { primaryActionFor } from "$lib/library-actions";
+  import {
+    commands,
+    type LibraryEntry,
+    type ProjectId,
+  } from "$lib/ipc/bindings";
 
   onMount(() => {
     library.load();
@@ -17,6 +23,9 @@
   let search = $state("");
   let languageFilter = $state("");
   let lingqKeyMissing = $state(false);
+  let searchEl = $state<HTMLInputElement | null>(null);
+  let focusIndex = $state<number | null>(null);
+  let confirmRequestId = $state<string | null>(null);
 
   async function checkLingqKey() {
     const r = await commands.cmdLoadLingqKey();
@@ -82,6 +91,83 @@
     search = "";
     languageFilter = "";
   }
+
+  function isFormField(el: EventTarget | null): boolean {
+    if (!(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    return (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT" ||
+      el.isContentEditable
+    );
+  }
+
+  function handleTrashed(id: ProjectId) {
+    const removedKey = joinKey(id);
+    const list = filtered;
+    const removedIdx = list.findIndex((e) => joinKey(e.id) === removedKey);
+    library.removeById(id);
+    const nextLen = list.length - 1;
+    if (focusIndex == null || removedIdx === -1) return;
+    if (nextLen === 0) {
+      focusIndex = null;
+    } else if (removedIdx === focusIndex) {
+      focusIndex = Math.min(removedIdx, nextLen - 1);
+    } else if (removedIdx < focusIndex) {
+      focusIndex = focusIndex - 1;
+    }
+  }
+
+  $effect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const inForm = isFormField(e.target);
+      const searchFocused = e.target === searchEl;
+
+      if (e.key === "/" && !inForm) {
+        e.preventDefault();
+        searchEl?.focus();
+        return;
+      }
+
+      if (e.key === "Escape" && searchFocused) {
+        search = "";
+        searchEl?.blur();
+        return;
+      }
+
+      if (inForm) return;
+
+      const list = filtered;
+      if (list.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusIndex =
+          focusIndex == null ? 0 : Math.min(focusIndex + 1, list.length - 1);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusIndex = focusIndex == null ? 0 : Math.max(focusIndex - 1, 0);
+        return;
+      }
+      if (e.key === "Enter" && focusIndex != null) {
+        e.preventDefault();
+        const entry = list[focusIndex];
+        if (entry) primaryActionFor(entry).run();
+        return;
+      }
+      if (e.key === "Delete" && focusIndex != null) {
+        e.preventDefault();
+        const entry = list[focusIndex];
+        if (entry) confirmRequestId = joinKey(entry.id);
+      }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  });
 </script>
 
 <section class="mx-auto max-w-3xl pt-6">
@@ -179,6 +265,7 @@
         type="search"
         placeholder="Search titles or authors…"
         bind:value={search}
+        bind:this={searchEl}
         class="flex-1 rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-fg-muted"
       />
       <select
@@ -207,7 +294,14 @@
         </button>
       </div>
     {:else}
-      <LibraryList entries={filtered} />
+      <LibraryList
+        entries={filtered}
+        {focusIndex}
+        onfocuschange={(i) => (focusIndex = i)}
+        ontrash={handleTrashed}
+        {confirmRequestId}
+        onconfirmhandled={() => (confirmRequestId = null)}
+      />
     {/if}
   {/if}
 </section>

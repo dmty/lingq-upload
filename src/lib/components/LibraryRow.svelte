@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { LibraryEntry } from "$lib/ipc/bindings";
+  import { fade } from "svelte/transition";
+  import { commands, type LibraryEntry } from "$lib/ipc/bindings";
+  import { appErrorMessage } from "$lib/errors";
+  import { formatRelative } from "$lib/format";
+  import { primaryActionFor } from "$lib/library-actions";
   import CoverThumb from "./CoverThumb.svelte";
   import StatusBadge from "./StatusBadge.svelte";
 
@@ -8,11 +12,17 @@
     prev = null,
     next = null,
     onPrimary,
+    ontrash,
+    confirmRequested = false,
+    onconfirmhandled,
   }: {
     entry: LibraryEntry;
     prev?: LibraryEntry | null;
     next?: LibraryEntry | null;
     onPrimary: (entry: LibraryEntry) => void;
+    ontrash?: (entry: LibraryEntry) => void;
+    confirmRequested?: boolean;
+    onconfirmhandled?: () => void;
   } = $props();
 
   const status = $derived(entry.status ?? "idle");
@@ -82,63 +92,76 @@
     }
   });
 
-  const primaryLabel = $derived.by(() => {
-    switch (status) {
-      case "done":
-        return "Open";
-      case "running":
-        return "Watch";
-      case "paused":
-        return "Resume";
-      case "needs_match":
-        return "Resolve";
-      case "failed":
-        return "Retry";
-      case "idle":
-      default:
-        return "Start";
+  const action = $derived(primaryActionFor(entry));
+  const rowDisabled = $derived(action.disabled);
+
+  let confirming = $state(false);
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+  let trashError = $state<string | null>(null);
+  let trashBusy = $state(false);
+
+  function startConfirm() {
+    if (confirmTimer != null) clearTimeout(confirmTimer);
+    confirming = true;
+    trashError = null;
+    confirmTimer = setTimeout(() => {
+      confirming = false;
+      confirmTimer = null;
+    }, 5000);
+  }
+
+  function cancelConfirm() {
+    if (confirmTimer != null) {
+      clearTimeout(confirmTimer);
+      confirmTimer = null;
+    }
+    confirming = false;
+    trashError = null;
+  }
+
+  $effect(() => {
+    if (confirmRequested && !confirming) {
+      startConfirm();
+      onconfirmhandled?.();
     }
   });
 
-  const rowDisabled = $derived(
-    status === "done" && entry.lingq_collection_id == null,
-  );
-  const primaryDisabled = $derived(rowDisabled);
-
-  function formatRelative(iso: string): string {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    const now = new Date();
-    const startOfDay = (x: Date) =>
-      new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const dayDiff = Math.floor((startOfDay(now) - startOfDay(d)) / 86_400_000);
-    if (dayDiff <= 0) return "today";
-    if (dayDiff === 1) return "yesterday";
-    if (dayDiff < 7) {
-      return new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(d);
-    }
-    if (d.getFullYear() === now.getFullYear()) {
-      return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric",
-      }).format(d);
-    }
-    return new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(d);
-  }
+  $effect(() => {
+    return () => {
+      if (confirmTimer != null) clearTimeout(confirmTimer);
+    };
+  });
 
   function handleRow() {
-    if (rowDisabled) return;
+    if (rowDisabled || confirming) return;
     onPrimary(entry);
   }
 
   function handlePrimary(e: MouseEvent) {
     e.stopPropagation();
-    if (primaryDisabled) return;
+    if (rowDisabled) return;
     onPrimary(entry);
+  }
+
+  function handleTrashClick(e: MouseEvent) {
+    e.stopPropagation();
+    startConfirm();
+  }
+
+  async function handleConfirmTrash(e: MouseEvent) {
+    e.stopPropagation();
+    if (trashBusy) return;
+    trashBusy = true;
+    trashError = null;
+    const res = await commands.cmdTrashProject(entry.id);
+    trashBusy = false;
+    if (res.status === "ok") {
+      if (confirmTimer != null) clearTimeout(confirmTimer);
+      confirmTimer = null;
+      ontrash?.(entry);
+    } else {
+      trashError = appErrorMessage(res.error);
+    }
   }
 </script>
 
@@ -154,47 +177,85 @@
   ></span>
 {/if}
 
-<button
-  type="button"
-  class="grid grid-cols-[64px_1fr] gap-4 items-center text-left w-full min-h-[88px] py-3 transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:bg-transparent"
-  aria-label={`Open "${entry.title}" — ${statusHumanLabel}`}
-  disabled={rowDisabled}
-  title={rowDisabled ? "No LingQ collection id" : undefined}
-  onclick={handleRow}
->
-  <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
-
-  <div class="min-w-0">
-    <div class="truncate text-sm font-medium text-fg" title={entry.title}>
-      {entry.title}
+{#if confirming}
+  <div
+    role="alertdialog"
+    aria-live="assertive"
+    aria-label={`Confirm move "${entry.title}" to trash`}
+    class="col-span-2 flex min-h-[88px] flex-col justify-center gap-1 py-3"
+    transition:fade={{ duration: 200 }}
+  >
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-sm text-fg-muted">
+        Move <span class="font-medium text-fg">"{entry.title}"</span> to trash?
+      </p>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="rounded-sm px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg"
+          onclick={(e) => {
+            e.stopPropagation();
+            cancelConfirm();
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-60"
+          disabled={trashBusy}
+          onclick={handleConfirmTrash}
+        >
+          {trashBusy ? "Moving…" : "Move to trash"}
+        </button>
+      </div>
     </div>
-    {#if authorLine}
-      <div class="truncate text-xs text-fg-muted">{authorLine}</div>
+    {#if trashError}
+      <p class="text-xs text-error">{trashError}</p>
     {/if}
-    <div class="truncate text-xs text-fg-subtle">{stateLine}</div>
   </div>
-</button>
+{:else}
+  <button
+    type="button"
+    class="grid grid-cols-[64px_1fr] gap-4 items-center text-left w-full min-h-[88px] py-3 transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:bg-transparent"
+    aria-label={`Open "${entry.title}" — ${statusHumanLabel}`}
+    disabled={rowDisabled}
+    title={rowDisabled ? "No LingQ collection id" : undefined}
+    onclick={handleRow}
+  >
+    <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
 
-<div class="flex h-full flex-col items-end justify-between gap-2 py-3">
-  <StatusBadge {status} {failedReason} />
-  <div class="flex items-center gap-2 text-xs">
-    <button
-      type="button"
-      class="rounded-sm px-2 py-1 font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-      disabled={primaryDisabled}
-      onclick={handlePrimary}
-    >
-      {primaryLabel}
-    </button>
-    <span class="text-fg-subtle">·</span>
-    <button
-      type="button"
-      class="rounded-sm px-2 py-1 text-fg-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-      aria-label={`Move "${entry.title}" to trash`}
-      title="Coming soon"
-      disabled
-    >
-      Trash
-    </button>
+    <div class="min-w-0">
+      <div class="truncate text-sm font-medium text-fg" title={entry.title}>
+        {entry.title}
+      </div>
+      {#if authorLine}
+        <div class="truncate text-xs text-fg-muted">{authorLine}</div>
+      {/if}
+      <div class="truncate text-xs text-fg-subtle">{stateLine}</div>
+    </div>
+  </button>
+
+  <div class="flex h-full flex-col items-end justify-between gap-2 py-3">
+    <StatusBadge {status} {failedReason} />
+    <div class="flex items-center gap-2 text-xs">
+      <button
+        type="button"
+        class="rounded-sm px-2 py-1 font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={rowDisabled}
+        onclick={handlePrimary}
+      >
+        {action.label}
+      </button>
+      <span class="text-fg-subtle">·</span>
+      <button
+        type="button"
+        class="rounded-sm px-2 py-1 text-fg-muted hover:text-fg"
+        aria-label={`Move "${entry.title}" to trash`}
+        onclick={handleTrashClick}
+      >
+        Trash
+      </button>
+    </div>
   </div>
-</div>
+{/if}
