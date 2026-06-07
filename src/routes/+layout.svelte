@@ -4,10 +4,7 @@
 
   let { children } = $props();
 
-  const isActive = (path: string) =>
-    path === "/"
-      ? page.url.pathname === "/"
-      : page.url.pathname.startsWith(path);
+  const isActive = (path: string) => page.url.pathname.startsWith(path);
 </script>
 
 <header class="sticky top-0 z-10 flex h-13 items-center gap-4 bg-canvas px-8">
@@ -32,16 +29,6 @@
         : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
     >
       Add
-    </a>
-    <a
-      href="/"
-      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
-        '/',
-      )
-        ? 'bg-accent-soft text-fg'
-        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
-    >
-      Upload
     </a>
     <a
       href="/settings"
