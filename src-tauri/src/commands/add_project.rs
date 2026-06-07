@@ -55,6 +55,11 @@ fn build_project(candidate: &Candidate, language: String, collection_title: Stri
         queue_cursor: 0,
         completed_lesson_ids: vec![],
         matcher_decision: None,
+        cover_path: candidate.cover_path.clone(),
+        authors: candidate.authors.clone(),
+        series: candidate.series.clone(),
+        lingq_collection_id: None,
+        last_activity_at: None,
     }
 }
 

@@ -28,6 +28,10 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::lingq::cmd_list_collections,
             commands::upload::upload_one_shot,
             commands::library::cmd_library_list,
+            commands::library::cmd_trash_project,
+            commands::library::cmd_list_trash,
+            commands::library::cmd_restore_project,
+            commands::library::cmd_purge_project,
             commands::add_project::cmd_create_project,
             commands::add_project::cmd_create_project_with_resolution,
             commands::matcher::cmd_matcher_resolve,
@@ -64,6 +68,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::matcher::BucketPreview>()
         .typ::<core::library::LibraryIndex>()
         .typ::<core::library::LibraryEntry>()
+        .typ::<core::library::LibraryStatus>()
+        .typ::<core::library::TrashEntry>()
         .typ::<commands::add_project::CreateProjectResult>()
         .typ::<commands::add_project::ConflictResolution>()
         .typ::<commands::ingest::LibrarySource>()

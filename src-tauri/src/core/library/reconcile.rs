@@ -98,21 +98,14 @@ pub async fn reconcile(
         entries: store
             .list()?
             .into_iter()
-            .map(|s| super::index::LibraryEntry {
-                id: s.id,
-                title: s.title,
-                language: s.language,
-                completed_lesson_count: s.completed_lesson_count,
-                receipt_count: s.receipt_count,
-                mtime: None,
-            })
+            .map(|s| super::index::summary_to_entry(s, super::index::LibraryStatus::Idle, None))
             .collect(),
     };
     write_atomic(&idx, &app_data_root.join(INDEX_FILENAME))?;
     Ok(report)
 }
 
-fn candidate_to_project(c: &Candidate) -> Project {
+pub fn candidate_to_project(c: &Candidate) -> Project {
     Project {
         schema_version: SCHEMA_V1,
         id: candidate_to_id(c),
@@ -131,6 +124,11 @@ fn candidate_to_project(c: &Candidate) -> Project {
         queue_cursor: 0,
         completed_lesson_ids: vec![],
         matcher_decision: None,
+        cover_path: c.cover_path.clone(),
+        authors: c.authors.clone(),
+        series: c.series.clone(),
+        lingq_collection_id: None,
+        last_activity_at: None,
     }
 }
 

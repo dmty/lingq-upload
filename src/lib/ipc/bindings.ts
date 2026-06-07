@@ -105,11 +105,44 @@ async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : 
 },
 /**
  * List the library. Always rebuilds from the shared `ProjectStore` and
- * rewrites `library.index.json` as a cold-start cache.
+ * rewrites `library.index.json` as a cold-start cache. Threads the in-flight
+ * `JobCancelMap` so each entry's `status` reflects whether a job is running.
  */
 async cmdLibraryList() : Promise<Result<LibraryIndex, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_library_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdTrashProject(projectId: ProjectId) : Promise<Result<TrashEntry, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_trash_project", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdListTrash() : Promise<Result<TrashEntry[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_list_trash") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdRestoreProject(trashId: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_restore_project", { trashId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdPurgeProject(trashId: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_purge_project", { trashId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -247,19 +280,20 @@ export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kin
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
-export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null }
+export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; status?: LibraryStatus; failed_reason?: string | null }
 export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
 /**
  * Bookshelf source for `cmd_ingest_scan`. Modelled as an enum so specta
  * emits a TS union and the frontend can't pass a misspelled string.
  */
 export type LibrarySource = "calibre" | "libation"
+export type LibraryStatus = "done" | "running" | "paused" | "needs_match" | "failed" | "idle"
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
 export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
-export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null }
+export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null }
 /**
  * Canonical project identity (AD-021).
  * 
@@ -270,7 +304,7 @@ export type Project = { schema_version?: number; id: ProjectId; sources: Project
 export type ProjectId = { content_hash: string; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
 export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
 export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
-export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number }
+export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null }
 /**
  * Errors raised by the secrets layer, lifted from the keyring backend.
  * 
@@ -283,6 +317,7 @@ export type SeriesRef = { name: string; index: number | null }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
 export type TextError = { kind: "Io"; message: string }
 export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
+export type TrashEntry = { trash_id: string; project_id: ProjectId; title: string; language: string; trashed_at: string }
 export type UploadResult = { lesson_id: number; lesson_url: string }
 export type WhoAmI = { ok: boolean }
 

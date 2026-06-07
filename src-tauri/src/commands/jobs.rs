@@ -29,7 +29,7 @@ pub type JobCancelMap = Arc<Mutex<HashMap<Uuid, JobCancelEntry>>>;
 
 /// Single funnel for locking the cancel map. The map is single-process and
 /// a poisoned mutex means real corruption — propagate the panic.
-fn lock_cancels(map: &JobCancelMap) -> MutexGuard<'_, HashMap<Uuid, JobCancelEntry>> {
+pub(crate) fn lock_cancels(map: &JobCancelMap) -> MutexGuard<'_, HashMap<Uuid, JobCancelEntry>> {
     map.lock().expect("job cancel map mutex poisoned")
 }
 

@@ -87,6 +87,11 @@ impl JsonProjectStore {
         let dir_entries = fs::read_dir(&projects).map_err(|e| io_err(&projects, e))?;
         for ent in dir_entries {
             let ent = ent.map_err(|e| io_err(&projects, e))?;
+            // Soft-deleted projects live under projects/.trash/. Skip the whole
+            // subtree; trash commands read it via the dedicated module.
+            if ent.file_name() == crate::core::library::trash::TRASH_DIRNAME {
+                continue;
+            }
             let pj = ent.path().join("project.json");
             if !pj.is_file() {
                 continue;
