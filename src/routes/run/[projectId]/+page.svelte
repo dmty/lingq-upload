@@ -95,7 +95,8 @@
         res.error.kind === "Other" &&
         msg.toLowerCase().includes("already running")
       ) {
-        info = "This project is already running. Watch the chapter list update below.";
+        info =
+          "This project is already running. Watch the chapter list update below.";
         running = true;
       } else {
         error = msg;
@@ -115,6 +116,16 @@
   }
 
   function goToMatch(ev: Extract<JobEvent, { kind: "NeedsMatch" }>): void {
+    // bucket_preview is an array, so it rides via sessionStorage rather
+    // than the URL. The match page reads + clears the key on Confirm.
+    if (typeof sessionStorage !== "undefined") {
+      const key = `bucketPreview:${projectKey}`;
+      if (ev.bucket_preview) {
+        sessionStorage.setItem(key, JSON.stringify(ev.bucket_preview));
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    }
     const url =
       `/match/${encodeURIComponent(projectKey)}` +
       `?title=${encodeURIComponent(ev.title)}` +
@@ -218,7 +229,9 @@
   {/if}
 
   {#if rows.length === 0}
-    <p class="rounded-sm border border-border bg-surface p-4 text-sm text-fg-muted">
+    <p
+      class="rounded-sm border border-border bg-surface p-4 text-sm text-fg-muted"
+    >
       No chapter receipts yet. Press Start to begin uploading; per-chapter rows
       will stream here in order.
     </p>

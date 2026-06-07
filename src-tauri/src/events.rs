@@ -3,7 +3,7 @@ use specta::Type;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
-use crate::core::matcher::{MismatchCondition, MismatchResponse};
+use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 
 #[derive(Serialize, Type, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -73,6 +73,12 @@ pub enum JobEvent {
         condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
+        /// Populated only when `condition == ManyToFew`; the proportional
+        /// packer's preview rows for the Mismatch UI's SplitProportional
+        /// card. `serde(default)` keeps older project.json / replay logs
+        /// (written before this field existed) loadable.
+        #[serde(default)]
+        bucket_preview: Option<Vec<BucketPreview>>,
     },
 }
 
@@ -205,6 +211,7 @@ impl<'a> JobEmitter<'a> {
 
     /// Terminal: the orchestrator paused for user matcher input. The UI
     /// consumes this to navigate to `/match`.
+    #[allow(clippy::too_many_arguments)]
     pub fn needs_match(
         &mut self,
         title: String,
@@ -213,6 +220,7 @@ impl<'a> JobEmitter<'a> {
         condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
+        bucket_preview: Option<Vec<BucketPreview>>,
     ) {
         self.emit(JobEvent::NeedsMatch {
             job_id: self.job_id,
@@ -222,6 +230,7 @@ impl<'a> JobEmitter<'a> {
             condition,
             options,
             preselect,
+            bucket_preview,
         });
     }
 
@@ -483,6 +492,7 @@ mod tests {
                 condition: MismatchCondition::CountOff,
                 options: vec![MismatchResponse::PairAccept, MismatchResponse::Cancel],
                 preselect: MismatchResponse::PairAccept,
+                bucket_preview: None,
             },
         ];
         assert!(validate(&seq).is_ok());
@@ -504,6 +514,7 @@ mod tests {
                 condition: MismatchCondition::CountOff,
                 options: vec![MismatchResponse::PairAccept, MismatchResponse::Cancel],
                 preselect: MismatchResponse::PairAccept,
+                bucket_preview: None,
             },
             JobEvent::Progress {
                 job_id: id,

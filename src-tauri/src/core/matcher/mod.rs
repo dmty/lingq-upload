@@ -2,7 +2,7 @@ pub mod mismatch;
 pub mod pack;
 
 pub use mismatch::{allowed, classify, MismatchCondition, MismatchResponse};
-pub use pack::{proportional_pack, Bucket};
+pub use pack::{build_preview, proportional_pack, Bucket, BucketPreview};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;

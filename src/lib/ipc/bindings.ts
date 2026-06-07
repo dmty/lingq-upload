@@ -218,6 +218,16 @@ export type AccountProfile = { username: string }
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Other"; message: string }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
+/**
+ * Read-only preview row for the Mismatch UI's `SplitProportional` card.
+ * One row per audio atom: text-chapter index range that the proportional
+ * packer assigned, the atom's title and duration, and the bucket's
+ * chars-per-second density. The frontend uses `chars_per_sec` to flag
+ * buckets that deviate from the corpus median by more than ±30%, hinting at
+ * narrator skips or extra material at the boundary. See AD-023 and
+ * `docs/specs/m4b-chapters.md`.
+ */
+export type BucketPreview = { textRangeStart: number; textRangeEnd: number; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 export type ChapterManifest = { chapters: ChapterEntry[] }
@@ -233,7 +243,7 @@ export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kin
  * emitted no further events fire for this job — the UI navigates to
  * `/match`, the user resolves, and the next job kicks off fresh.
  */
-{ kind: "NeedsMatch"; job_id: string; title: string; chapters: number; tracks: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse }
+{ kind: "NeedsMatch"; job_id: string; title: string; chapters: number; tracks: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview?: BucketPreview[] | null }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }

@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::core::identity::ProjectId;
 use crate::core::job::{run_project_job, JobSink};
-use crate::core::matcher::{MismatchCondition, MismatchResponse};
+use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
@@ -158,8 +158,16 @@ impl<'a, 'b> JobSink for EmitterSink<'a, 'b> {
         condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
+        bucket_preview: Option<Vec<BucketPreview>>,
     ) {
-        self.inner
-            .needs_match(title, chapters, tracks, condition, options, preselect);
+        self.inner.needs_match(
+            title,
+            chapters,
+            tracks,
+            condition,
+            options,
+            preselect,
+            bucket_preview,
+        );
     }
 }

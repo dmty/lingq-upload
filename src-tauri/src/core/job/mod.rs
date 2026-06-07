@@ -14,8 +14,10 @@ use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{parse_epub, Chapter, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
-use crate::core::matcher::pack::proportional_pack;
-use crate::core::matcher::{auto_match, MatchOutcome, MismatchCondition, MismatchResponse};
+use crate::core::matcher::pack::{build_preview, proportional_pack};
+use crate::core::matcher::{
+    auto_match, BucketPreview, MatchOutcome, MismatchCondition, MismatchResponse,
+};
 use crate::core::project::{ChapterReceipt, MatcherDecision, Project};
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
@@ -37,6 +39,7 @@ pub trait JobSink: Send {
     /// Terminal signal: orchestrator paused because chapter/track counts
     /// don't pair cleanly and there's no recorded `MatcherDecision`. The UI
     /// consumes this to navigate to `/match` and record the user's choice.
+    #[allow(clippy::too_many_arguments)]
     fn needs_match(
         &mut self,
         title: String,
@@ -45,6 +48,7 @@ pub trait JobSink: Send {
         condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
+        bucket_preview: Option<Vec<BucketPreview>>,
     );
 }
 
@@ -108,6 +112,7 @@ pub async fn run_project_job(
             condition,
             options,
             preselect,
+            bucket_preview,
         } => {
             sink.needs_match(
                 project.settings.collection_title.clone(),
@@ -116,6 +121,7 @@ pub async fn run_project_job(
                 condition,
                 options,
                 preselect,
+                bucket_preview,
             );
             return Ok(());
         }
@@ -324,6 +330,7 @@ enum PlanOrPause {
         condition: MismatchCondition,
         options: Vec<MismatchResponse>,
         preselect: MismatchResponse,
+        bucket_preview: Option<Vec<BucketPreview>>,
     },
     Cancelled,
     Failed(String),
@@ -350,12 +357,43 @@ fn build_plan(project: &Project, chapters: &[Chapter], tracks: &[AudioTrack]) ->
             condition,
             options,
             preselect,
-        } => PlanOrPause::NeedsMatch {
-            condition,
-            options,
-            preselect,
-        },
+        } => {
+            let bucket_preview = if condition == MismatchCondition::ManyToFew {
+                Some(compute_bucket_preview(chapters, tracks))
+            } else {
+                None
+            };
+            PlanOrPause::NeedsMatch {
+                condition,
+                options,
+                preselect,
+                bucket_preview,
+            }
+        }
     }
+}
+
+/// Eagerly run the proportional packer so the Mismatch UI can show the
+/// proposed bucket layout BEFORE the user confirms `SplitProportional`. Mirrors
+/// `plan_from_decision::SplitProportional` so the preview never lies about the
+/// final upload shape.
+fn compute_bucket_preview(chapters: &[Chapter], tracks: &[AudioTrack]) -> Vec<BucketPreview> {
+    let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
+    let atoms: Vec<ChapterAtom> = tracks
+        .iter()
+        .map(|t| {
+            let (start, end) = t
+                .window
+                .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
+            ChapterAtom {
+                start,
+                end,
+                title: t.title.clone(),
+            }
+        })
+        .collect();
+    let buckets = proportional_pack(&atoms, &text_chars);
+    build_preview(&buckets, &text_chars)
 }
 
 fn plan_from_decision(
