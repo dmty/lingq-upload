@@ -185,7 +185,7 @@ export type Project = { schema_version?: number; id: ProjectId; sources: Project
  * (`audible_asin` / `isbn13` / `calibre_uuid`) supply higher-confidence
  * joins when available across sources.
  */
-export type ProjectId = { content_hash: [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
+export type ProjectId = { content_hash: string; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
 export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
 export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
 export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number }
