@@ -75,6 +75,9 @@ jobs:
         working-directory: src-tauri
         run: cargo build --locked
 
+      # `kafka_snapshot_test` prints "skipping kafka snapshot ..." on every
+      # platform — fixture is a personal Kindle decrypt that cannot ship.
+      # The noise is harmless; left as-is until the fixture is seeded in CI.
       - name: cargo test (locked)
         working-directory: src-tauri
         run: cargo test --locked
@@ -82,6 +85,14 @@ jobs:
       - name: cargo clippy
         working-directory: src-tauri
         run: cargo clippy --locked -- -D warnings
+
+      # Regenerate first so the diff catches present-tense drift, not just
+      # whatever was committed. `gen_bindings` is a bin defined in
+      # `src-tauri/src/bin/gen_bindings.rs`.
+      - name: regenerate Tauri bindings
+        if: runner.os == 'Linux'
+        working-directory: src-tauri
+        run: cargo run --locked --bin gen_bindings
 
       - name: bindings.ts drift check
         if: runner.os == 'Linux'
