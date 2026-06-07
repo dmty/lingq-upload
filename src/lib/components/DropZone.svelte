@@ -13,15 +13,8 @@
     ref?: (el: HTMLButtonElement | null) => void;
   }
 
-  let {
-    variant,
-    path,
-    hovered,
-    disabled,
-    onPick,
-    onClear,
-    ref,
-  }: Props = $props();
+  let { variant, path, hovered, disabled, onPick, onClear, ref }: Props =
+    $props();
 
   const COPY = {
     text: {
