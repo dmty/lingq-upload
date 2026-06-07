@@ -32,13 +32,11 @@ impl LibationFolderSource {
                 let folder = book_ent.file_name().and_then(|s| s.to_str()).unwrap_or("");
                 let asin = extract_asin(folder);
                 let title = strip_asin_suffix(folder).trim().to_string();
-                let authors = vec![
-                    author_ent
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("")
-                        .to_string(),
-                ];
+                let authors = vec![author_ent
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string()];
 
                 let audio_stem = match &kind {
                     AudioKind::SingleFile(p) => p
@@ -101,7 +99,11 @@ fn collect_audio(dir: &Path) -> Result<(Vec<PathBuf>, AudioKind), IngestError> {
     for ent in std::fs::read_dir(dir).map_err(|e| IngestError::Io(e.to_string()))? {
         let ent = ent.map_err(|e| IngestError::Io(e.to_string()))?;
         let p = ent.path();
-        match p.extension().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase()) {
+        match p
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_ascii_lowercase())
+        {
             Some(ref s) if s == "m4b" || s == "m4a" => found.push(p),
             _ => {}
         }
@@ -142,7 +144,8 @@ fn find_asin_group(folder: &str) -> Option<(usize, String)> {
 fn is_asin_shape(s: &str) -> bool {
     s.len() == 10
         && s.starts_with("B0")
-        && s.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+        && s.bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
 }
 
 fn extract_asin(folder: &str) -> Option<String> {
@@ -197,7 +200,10 @@ fn parse_libation_chapters(chapters: &[serde_json::Value]) -> Vec<ChapterEntry> 
         .iter()
         .filter_map(|c| {
             let title = c.get("title")?.as_str()?.to_string();
-            let start_ms = c.get("start_offset_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+            let start_ms = c
+                .get("start_offset_ms")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let length_ms = c.get("length_ms").and_then(|v| v.as_u64()).unwrap_or(0);
             Some(ChapterEntry {
                 title,
@@ -215,17 +221,11 @@ impl IngestSource for LibationFolderSource {
     fn label(&self) -> &'static str {
         "Libation"
     }
-    fn scan<'a>(
-        &'a self,
-        root: &'a Path,
-    ) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
+    fn scan<'a>(&'a self, root: &'a Path) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
         let r = self.scan_sync(root);
         Box::pin(future::ready(r))
     }
-    fn enrich<'a>(
-        &'a self,
-        _c: &'a mut Candidate,
-    ) -> BoxFuture<'a, Result<(), IngestError>> {
+    fn enrich<'a>(&'a self, _c: &'a mut Candidate) -> BoxFuture<'a, Result<(), IngestError>> {
         Box::pin(future::ready(Ok(())))
     }
 }

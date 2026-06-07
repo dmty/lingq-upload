@@ -64,7 +64,10 @@ async fn scan_walks_calibre_layout() {
     let candidates = src.scan(tmp.path()).await.unwrap();
     assert_eq!(candidates.len(), 3);
 
-    let kafka = candidates.iter().find(|c| c.title.contains("カフカ")).unwrap();
+    let kafka = candidates
+        .iter()
+        .find(|c| c.title.contains("カフカ"))
+        .unwrap();
     assert_eq!(kafka.authors, vec!["村上春樹"]);
     assert_eq!(kafka.language.as_deref(), Some("ja"));
     assert_eq!(
@@ -74,10 +77,7 @@ async fn scan_walks_calibre_layout() {
     assert_eq!(kafka.series.as_ref().and_then(|s| s.index), Some(2.0));
     assert!(matches!(kafka.text_source, TextSource::Epub(_)));
     assert_eq!(
-        kafka
-            .metadata_extras
-            .get("isbn13")
-            .and_then(|v| v.as_str()),
+        kafka.metadata_extras.get("isbn13").and_then(|v| v.as_str()),
         Some("9784101001012")
     );
 
@@ -159,7 +159,10 @@ async fn calibre_uuid_valid_present_in_extras() {
     let src = CalibreLibrarySource;
     let cs = src.scan(tmp.path()).await.unwrap();
     assert_eq!(
-        cs[0].metadata_extras.get("calibre_uuid").and_then(|v| v.as_str()),
+        cs[0]
+            .metadata_extras
+            .get("calibre_uuid")
+            .and_then(|v| v.as_str()),
         Some("aaaa1111-bbbb-2222-cccc-333344445555")
     );
 }

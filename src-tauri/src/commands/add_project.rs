@@ -35,11 +35,7 @@ pub enum ConflictResolution {
     NewProject,
 }
 
-fn build_project(
-    candidate: &Candidate,
-    language: String,
-    collection_title: String,
-) -> Project {
+fn build_project(candidate: &Candidate, language: String, collection_title: String) -> Project {
     let id = candidate_to_id(candidate);
     Project {
         schema_version: SCHEMA_V1,
@@ -62,16 +58,13 @@ fn build_project(
     }
 }
 
-fn rebuild_library_index(
-    app: &tauri::AppHandle,
-    store: &dyn ProjectStore,
-) -> Result<(), AppError> {
+fn rebuild_library_index(app: &tauri::AppHandle, store: &dyn ProjectStore) -> Result<(), AppError> {
     let root = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::Other(format!("app_data_dir: {e}")))?;
-    let idx = rebuild_from_store(store)
-        .map_err(|e| AppError::Other(format!("library rebuild: {e}")))?;
+    let idx =
+        rebuild_from_store(store).map_err(|e| AppError::Other(format!("library rebuild: {e}")))?;
     write_atomic(&idx, &root.join(INDEX_FILENAME))
         .map_err(|e| AppError::Other(format!("library write: {e}")))?;
     Ok(())
@@ -166,9 +159,7 @@ pub async fn cmd_create_project_with_resolution(
                     return Ok(id);
                 }
             }
-            Err(AppError::Other(
-                "could not allocate copy name".into(),
-            ))
+            Err(AppError::Other("could not allocate copy name".into()))
         }
     }
 }

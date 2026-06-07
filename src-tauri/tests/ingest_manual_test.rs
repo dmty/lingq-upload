@@ -19,10 +19,7 @@ fn from_files_defaults_title_from_audio_stem() {
     assert!(candidate.series.is_none());
     assert!(candidate.cover_path.is_none());
     assert_eq!(candidate.text_source, TextSource::Epub(epub));
-    assert_eq!(
-        candidate.audio_source,
-        Some(AudioSource::SingleFile(audio))
-    );
+    assert_eq!(candidate.audio_source, Some(AudioSource::SingleFile(audio)));
     assert!(candidate.chapter_manifest.is_none());
     assert!(candidate.metadata_extras.is_empty());
 }
@@ -32,13 +29,8 @@ fn from_files_explicit_title_overrides_default() {
     let epub = PathBuf::from("/tmp/book.xhtml");
     let audio = PathBuf::from("/tmp/track.mp3");
 
-    let candidate = ManualSource::from_files(
-        epub,
-        audio,
-        "ru",
-        Some("Custom".to_string()),
-    )
-    .expect("manual candidate");
+    let candidate = ManualSource::from_files(epub, audio, "ru", Some("Custom".to_string()))
+        .expect("manual candidate");
 
     assert_eq!(candidate.title, "Custom");
     assert_eq!(candidate.language.as_deref(), Some("ru"));

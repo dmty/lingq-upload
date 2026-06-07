@@ -89,8 +89,7 @@ fn join_key_fallback_to_content_hash() {
 
 #[test]
 fn matches_same_asin_different_titles() {
-    let a = ProjectId::from_title_author("Kafka on the Shore", "Murakami")
-        .with_asin("B0ABCDEFGH");
+    let a = ProjectId::from_title_author("Kafka on the Shore", "Murakami").with_asin("B0ABCDEFGH");
     let b = ProjectId::from_title_author("totally different", "different person")
         .with_asin("B0ABCDEFGH");
     assert!(a.matches(&b));

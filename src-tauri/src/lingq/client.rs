@@ -113,7 +113,11 @@ impl LingqClient {
     /// The browser extension uses the username it returns to scope follow-up
     /// calls like `/api/v2/languages/?username=…`.
     pub async fn account_profile(&self) -> Result<AccountProfile, LingqError> {
-        let candidates = ["/api/v2/api-profile/", "/api/v2/profile/", "/api/v3/api-profile/"];
+        let candidates = [
+            "/api/v2/api-profile/",
+            "/api/v2/profile/",
+            "/api/v3/api-profile/",
+        ];
         let mut last_err: Option<LingqError> = None;
         for path in candidates {
             let url = format!("{}{}", self.base_url, path);
@@ -148,8 +152,8 @@ impl LingqClient {
                 .json()
                 .await
                 .map_err(|e| LingqError::Transport(e.to_string()))?;
-            if let Some(username) = pick_str(&body, &["username", "user_name", "user"])
-                .map(str::to_string)
+            if let Some(username) =
+                pick_str(&body, &["username", "user_name", "user"]).map(str::to_string)
             {
                 return Ok(AccountProfile { username });
             }
@@ -157,8 +161,9 @@ impl LingqClient {
                 "{path}: response missing recognisable username field"
             )));
         }
-        Err(last_err
-            .unwrap_or_else(|| LingqError::Schema("no profile endpoint candidate succeeded".into())))
+        Err(last_err.unwrap_or_else(|| {
+            LingqError::Schema("no profile endpoint candidate succeeded".into())
+        }))
     }
 
     pub async fn list_my_languages(&self) -> Result<Vec<Language>, LingqError> {
@@ -167,10 +172,7 @@ impl LingqClient {
 
     /// User-scoped variant. With a username, LingQ trims the catalogue down to
     /// the user's enrolled languages (matches the browser extension's behaviour).
-    pub async fn list_my_languages_for(
-        &self,
-        username: &str,
-    ) -> Result<Vec<Language>, LingqError> {
+    pub async fn list_my_languages_for(&self, username: &str) -> Result<Vec<Language>, LingqError> {
         self.list_languages_inner(Some(username)).await
     }
 
@@ -374,9 +376,11 @@ async fn parse_languages(resp: reqwest::Response) -> Result<Vec<Language>, Lingq
         // accept the common ones and skip rows missing both code + title.
         let code = pick_str(v, &["code", "language", "url_slug", "tag"]).map(str::to_string);
         let title = pick_str(v, &["title", "english_name", "name", "label"]).map(str::to_string);
-        let known_words =
-            pick_i64(v, &["known_words", "knownWords", "words_known", "wordsKnown"])
-                .unwrap_or(0);
+        let known_words = pick_i64(
+            v,
+            &["known_words", "knownWords", "words_known", "wordsKnown"],
+        )
+        .unwrap_or(0);
         if let (Some(code), Some(title)) = (code, title) {
             out.push(Language {
                 code,

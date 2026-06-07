@@ -115,10 +115,7 @@ async fn import_lesson_200_returns_id() {
 
     let _m = server
         .mock(&cas.method, cas.url_path.as_str())
-        .match_header(
-            "content-type",
-            Matcher::Regex("multipart/form-data".into()),
-        )
+        .match_header("content-type", Matcher::Regex("multipart/form-data".into()))
         .with_status(cas.status as usize)
         .with_header("content-type", &cas.response_content_type)
         .with_body(&cas.response_body)
@@ -333,7 +330,9 @@ async fn list_languages_tolerates_alt_field_names() {
     let client = client_for(&server, "en", "test-key");
     let langs = client.list_my_languages().await.expect("ok");
     assert_eq!(langs.len(), 2);
-    assert!(langs.iter().any(|l| l.code == "ja" && l.known_words == 50000));
+    assert!(langs
+        .iter()
+        .any(|l| l.code == "ja" && l.known_words == 50000));
     assert!(langs.iter().any(|l| l.code == "fr" && l.title == "French"));
 }
 
@@ -354,7 +353,9 @@ async fn list_collections_200_parses_results_wrapper() {
     let client = client_for(&server, "ja", "test-key");
     let cols: Vec<Collection> = client.list_my_collections().await.expect("collections ok");
     assert_eq!(cols.len(), 2);
-    assert!(cols.iter().any(|c| c.id == 123456 && c.title == "海辺のカフカ"));
+    assert!(cols
+        .iter()
+        .any(|c| c.id == 123456 && c.title == "海辺のカフカ"));
 }
 
 #[tokio::test]

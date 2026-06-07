@@ -21,9 +21,7 @@ fn seed_root(root: &Path) {
     fs::write(calibre.join("metadata.opf"), OPF).unwrap();
     fs::write(calibre.join("book.epub"), b"PK\x03\x04").unwrap();
 
-    let libation = root
-        .join("Same Author")
-        .join("Crossover Book [B0ABCDEFGH]");
+    let libation = root.join("Same Author").join("Crossover Book [B0ABCDEFGH]");
     fs::create_dir_all(&libation).unwrap();
     fs::write(libation.join("audio.m4b"), b"fake").unwrap();
 }
@@ -73,7 +71,10 @@ async fn reconcile_persists_new_projects_and_re_merges_on_rerun() {
 
     let first = reconcile(&registry, &store, tmp.path()).await.unwrap();
     assert_eq!(first.created.len(), 1, "first run creates");
-    assert!(first.merged.is_empty(), "first run does not merge: {first:?}");
+    assert!(
+        first.merged.is_empty(),
+        "first run does not merge: {first:?}"
+    );
     assert_eq!(store.list().unwrap().len(), 1, "store now has the project");
 
     let second = reconcile(&registry, &store, tmp.path()).await.unwrap();

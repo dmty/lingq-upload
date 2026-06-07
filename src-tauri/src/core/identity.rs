@@ -128,11 +128,15 @@ impl ProjectId {
 fn is_well_formed_asin(s: &str) -> bool {
     s.len() == 10
         && s.starts_with("B0")
-        && s.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+        && s.bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
 }
 
 fn validate_isbn13(s: &str) -> Result<String, IdentityError> {
-    let cleaned: String = s.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect();
     if cleaned.len() == 13 && cleaned.bytes().all(|b| b.is_ascii_digit()) {
         Ok(cleaned)
     } else {
@@ -170,9 +174,9 @@ mod hex_array_32 {
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
         let s = String::deserialize(d)?;
         let raw = hex::decode(s.to_ascii_lowercase()).map_err(D::Error::custom)?;
-        let arr: [u8; 32] = raw
-            .try_into()
-            .map_err(|v: Vec<u8>| D::Error::custom(format!("expected 32 bytes, got {}", v.len())))?;
+        let arr: [u8; 32] = raw.try_into().map_err(|v: Vec<u8>| {
+            D::Error::custom(format!("expected 32 bytes, got {}", v.len()))
+        })?;
         Ok(arr)
     }
 }

@@ -45,11 +45,12 @@ impl LingqClient {
     /// Import a single lesson with full multipart fields. Per-call language
     /// override (AD-017). Retries on 5xx with capped, jittered exponential
     /// backoff (max 3 attempts); 4xx fails fast.
-    pub async fn import_lesson_v2(
-        &self,
-        req: ImportLessonRequest<'_>,
-    ) -> Result<i64, LingqError> {
-        let url = format!("{}/api/v3/{}/lessons/import/", self.base_url(), req.language);
+    pub async fn import_lesson_v2(&self, req: ImportLessonRequest<'_>) -> Result<i64, LingqError> {
+        let url = format!(
+            "{}/api/v3/{}/lessons/import/",
+            self.base_url(),
+            req.language
+        );
         // Read audio once; multipart Part::bytes accepts owned Vec, so we clone
         // per attempt instead of re-reading from disk.
         let audio_bytes = match req.audio {
@@ -95,9 +96,7 @@ impl LingqClient {
                     last_err = Some(LingqError::Server(detail));
                 }
                 other => {
-                    last_err = Some(LingqError::Transport(format!(
-                        "unexpected status {other}"
-                    )))
+                    last_err = Some(LingqError::Transport(format!("unexpected status {other}")))
                 }
             }
         }

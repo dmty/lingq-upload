@@ -12,9 +12,7 @@ use std::sync::Arc;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::library::candidate_to_id;
-use lingq_upload_lib::core::project::{
-    Project, ProjectSettings, ProjectSources, SCHEMA_V1,
-};
+use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{Candidate, TextSource};
 
@@ -64,7 +62,10 @@ fn new_project_mutating_collection_title_alone_does_not_change_id() {
     let c2 = make_candidate("Foo Book", "Author"); // collection_title differs only at the Project layer
     let id1 = candidate_to_id(&c1);
     let id2 = candidate_to_id(&c2);
-    assert_eq!(id1, id2, "id derived solely from candidate.title + authors[0]");
+    assert_eq!(
+        id1, id2,
+        "id derived solely from candidate.title + authors[0]"
+    );
 }
 
 #[test]
@@ -90,12 +91,16 @@ fn new_project_loop_terminates_with_existing_copy() {
     // has to advance to " (copy) (copy)" before finding free space.
     let original = make_candidate("Foo Book", "Author");
     let original_id = candidate_to_id(&original);
-    store.put(&make_project(original_id.clone(), "Foo Book")).unwrap();
+    store
+        .put(&make_project(original_id.clone(), "Foo Book"))
+        .unwrap();
 
     let mut first_copy = original.clone();
     first_copy.title.push_str(" (copy)");
     let first_copy_id = candidate_to_id(&first_copy);
-    store.put(&make_project(first_copy_id.clone(), &first_copy.title)).unwrap();
+    store
+        .put(&make_project(first_copy_id.clone(), &first_copy.title))
+        .unwrap();
 
     let mut copy = original.clone();
     let mut chosen: Option<ProjectId> = None;
@@ -126,5 +131,8 @@ fn new_project_loop_terminates_with_existing_copy() {
         }
     }
     let second = second.expect("second pass must also terminate");
-    assert_ne!(second, chosen, "second NewProject must produce a distinct id");
+    assert_ne!(
+        second, chosen,
+        "second NewProject must produce a distinct id"
+    );
 }

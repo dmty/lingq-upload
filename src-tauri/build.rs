@@ -11,8 +11,8 @@ fn emit_bundle_identifier() {
 
     let raw = std::fs::read_to_string(&conf_path)
         .unwrap_or_else(|e| panic!("read {}: {e}", conf_path.display()));
-    let value: serde_json::Value = serde_json::from_str(&raw)
-        .unwrap_or_else(|e| panic!("parse {}: {e}", conf_path.display()));
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {}: {e}", conf_path.display()));
     let identifier = value
         .get("identifier")
         .and_then(|v| v.as_str())

@@ -86,8 +86,7 @@ pub fn export_bindings() -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -109,8 +108,7 @@ pub fn run() {
             let store: Arc<dyn core::store::ProjectStore> =
                 Arc::new(core::store::JsonProjectStore::new(root));
             app.manage(store);
-            let cancels: commands::jobs::JobCancelMap =
-                Arc::new(Mutex::new(HashMap::new()));
+            let cancels: commands::jobs::JobCancelMap = Arc::new(Mutex::new(HashMap::new()));
             app.manage(cancels);
             builder.mount_events(app);
             Ok(())

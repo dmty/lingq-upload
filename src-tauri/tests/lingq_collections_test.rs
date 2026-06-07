@@ -13,11 +13,7 @@ async fn find_or_create_returns_existing_id_on_exact_match() {
         .create_async()
         .await;
 
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "ja",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
     let id = client
         .find_or_create_collection("Foo", "desc", "ja")
         .await
@@ -40,11 +36,7 @@ async fn find_or_create_posts_when_no_match() {
         .with_body(r#"{"pk":777,"title":"Foo"}"#)
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "ja",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
     let id = client
         .find_or_create_collection("Foo", "desc", "ja")
         .await
@@ -65,11 +57,7 @@ async fn find_or_create_matches_nfd_response_to_nfc_request() {
         .create_async()
         .await;
 
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "ja",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
     let id = client
         .find_or_create_collection("\u{30AC}", "desc", "ja")
         .await
@@ -103,11 +91,7 @@ async fn find_or_create_post_4xx_then_research_finds_id() {
         .expect(1)
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "ja",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
     let id = client
         .find_or_create_collection("Race", "desc", "ja")
         .await
@@ -124,11 +108,7 @@ async fn find_or_create_401_returns_unauthorized() {
         .with_body("Unauthorized")
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "ja",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
     let err = client
         .find_or_create_collection("Foo", "desc", "ja")
         .await

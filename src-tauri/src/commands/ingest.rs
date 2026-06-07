@@ -37,11 +37,13 @@ pub async fn cmd_ingest_scan(
 ) -> Result<Vec<Candidate>, AppError> {
     let root_path = Path::new(&root);
     match source {
-        LibrarySource::Calibre => {
-            CalibreLibrarySource.scan(root_path).await.map_err(AppError::from)
-        }
-        LibrarySource::Libation => {
-            LibationFolderSource.scan(root_path).await.map_err(AppError::from)
-        }
+        LibrarySource::Calibre => CalibreLibrarySource
+            .scan(root_path)
+            .await
+            .map_err(AppError::from),
+        LibrarySource::Libation => LibationFolderSource
+            .scan(root_path)
+            .await
+            .map_err(AppError::from),
     }
 }

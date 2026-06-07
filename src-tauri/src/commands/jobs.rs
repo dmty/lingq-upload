@@ -33,10 +33,7 @@ fn lock_cancels(map: &JobCancelMap) -> MutexGuard<'_, HashMap<Uuid, JobCancelEnt
     map.lock().expect("job cancel map mutex poisoned")
 }
 
-fn is_project_active(
-    map: &HashMap<Uuid, JobCancelEntry>,
-    project_id: &ProjectId,
-) -> bool {
+fn is_project_active(map: &HashMap<Uuid, JobCancelEntry>, project_id: &ProjectId) -> bool {
     map.values().any(|(pid, _)| pid == project_id)
 }
 
@@ -100,10 +97,10 @@ pub async fn cmd_start_project_job(
         // Guarantee map cleanup even if the future panics.
         let _guard = JobMapGuard::new(cancels_ref, job_id);
         let mut emitter = JobEmitter::new(&app_for_task, job_id);
-        let mut sink = EmitterSink { inner: &mut emitter };
-        if let Err(e) =
-            run_project_job(store_ref, client, project_id, token, &mut sink).await
-        {
+        let mut sink = EmitterSink {
+            inner: &mut emitter,
+        };
+        if let Err(e) = run_project_job(store_ref, client, project_id, token, &mut sink).await {
             tracing::error!(job_id = %job_id, error = %e, "project job failed");
         }
     });

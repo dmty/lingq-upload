@@ -84,9 +84,7 @@ pub async fn reconcile(
         }
 
         let project = candidate_to_project(leader_cand);
-        store
-            .put(&project)
-            .map_err(LibraryError::from)?;
+        store.put(&project).map_err(LibraryError::from)?;
         report.created.push(leader_id);
     }
 
@@ -178,9 +176,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
         curr[0] = i;
         for j in 1..=b.len() {
             let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
-            curr[j] = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }

@@ -54,17 +54,11 @@ impl IngestSource for ManualSource {
         "Manual"
     }
 
-    fn scan<'a>(
-        &'a self,
-        _root: &'a Path,
-    ) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
+    fn scan<'a>(&'a self, _root: &'a Path) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
         Box::pin(future::ready(Err(IngestError::NotSupported)))
     }
 
-    fn enrich<'a>(
-        &'a self,
-        _c: &'a mut Candidate,
-    ) -> BoxFuture<'a, Result<(), IngestError>> {
+    fn enrich<'a>(&'a self, _c: &'a mut Candidate) -> BoxFuture<'a, Result<(), IngestError>> {
         Box::pin(future::ready(Err(IngestError::NotSupported)))
     }
 }

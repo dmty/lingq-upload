@@ -32,7 +32,11 @@ fn kafka_shimo_kindle_snapshot() {
 
     assert_eq!(chapters.len(), 27, "expected 27 chapters in 下巻");
     for c in &chapters {
-        assert!(!c.body.is_empty(), "chapter {} body must be non-empty", c.order);
+        assert!(
+            !c.body.is_empty(),
+            "chapter {} body must be non-empty",
+            c.order
+        );
     }
 
     let shape: Vec<(usize, String, usize)> = chapters

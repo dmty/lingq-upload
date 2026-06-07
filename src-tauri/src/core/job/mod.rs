@@ -132,7 +132,11 @@ pub async fn run_project_job(
 
     // Resolve the collection up front. Idempotent on the server side.
     let collection = match client
-        .find_or_create_collection(&project.settings.collection_title, "", &project.settings.language)
+        .find_or_create_collection(
+            &project.settings.collection_title,
+            "",
+            &project.settings.language,
+        )
         .await
     {
         Ok(id) => id,
@@ -170,7 +174,9 @@ pub async fn run_project_job(
         }
 
         let track = &tracks[step.track_index];
-        let dst = staging.path().join(format!("chapter_{:03}.mp3", step.chapter_index));
+        let dst = staging
+            .path()
+            .join(format!("chapter_{:03}.mp3", step.chapter_index));
         let transcode_fut = audio::transcode(&track.path, &dst, &enc);
         let report = tokio::select! {
             biased;
@@ -227,7 +233,11 @@ pub async fn run_project_job(
                 return Err(app);
             }
         };
-        tracing::info!(chapter = step.chapter_index, lesson_id, "job: imported lesson");
+        tracing::info!(
+            chapter = step.chapter_index,
+            lesson_id,
+            "job: imported lesson"
+        );
 
         // Upsert a receipt for this chapter. Build the freshly-uploaded
         // receipt once, then either replace an existing slot or append.
@@ -450,9 +460,8 @@ fn plan_from_decision(
 
 fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
     match text {
-        TextSource::Epub(p) => parse_epub(p, HeadingStrategy::Kindle).map_err(|e| {
-            AppError::Other(format!("epub parse: {e}"))
-        }),
+        TextSource::Epub(p) => parse_epub(p, HeadingStrategy::Kindle)
+            .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
         TextSource::LooseFiles { paths } => {
             let mut sorted: Vec<PathBuf> = paths.clone();
             sorted.sort();
@@ -517,7 +526,10 @@ fn list_audio_in_dir(dir: &Path) -> Result<Vec<PathBuf>, AppError> {
         if !p.is_file() {
             continue;
         }
-        let ext = p.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+        let ext = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
         if matches!(ext.as_deref(), Some("m4b" | "m4a" | "mp3")) {
             out.push(p);
         }

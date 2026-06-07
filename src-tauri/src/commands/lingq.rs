@@ -6,9 +6,9 @@ use crate::secrets::{RealKeyring, SecretsStore};
 
 fn load_api_key() -> Result<String, AppError> {
     let store = SecretsStore::new(Box::new(RealKeyring::new()));
-    store.load_key()?.ok_or_else(|| {
-        AppError::Internal("no LingQ API key set; configure it in Settings".into())
-    })
+    store
+        .load_key()?
+        .ok_or_else(|| AppError::Internal("no LingQ API key set; configure it in Settings".into()))
 }
 
 fn client_for(lang: &str) -> Result<LingqClient, AppError> {
@@ -29,9 +29,7 @@ pub async fn cmd_account_profile() -> Result<AccountProfile, AppError> {
 /// fall back to the full catalogue and let the UI filter by known_words.
 #[tauri::command]
 #[specta::specta]
-pub async fn cmd_list_languages(
-    username: Option<String>,
-) -> Result<Vec<Language>, AppError> {
+pub async fn cmd_list_languages(username: Option<String>) -> Result<Vec<Language>, AppError> {
     let client = client_for("en")?;
     let langs = match username.as_deref() {
         Some(u) if !u.is_empty() => client.list_my_languages_for(u).await?,

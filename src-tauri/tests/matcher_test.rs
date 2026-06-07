@@ -57,7 +57,11 @@ fn check_fixture(path: &Path) {
                 "{}",
                 path.display()
             );
-            let got: Vec<String> = options.iter().copied().map(|r| response_str(r).into()).collect();
+            let got: Vec<String> = options
+                .iter()
+                .copied()
+                .map(|r| response_str(r).into())
+                .collect();
             assert_eq!(Some(got), f.expected_options, "{}", path.display());
             assert_eq!(
                 Some(response_str(preselect).to_string()),
@@ -142,11 +146,22 @@ fn equal_counts_returns_paired_by_index() {
 
 #[test]
 fn manual_pair_is_not_a_response() {
-    for c in [MismatchCondition::OneToMany, MismatchCondition::ManyToOne, MismatchCondition::CountOff, MismatchCondition::Unalignable] {
+    for c in [
+        MismatchCondition::OneToMany,
+        MismatchCondition::ManyToOne,
+        MismatchCondition::CountOff,
+        MismatchCondition::Unalignable,
+    ] {
         let (opts, _) = allowed(c);
         for opt in opts {
             // No "ManualPair" variant exists; ensure preselect/options are within enum.
-            assert!(matches!(opt, MismatchResponse::PairAccept | MismatchResponse::PairDrop | MismatchResponse::SingleLesson | MismatchResponse::Cancel));
+            assert!(matches!(
+                opt,
+                MismatchResponse::PairAccept
+                    | MismatchResponse::PairDrop
+                    | MismatchResponse::SingleLesson
+                    | MismatchResponse::Cancel
+            ));
         }
     }
 }
