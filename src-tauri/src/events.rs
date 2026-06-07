@@ -45,6 +45,12 @@ pub enum JobEvent {
         level: LogLevel,
         message: String,
     },
+    ChapterDone {
+        job_id: Uuid,
+        chapter_index: usize,
+        lesson_id: i64,
+        degraded: bool,
+    },
     Result {
         job_id: Uuid,
         ok: bool,
@@ -71,7 +77,8 @@ pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
             }
             JobEvent::StageChanged { .. }
             | JobEvent::Progress { .. }
-            | JobEvent::Log { .. } => {
+            | JobEvent::Log { .. }
+            | JobEvent::ChapterDone { .. } => {
                 if !seen_started {
                     return Err("non-Started before Started");
                 }
@@ -132,6 +139,21 @@ impl<'a> JobEmitter<'a> {
             job_id: self.job_id,
             pct,
             message,
+        });
+    }
+
+    pub fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool) {
+        self.emit(JobEvent::ChapterDone {
+            job_id: self.job_id,
+            chapter_index,
+            lesson_id,
+            degraded,
+        });
+    }
+
+    pub fn cancelled(&mut self) {
+        self.emit(JobEvent::Cancelled {
+            job_id: self.job_id,
         });
     }
 
