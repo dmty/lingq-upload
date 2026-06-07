@@ -30,6 +30,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::add_project::cmd_create_project,
             commands::matcher::cmd_matcher_resolve,
             commands::project::cmd_project_load,
+            commands::jobs::cmd_start_project_job,
+            commands::jobs::cmd_cancel_job,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.
@@ -91,7 +93,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
-            use std::sync::Arc;
+            use std::collections::HashMap;
+            use std::sync::{Arc, Mutex};
             use tauri::Manager;
             register_bundled_audio_binaries(app);
             let root = app
@@ -101,6 +104,9 @@ pub fn run() {
             let store: Arc<dyn core::store::ProjectStore> =
                 Arc::new(core::store::JsonProjectStore::new(root));
             app.manage(store);
+            let cancels: commands::jobs::JobCancelMap =
+                Arc::new(Mutex::new(HashMap::new()));
+            app.manage(cancels);
             builder.mount_events(app);
             Ok(())
         })

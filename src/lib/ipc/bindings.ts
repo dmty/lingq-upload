@@ -143,6 +143,30 @@ async cmdProjectLoad(key: string) : Promise<Result<Project, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Start an end-to-end project job. Returns immediately with the new job id;
+ * the actual work runs on the tokio runtime and streams `JobEvent`s.
+ */
+async cmdStartProjectJob(projectId: ProjectId) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_start_project_job", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Signal cancellation for a previously started job. No-op if the job has
+ * already finished and the token was reaped.
+ */
+async cmdCancelJob(jobId: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_cancel_job", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -166,7 +190,7 @@ export type ChapterManifest = { chapters: ChapterEntry[] }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
+export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
