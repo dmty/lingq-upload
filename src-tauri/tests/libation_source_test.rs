@@ -16,10 +16,16 @@ const SIDECAR_JSON: &str = r#"{
 
 fn setup_libation(root: &Path) {
     // Single-file with sidecar.
-    let single = root.join("Haruki Murakami").join("Kafka on the Shore [B0ABCDEFGH]");
+    let single = root
+        .join("Haruki Murakami")
+        .join("Kafka on the Shore [B0ABCDEFGH]");
     fs::create_dir_all(&single).unwrap();
     fs::write(single.join("Kafka on the Shore [B0ABCDEFGH].m4b"), b"fake").unwrap();
-    fs::write(single.join("Kafka on the Shore [B0ABCDEFGH].json"), SIDECAR_JSON).unwrap();
+    fs::write(
+        single.join("Kafka on the Shore [B0ABCDEFGH].json"),
+        SIDECAR_JSON,
+    )
+    .unwrap();
 
     // Multi-file, no sidecar.
     let multi = root.join("Some Author").join("Multi Book [B0IJKLMNOP]");
@@ -48,7 +54,10 @@ async fn scan_walks_libation_layout() {
             .and_then(|v| v.as_str()),
         Some("B0ABCDEFGH")
     );
-    assert!(matches!(kafka.audio_source, Some(AudioSource::SingleFile(_))));
+    assert!(matches!(
+        kafka.audio_source,
+        Some(AudioSource::SingleFile(_))
+    ));
     assert!(matches!(kafka.text_source, TextSource::Missing));
 
     let manifest = kafka.chapter_manifest.as_ref().expect("sidecar parsed");
@@ -57,7 +66,10 @@ async fn scan_walks_libation_layout() {
     assert!((manifest.chapters[0].start_sec - 0.0).abs() < 0.001);
     assert!((manifest.chapters[1].start_sec - 600.0).abs() < 0.001);
 
-    let multi = candidates.iter().find(|c| c.title.contains("Multi")).unwrap();
+    let multi = candidates
+        .iter()
+        .find(|c| c.title.contains("Multi"))
+        .unwrap();
     assert!(multi.chapter_manifest.is_none(), "no sidecar → None");
     assert!(matches!(multi.audio_source, Some(AudioSource::Folder(_))));
     assert_eq!(
@@ -80,7 +92,10 @@ async fn empty_root_returns_empty() {
 #[tokio::test]
 async fn extracts_last_asin_and_keeps_annotated_bracket_in_title() {
     let tmp = TempDir::new().unwrap();
-    let book = tmp.path().join("Author X").join("Title [Annotated] [B0ABCDEFGH]");
+    let book = tmp
+        .path()
+        .join("Author X")
+        .join("Title [Annotated] [B0ABCDEFGH]");
     fs::create_dir_all(&book).unwrap();
     fs::write(book.join("audio.m4b"), b"fake").unwrap();
 
@@ -137,7 +152,11 @@ async fn cover_prefers_stem_with_asin_then_lexical_order() {
     let cs = src.scan(tmp.path()).await.unwrap();
     let cover = cs[0].cover_path.as_ref().unwrap();
     assert!(
-        cover.file_name().and_then(|s| s.to_str()).unwrap().contains("B0ABCDEFGH"),
+        cover
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap()
+            .contains("B0ABCDEFGH"),
         "got {cover:?}"
     );
 }

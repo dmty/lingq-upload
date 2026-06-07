@@ -52,18 +52,17 @@ pub async fn upload_one_shot(
     // tempdir lives until the upload finishes so the staged mp3 isn't
     // unlinked mid-upload. Source-adjacent writes break on read-only mounts.
     let staging = tempfile::tempdir()?;
-    let audio_for_upload: PathBuf = if audio_path.extension().and_then(|e| e.to_str())
-        == Some("mp3")
-    {
-        audio_path
-    } else {
-        job.stage(Stage::Transcoding);
-        job.progress(0.0, Some("Transcoding audio".into()));
-        let dst = staging.path().join("upload.mp3");
-        let _report = audio::transcode(&audio_path, &dst, &Default::default()).await?;
-        job.progress(1.0, Some("Transcode complete".into()));
-        dst
-    };
+    let audio_for_upload: PathBuf =
+        if audio_path.extension().and_then(|e| e.to_str()) == Some("mp3") {
+            audio_path
+        } else {
+            job.stage(Stage::Transcoding);
+            job.progress(0.0, Some("Transcoding audio".into()));
+            let dst = staging.path().join("upload.mp3");
+            let _report = audio::transcode(&audio_path, &dst, &Default::default()).await?;
+            job.progress(1.0, Some("Transcode complete".into()));
+            dst
+        };
 
     job.stage(Stage::Uploading);
     job.progress(0.0, Some("Uploading to LingQ".into()));

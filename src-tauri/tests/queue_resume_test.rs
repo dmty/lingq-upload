@@ -126,7 +126,10 @@ fn rebuild_pending_re_enqueues_decided_but_unstarted_projects() {
 
     let q = Queue::new(Arc::clone(&store_arc));
     let added = q.rebuild_pending().unwrap();
-    assert_eq!(added, 1, "only the decided-but-unstarted project re-enqueues");
+    assert_eq!(
+        added, 1,
+        "only the decided-but-unstarted project re-enqueues"
+    );
     let cur = q.current().unwrap();
     assert_eq!(cur.project_id, decided.id);
 }
@@ -142,5 +145,8 @@ fn rebuild_pending_re_enqueues_cursor_lag() {
 
     let q = Queue::new(Arc::clone(&store_arc));
     let added = q.rebuild_pending().unwrap();
-    assert_eq!(added, 1, "cursor lag re-enqueues even when all receipts have lesson_ids");
+    assert_eq!(
+        added, 1,
+        "cursor lag re-enqueues even when all receipts have lesson_ids"
+    );
 }

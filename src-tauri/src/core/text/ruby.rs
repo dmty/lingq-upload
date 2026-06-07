@@ -66,7 +66,10 @@ pub fn strip_ruby(html: &str) -> String {
 }
 
 fn find_byte(bytes: &[u8], target: u8, start: usize) -> Option<usize> {
-    bytes[start..].iter().position(|&b| b == target).map(|p| p + start)
+    bytes[start..]
+        .iter()
+        .position(|&b| b == target)
+        .map(|p| p + start)
 }
 
 fn parse_tag(raw: &str) -> (&str, bool) {

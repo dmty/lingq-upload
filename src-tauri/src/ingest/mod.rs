@@ -80,14 +80,8 @@ pub enum IngestError {
 pub trait IngestSource: Send + Sync {
     fn id(&self) -> &'static str;
     fn label(&self) -> &'static str;
-    fn scan<'a>(
-        &'a self,
-        root: &'a Path,
-    ) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>>;
-    fn enrich<'a>(
-        &'a self,
-        c: &'a mut Candidate,
-    ) -> BoxFuture<'a, Result<(), IngestError>>;
+    fn scan<'a>(&'a self, root: &'a Path) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>>;
+    fn enrich<'a>(&'a self, c: &'a mut Candidate) -> BoxFuture<'a, Result<(), IngestError>>;
 }
 
 pub struct IngestRegistry {

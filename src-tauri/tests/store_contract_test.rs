@@ -117,7 +117,10 @@ fn corrupt_json_returns_corrupt_error() {
     let tmp = TempDir::new().unwrap();
     let store = JsonProjectStore::new(tmp.path());
     let id = ProjectId::from_title_author("Bad", "Author");
-    let dir = tmp.path().join("projects").join(safe_path_segment(&id.join_key()));
+    let dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&id.join_key()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("project.json"), b"{ not json }").unwrap();
 
@@ -147,7 +150,9 @@ fn atomic_write_leaves_no_tmp_files_behind() {
         "project.json present"
     );
     assert!(
-        !entries.iter().any(|n| n.to_string_lossy().ends_with(".tmp")),
+        !entries
+            .iter()
+            .any(|n| n.to_string_lossy().ends_with(".tmp")),
         "no .tmp files: {entries:?}"
     );
 }
@@ -242,7 +247,11 @@ fn health_reports_ok_corrupt_and_deduped_counts() {
     let bytes = serde_json::to_vec_pretty(&dup).unwrap();
     std::fs::write(legacy_dir.join("project.json"), bytes).unwrap();
 
-    let ListHealth { ok, corrupt, deduped } = store.health().unwrap();
+    let ListHealth {
+        ok,
+        corrupt,
+        deduped,
+    } = store.health().unwrap();
     assert_eq!(ok, 2, "two distinct good ids");
     assert_eq!(corrupt.len(), 1, "one corrupt file surfaced");
     assert_eq!(deduped.len(), 1, "one duplicate suppressed");
@@ -263,10 +272,10 @@ fn list_dedupe_winner_is_most_recently_modified() {
     older.settings.collection_title = "OLD".into();
     store.put(&older).unwrap();
 
-    let legacy_dir = tmp
-        .path()
-        .join("projects")
-        .join(format!("legacy_{}", safe_path_segment(&older.id.join_key())));
+    let legacy_dir = tmp.path().join("projects").join(format!(
+        "legacy_{}",
+        safe_path_segment(&older.id.join_key())
+    ));
     std::fs::create_dir_all(&legacy_dir).unwrap();
     sleep(Duration::from_millis(50));
     let mut newer = older.clone();

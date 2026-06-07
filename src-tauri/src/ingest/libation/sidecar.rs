@@ -83,7 +83,10 @@ pub fn parse_sidecar(raw: &str) -> Option<ChapterManifest> {
         .iter()
         .filter_map(|c| {
             let title = c.get("title")?.as_str()?.to_string();
-            let start_ms = c.get("start_offset_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+            let start_ms = c
+                .get("start_offset_ms")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let length_ms = c.get("length_ms").and_then(|v| v.as_u64()).unwrap_or(0);
             Some(ChapterEntry {
                 title,

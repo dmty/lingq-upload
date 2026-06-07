@@ -66,7 +66,11 @@ impl CalibreLibrarySource {
                     source_id: Self::ID.into(),
                     title: meta.title,
                     authors: meta.authors,
-                    language: meta.language.as_deref().map(lang::normalise).map(String::from),
+                    language: meta
+                        .language
+                        .as_deref()
+                        .map(lang::normalise)
+                        .map(String::from),
                     series: meta.series.map(|name| SeriesRef {
                         name,
                         index: meta.series_index,
@@ -101,7 +105,11 @@ fn find_first_with_ext(dir: &Path, ext: &str) -> Result<Option<PathBuf>, IngestE
     for ent in std::fs::read_dir(dir).map_err(|e| IngestError::Io(e.to_string()))? {
         let ent = ent.map_err(|e| IngestError::Io(e.to_string()))?;
         let p = ent.path();
-        if p.extension().and_then(|e| e.to_str()).map(|s| s.eq_ignore_ascii_case(ext)).unwrap_or(false) {
+        if p.extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.eq_ignore_ascii_case(ext))
+            .unwrap_or(false)
+        {
             found.push(p);
         }
     }
@@ -126,17 +134,11 @@ impl IngestSource for CalibreLibrarySource {
     fn label(&self) -> &'static str {
         "Calibre"
     }
-    fn scan<'a>(
-        &'a self,
-        root: &'a Path,
-    ) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
+    fn scan<'a>(&'a self, root: &'a Path) -> BoxFuture<'a, Result<Vec<Candidate>, IngestError>> {
         let r = self.scan_sync(root);
         Box::pin(future::ready(r))
     }
-    fn enrich<'a>(
-        &'a self,
-        _c: &'a mut Candidate,
-    ) -> BoxFuture<'a, Result<(), IngestError>> {
+    fn enrich<'a>(&'a self, _c: &'a mut Candidate) -> BoxFuture<'a, Result<(), IngestError>> {
         Box::pin(future::ready(Ok(())))
     }
 }

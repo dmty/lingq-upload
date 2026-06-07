@@ -33,9 +33,7 @@ pub enum BatchError {
 impl From<BatchError> for AudioError {
     fn from(b: BatchError) -> AudioError {
         match b {
-            BatchError::Batch {
-                source_message, ..
-            } => AudioError::Io(source_message),
+            BatchError::Batch { source_message, .. } => AudioError::Io(source_message),
             BatchError::Cancelled { .. } => AudioError::Cancelled,
         }
     }
@@ -117,7 +115,10 @@ mod tests {
         }];
         let result = transcode_batch_sequential(jobs, Some(token), |_, _| {}).await;
         match result {
-            Err(BatchError::Cancelled { cancelled_at, completed }) => {
+            Err(BatchError::Cancelled {
+                cancelled_at,
+                completed,
+            }) => {
                 assert_eq!(cancelled_at, 0);
                 assert!(completed.is_empty());
             }

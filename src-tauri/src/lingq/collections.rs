@@ -5,8 +5,8 @@ use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tokio::sync::Mutex as AsyncMutex;
 use std::sync::Arc;
+use tokio::sync::Mutex as AsyncMutex;
 
 use super::client::LingqClient;
 use super::error::LingqError;
@@ -124,10 +124,8 @@ impl LingqClient {
                 for v in &items {
                     let t = v.get("title").and_then(|x| x.as_str()).unwrap_or("");
                     if title_hash(t) == target {
-                        if let Some(id) = v
-                            .get("pk")
-                            .or_else(|| v.get("id"))
-                            .and_then(|x| x.as_i64())
+                        if let Some(id) =
+                            v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64())
                         {
                             return Ok(Some(CollectionId(id)));
                         }

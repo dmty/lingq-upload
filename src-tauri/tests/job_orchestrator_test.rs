@@ -61,14 +61,20 @@ impl JobSink for RecordingSink {
         self.events.lock().unwrap().push(RecordedEvent::Started);
     }
     fn progress(&mut self, pct: f32, _message: Option<String>) {
-        self.events.lock().unwrap().push(RecordedEvent::Progress(pct));
+        self.events
+            .lock()
+            .unwrap()
+            .push(RecordedEvent::Progress(pct));
     }
     fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool) {
-        self.events.lock().unwrap().push(RecordedEvent::ChapterDone {
-            chapter_index,
-            lesson_id,
-            degraded,
-        });
+        self.events
+            .lock()
+            .unwrap()
+            .push(RecordedEvent::ChapterDone {
+                chapter_index,
+                lesson_id,
+                degraded,
+            });
     }
     fn cancelled(&mut self) {
         self.events.lock().unwrap().push(RecordedEvent::Cancelled);
@@ -116,8 +122,8 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
 
     // Stage `tracks` copies of the probe fixture into a fresh audio folder.
     let audio_dir = tempfile::tempdir().unwrap();
-    let probe = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/audio/probe_3min.mp3");
+    let probe =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio/probe_3min.mp3");
     for i in 0..tracks {
         let dst = audio_dir.path().join(format!("track_{:02}.mp3", i + 1));
         std::fs::copy(&probe, &dst).unwrap();
@@ -161,7 +167,10 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
 
 fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
     let _ = server
-        .mock("GET", Matcher::Regex(r"^/api/v3/ja/collections/\?search=".into()))
+        .mock(
+            "GET",
+            Matcher::Regex(r"^/api/v3/ja/collections/\?search=".into()),
+        )
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(format!(
@@ -337,11 +346,7 @@ async fn resume_skips_chapters_already_uploaded() {
     // Only two imports — chapter 0 is already done.
     mock_imports(&mut fixture.server, 2, 2000);
 
-    let mut project = fixture
-        .store
-        .get(&fixture.project_id)
-        .unwrap()
-        .unwrap();
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
     project.receipts.push(ChapterReceipt {
         chapter_index: 0,
         track_index: Some(0),
@@ -434,11 +439,19 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         .iter()
         .filter(|e| matches!(e, RecordedEvent::ChapterDone { .. }))
         .count();
-    assert_eq!(done_count, 4, "expected 4 ChapterDone events; got {:?}", events);
+    assert_eq!(
+        done_count, 4,
+        "expected 4 ChapterDone events; got {:?}",
+        events
+    );
     assert!(matches!(events.last(), Some(RecordedEvent::Result(true))));
 
     let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
-    assert_eq!(project.receipts.len(), 4, "four receipts (2 paired + 2 leftover)");
+    assert_eq!(
+        project.receipts.len(),
+        4,
+        "four receipts (2 paired + 2 leftover)"
+    );
 
     // Paired receipts (chapter_index 0, 1) are not degraded.
     let paired: Vec<_> = project
@@ -447,7 +460,10 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         .filter(|r| r.chapter_index < 2)
         .collect();
     assert_eq!(paired.len(), 2);
-    assert!(paired.iter().all(|r| !r.degraded), "paired receipts must not be degraded");
+    assert!(
+        paired.iter().all(|r| !r.degraded),
+        "paired receipts must not be degraded"
+    );
 
     // Leftover receipts (chapter_index 2, 3 — synthetic = track index) ARE
     // degraded. The orchestrator emits `chapter_index: k` for leftovers so
@@ -458,7 +474,10 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         .filter(|r| r.chapter_index >= 2)
         .collect();
     assert_eq!(leftover.len(), 2, "got {:?}", project.receipts);
-    assert!(leftover.iter().all(|r| r.degraded), "leftover receipts must be degraded");
+    assert!(
+        leftover.iter().all(|r| r.degraded),
+        "leftover receipts must be degraded"
+    );
 
     let _ = fixture.audio_dir;
 }

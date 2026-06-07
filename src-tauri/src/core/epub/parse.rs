@@ -145,7 +145,9 @@ mod kindle {
         }
         let rest = &after[1..];
         let end = rest.iter().position(|&b| b == quote)?;
-        std::str::from_utf8(&rest[..end]).ok().map(|s| s.to_string())
+        std::str::from_utf8(&rest[..end])
+            .ok()
+            .map(|s| s.to_string())
     }
 
     fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
@@ -193,16 +195,10 @@ mod kindle {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"id" => {
-                                    id = attr
-                                        .unescape_value()
-                                        .map(|v| v.into_owned())
-                                        .ok();
+                                    id = attr.unescape_value().map(|v| v.into_owned()).ok();
                                 }
                                 b"href" => {
-                                    href = attr
-                                        .unescape_value()
-                                        .map(|v| v.into_owned())
-                                        .ok();
+                                    href = attr.unescape_value().map(|v| v.into_owned()).ok();
                                 }
                                 _ => {}
                             }
@@ -258,9 +254,7 @@ mod kindle {
             EpubError::Parse(format!("href is not valid utf-8 after decode: {rel}"))
         })?;
         if decoded.split('/').any(|seg| seg == "..") {
-            return Err(EpubError::Parse(format!(
-                "traversal href rejected: {rel}"
-            )));
+            return Err(EpubError::Parse(format!("traversal href rejected: {rel}")));
         }
         if base.is_empty() {
             Ok(decoded)
@@ -478,10 +472,7 @@ mod kindle {
         #[test]
         fn extract_first_heading_mixed_case_with_attrs() {
             let html = r#"<h1 class="chapter">İstanbul ßtraße</h1>"#;
-            assert_eq!(
-                extract_first_heading(html),
-                Some("İstanbul ßtraße".into())
-            );
+            assert_eq!(extract_first_heading(html), Some("İstanbul ßtraße".into()));
         }
 
         #[test]

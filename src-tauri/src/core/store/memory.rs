@@ -40,11 +40,7 @@ impl ProjectStore for InMemoryProjectStore {
     }
 
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
-        let mut out: Vec<ProjectSummary> = self
-            .lock()
-            .values()
-            .map(ProjectSummary::from)
-            .collect();
+        let mut out: Vec<ProjectSummary> = self.lock().values().map(ProjectSummary::from).collect();
         out.sort_by(|a: &ProjectSummary, b| a.title.cmp(&b.title));
         Ok(out)
     }

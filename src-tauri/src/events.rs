@@ -108,9 +108,7 @@ impl EventState {
                     return Err("non-terminal after terminal");
                 }
             }
-            JobEvent::Result { .. }
-            | JobEvent::Cancelled { .. }
-            | JobEvent::NeedsMatch { .. } => {
+            JobEvent::Result { .. } | JobEvent::Cancelled { .. } | JobEvent::NeedsMatch { .. } => {
                 if !next.seen_started {
                     return Err("terminal before Started");
                 }

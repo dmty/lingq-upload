@@ -21,10 +21,7 @@ async fn import_lesson_v2_posts_multipart_and_parses_id() {
         server.url(),
     );
 
-    let mut audio = tempfile::Builder::new()
-        .suffix(".mp3")
-        .tempfile()
-        .unwrap();
+    let mut audio = tempfile::Builder::new().suffix(".mp3").tempfile().unwrap();
     audio.write_all(b"fake mp3 bytes").unwrap();
 
     let tags = ["a", "b"];
@@ -58,11 +55,7 @@ async fn import_lesson_v2_retries_on_5xx_then_succeeds() {
         .with_body(r#"{"pk":42}"#)
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "en",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "en", server.url());
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",
@@ -87,11 +80,7 @@ async fn import_lesson_v2_exhausts_three_attempts_on_5xx() {
         .expect(3)
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "en",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "en", server.url());
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",
@@ -120,11 +109,7 @@ async fn import_lesson_v2_4xx_fails_fast() {
         .expect(1) // must NOT retry on 4xx
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(
-        SecretString::new("k".into()),
-        "en",
-        server.url(),
-    );
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), "en", server.url());
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",

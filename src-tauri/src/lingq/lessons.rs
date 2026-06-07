@@ -26,10 +26,7 @@ impl LingqClient {
     /// Shape is detected on each response, not assumed up-front: the envelope
     /// flavour is the trigger to stop on `next == null`; the bare-array flavour
     /// stops on empty page. Either way `page=N` is incremented in lockstep.
-    pub async fn list_lessons(
-        &self,
-        cid: CollectionId,
-    ) -> Result<Vec<LessonSummary>, LingqError> {
+    pub async fn list_lessons(&self, cid: CollectionId) -> Result<Vec<LessonSummary>, LingqError> {
         let mut out: Vec<LessonSummary> = Vec::new();
         let mut page = 1;
         loop {
@@ -66,23 +63,15 @@ impl LingqClient {
                         break;
                     }
                     for v in &results {
-                        let id = v
-                            .get("pk")
-                            .or_else(|| v.get("id"))
-                            .and_then(|x| x.as_i64());
-                        let title = v
-                            .get("title")
-                            .and_then(|x| x.as_str())
-                            .map(str::to_string);
+                        let id = v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64());
+                        let title = v.get("title").and_then(|x| x.as_str()).map(str::to_string);
                         if let (Some(id), Some(title)) = (id, title) {
                             out.push(LessonSummary { id, title });
                         }
                     }
                     // Envelope shape: trust `next`. Bare array: keep going until
                     // an empty page comes back.
-                    if !is_bare_array
-                        && body.get("next").map(|v| v.is_null()).unwrap_or(true)
-                    {
+                    if !is_bare_array && body.get("next").map(|v| v.is_null()).unwrap_or(true) {
                         break;
                     }
                     page += 1;
@@ -96,11 +85,7 @@ impl LingqClient {
                     let detail = resp.text().await.unwrap_or_default();
                     return Err(LingqError::Server(detail));
                 }
-                other => {
-                    return Err(LingqError::Transport(format!(
-                        "unexpected status {other}"
-                    )))
-                }
+                other => return Err(LingqError::Transport(format!("unexpected status {other}"))),
             }
         }
         Ok(out)
