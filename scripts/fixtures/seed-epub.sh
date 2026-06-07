@@ -43,7 +43,12 @@ KAFKA_SHIMO="${DEST}/kafka_shimo.epub"
 
 if [[ -f "$KAFKA_COMBINED" ]]; then
     if [[ ! -f "$KAFKA_SHIMO" && ! -L "$KAFKA_SHIMO" ]]; then
-        echo "  combined Kafka EPUB found; run scripts/fixtures/extract_shimo.sh to produce kafka_shimo.epub"
+        # extract_shimo.sh is intentionally a TODO today — it exits non-zero
+        # without producing kafka_shimo.epub. Surface that loudly so the user
+        # is not surprised when kafka_snapshot_test keeps skipping.
+        echo "  combined Kafka EPUB found, but extract_shimo.sh is not yet implemented" >&2
+        echo "  -> kafka_shimo.epub NOT seeded; kafka_snapshot_test will skip" >&2
+        missing=$((missing + 1))
     else
         echo "  kafka_shimo.epub already present"
     fi
