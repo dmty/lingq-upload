@@ -7,7 +7,7 @@ use lingq_upload_lib::core::project::{
     ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{
-    safe_path_segment, InMemoryProjectStore, JsonProjectStore, ProjectStore,
+    safe_path_segment, InMemoryProjectStore, JsonProjectStore, ListHealth, ProjectStore,
 };
 use lingq_upload_lib::ingest::TextSource;
 use tempfile::TempDir;
@@ -214,6 +214,72 @@ fn list_dedupes_when_same_id_exists_under_two_directories() {
 
     let list = store.list().unwrap();
     assert_eq!(list.len(), 1, "duplicate id collapses to a single entry");
+}
+
+#[test]
+fn health_reports_ok_corrupt_and_deduped_counts() {
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+
+    let good = sample("Health Good", "ja");
+    store.put(&good).unwrap();
+
+    let bad_id = ProjectId::from_title_author("Health Bad", "Author");
+    let bad_dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&bad_id.join_key()));
+    std::fs::create_dir_all(&bad_dir).unwrap();
+    std::fs::write(bad_dir.join("project.json"), b"{ not json }").unwrap();
+
+    let dup = sample("Health Dupe", "ja");
+    store.put(&dup).unwrap();
+    let legacy_dir = tmp
+        .path()
+        .join("projects")
+        .join(format!("legacy_{}", safe_path_segment(&dup.id.join_key())));
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    let bytes = serde_json::to_vec_pretty(&dup).unwrap();
+    std::fs::write(legacy_dir.join("project.json"), bytes).unwrap();
+
+    let ListHealth { ok, corrupt, deduped } = store.health().unwrap();
+    assert_eq!(ok, 2, "two distinct good ids");
+    assert_eq!(corrupt.len(), 1, "one corrupt file surfaced");
+    assert_eq!(deduped.len(), 1, "one duplicate suppressed");
+
+    let list = store.list().unwrap();
+    assert_eq!(list.len(), 2);
+}
+
+#[test]
+fn list_dedupe_winner_is_most_recently_modified() {
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+
+    let mut older = sample("Order Probe", "ja");
+    older.settings.collection_title = "OLD".into();
+    store.put(&older).unwrap();
+
+    let legacy_dir = tmp
+        .path()
+        .join("projects")
+        .join(format!("legacy_{}", safe_path_segment(&older.id.join_key())));
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    sleep(Duration::from_millis(50));
+    let mut newer = older.clone();
+    newer.settings.collection_title = "NEW".into();
+    std::fs::write(
+        legacy_dir.join("project.json"),
+        serde_json::to_vec_pretty(&newer).unwrap(),
+    )
+    .unwrap();
+
+    let list = store.list().unwrap();
+    assert_eq!(list.len(), 1, "duplicate id collapses");
+    assert_eq!(list[0].title, "NEW", "most-recently-modified wins");
 }
 
 #[test]
