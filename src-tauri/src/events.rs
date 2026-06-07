@@ -3,6 +3,8 @@ use specta::Type;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use crate::core::matcher::{MismatchCondition, MismatchResponse};
+
 #[derive(Serialize, Type, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[allow(dead_code)]
@@ -59,43 +61,77 @@ pub enum JobEvent {
     Cancelled {
         job_id: Uuid,
     },
+    /// Emitted when the orchestrator can't auto-pair chapters and tracks
+    /// and needs the user to pick a [`MismatchResponse`]. Terminal: once
+    /// emitted no further events fire for this job — the UI navigates to
+    /// `/match`, the user resolves, and the next job kicks off fresh.
+    NeedsMatch {
+        job_id: Uuid,
+        title: String,
+        chapters: usize,
+        tracks: usize,
+        condition: MismatchCondition,
+        options: Vec<MismatchResponse>,
+        preselect: MismatchResponse,
+    },
 }
 
-pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
-    let mut seen_started = false;
-    let mut seen_terminal = false;
-    for ev in seq {
+/// Public state-machine snapshot used by `JobEmitter`. Mirrors what
+/// `validate(&[JobEvent])` would compute, but cheap to update incrementally.
+#[derive(Default, Clone, Copy)]
+struct EventState {
+    seen_started: bool,
+    seen_terminal: bool,
+}
+
+impl EventState {
+    fn step(self, ev: &JobEvent) -> Result<Self, &'static str> {
+        let mut next = self;
         match ev {
             JobEvent::Started { .. } => {
-                if seen_started {
+                if next.seen_started {
                     return Err("duplicate Started");
                 }
-                if seen_terminal {
+                if next.seen_terminal {
                     return Err("Started after terminal");
                 }
-                seen_started = true;
+                next.seen_started = true;
             }
             JobEvent::StageChanged { .. }
             | JobEvent::Progress { .. }
             | JobEvent::Log { .. }
             | JobEvent::ChapterDone { .. } => {
-                if !seen_started {
+                if !next.seen_started {
                     return Err("non-Started before Started");
                 }
-                if seen_terminal {
+                if next.seen_terminal {
                     return Err("non-terminal after terminal");
                 }
             }
-            JobEvent::Result { .. } | JobEvent::Cancelled { .. } => {
-                if !seen_started {
+            JobEvent::Result { .. }
+            | JobEvent::Cancelled { .. }
+            | JobEvent::NeedsMatch { .. } => {
+                if !next.seen_started {
                     return Err("terminal before Started");
                 }
-                if seen_terminal {
+                if next.seen_terminal {
                     return Err("duplicate terminal");
                 }
-                seen_terminal = true;
+                next.seen_terminal = true;
             }
         }
+        Ok(next)
+    }
+}
+
+/// Whole-sequence validator. Preserved as a test helper so the contract
+/// can be exercised against a hand-built event list; runtime emission now
+/// uses the incremental `EventState::step` to avoid O(n²) history clones.
+#[cfg(test)]
+pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
+    let mut state = EventState::default();
+    for ev in seq {
+        state = state.step(ev)?;
     }
     Ok(())
 }
@@ -105,10 +141,14 @@ pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
 /// In debug builds a duplicate `Started`, out-of-order Progress, or post-terminal
 /// emission trips a `debug_assert!`. In release the violating event is dropped
 /// (and logged) so we don't break a user's upload, but the bug is loud in tests.
+///
+/// Tracks state incrementally (`EventState`) rather than retaining the full
+/// event history — the previous `history.clone()` per emit was O(n²) on
+/// long jobs (27 chapters × ~3 events each).
 pub struct JobEmitter<'a> {
     app: &'a AppHandle,
     job_id: Uuid,
-    history: Vec<JobEvent>,
+    state: EventState,
 }
 
 impl<'a> JobEmitter<'a> {
@@ -116,7 +156,7 @@ impl<'a> JobEmitter<'a> {
         Self {
             app,
             job_id,
-            history: Vec::with_capacity(8),
+            state: EventState::default(),
         }
     }
 
@@ -165,15 +205,37 @@ impl<'a> JobEmitter<'a> {
         });
     }
 
+    /// Terminal: the orchestrator paused for user matcher input. The UI
+    /// consumes this to navigate to `/match`.
+    pub fn needs_match(
+        &mut self,
+        title: String,
+        chapters: usize,
+        tracks: usize,
+        condition: MismatchCondition,
+        options: Vec<MismatchResponse>,
+        preselect: MismatchResponse,
+    ) {
+        self.emit(JobEvent::NeedsMatch {
+            job_id: self.job_id,
+            title,
+            chapters,
+            tracks,
+            condition,
+            options,
+            preselect,
+        });
+    }
+
     fn emit(&mut self, event: JobEvent) {
-        let mut next = self.history.clone();
-        next.push(event.clone());
-        if let Err(why) = validate(&next) {
-            debug_assert!(false, "JobEvent invariant broken: {why}");
-            tracing::error!(why = %why, "JobEvent invariant broken; dropping event");
-            return;
+        match self.state.step(&event) {
+            Ok(next) => self.state = next,
+            Err(why) => {
+                debug_assert!(false, "JobEvent invariant broken: {why}");
+                tracing::error!(why = %why, "JobEvent invariant broken; dropping event");
+                return;
+            }
         }
-        self.history = next;
         if let Err(e) = self.app.emit("job", event) {
             tracing::warn!(error = %e, "JobEvent emit dropped");
         }
@@ -405,5 +467,52 @@ mod tests {
             },
         ];
         assert_eq!(validate(&seq), Err("duplicate terminal"));
+    }
+
+    #[test]
+    fn needs_match_is_terminal() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::Uploading,
+            },
+            JobEvent::NeedsMatch {
+                job_id: id,
+                title: "Book".into(),
+                chapters: 5,
+                tracks: 7,
+                condition: MismatchCondition::CountOff,
+                options: vec![MismatchResponse::PairAccept, MismatchResponse::Cancel],
+                preselect: MismatchResponse::PairAccept,
+            },
+        ];
+        assert!(validate(&seq).is_ok());
+    }
+
+    #[test]
+    fn needs_match_then_progress_fails() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::Uploading,
+            },
+            JobEvent::NeedsMatch {
+                job_id: id,
+                title: "Book".into(),
+                chapters: 5,
+                tracks: 7,
+                condition: MismatchCondition::CountOff,
+                options: vec![MismatchResponse::PairAccept, MismatchResponse::Cancel],
+                preselect: MismatchResponse::PairAccept,
+            },
+            JobEvent::Progress {
+                job_id: id,
+                pct: 0.5,
+                message: None,
+            },
+        ];
+        assert_eq!(validate(&seq), Err("non-terminal after terminal"));
     }
 }
