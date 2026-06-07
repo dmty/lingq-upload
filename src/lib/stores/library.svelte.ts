@@ -27,14 +27,23 @@ export const library = {
   async load() {
     const ticket = ++inflight;
     state.status = "loading";
-    const result = await commands.cmdLibraryList();
-    if (ticket !== inflight) return;
-    if (result.status === "ok") {
-      state.index = result.data;
-      state.error = null;
-      state.status = "ready";
-    } else {
-      state.error = result.error;
+    try {
+      const result = await commands.cmdLibraryList();
+      if (ticket !== inflight) return;
+      if (result.status === "ok") {
+        state.index = result.data;
+        state.error = null;
+        state.status = "ready";
+      } else {
+        state.error = result.error;
+        state.status = "error";
+      }
+    } catch (e) {
+      if (ticket !== inflight) return;
+      state.error = {
+        kind: "Other",
+        message: e instanceof Error ? e.message : String(e),
+      };
       state.status = "error";
     }
   },

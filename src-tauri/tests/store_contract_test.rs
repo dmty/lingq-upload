@@ -193,6 +193,30 @@ fn list_skips_corrupt_entries_and_returns_good_ones() {
 }
 
 #[test]
+fn list_dedupes_when_same_id_exists_under_two_directories() {
+    // Path sanitisation (`:` -> `_`) can leave the same logical project
+    // under two on-disk dirs after upgrade. `list` must collapse those.
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+
+    let p = sample("Dupe Book", "ja");
+    store.put(&p).unwrap();
+
+    // Manually plant a second directory whose name pretends to be the
+    // legacy unsanitised key, containing the same project bytes.
+    let legacy_dir = tmp
+        .path()
+        .join("projects")
+        .join(format!("legacy_{}", safe_path_segment(&p.id.join_key())));
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    let bytes = serde_json::to_vec_pretty(&p).unwrap();
+    std::fs::write(legacy_dir.join("project.json"), bytes).unwrap();
+
+    let list = store.list().unwrap();
+    assert_eq!(list.len(), 1, "duplicate id collapses to a single entry");
+}
+
+#[test]
 fn put_and_get_round_trip_strong_key_with_colons() {
     let tmp = TempDir::new().unwrap();
     let store = JsonProjectStore::new(tmp.path());
