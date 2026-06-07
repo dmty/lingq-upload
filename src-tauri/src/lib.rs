@@ -65,6 +65,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::library::LibraryEntry>()
         .typ::<commands::add_project::CreateProjectResult>()
         .typ::<commands::add_project::ConflictResolution>()
+        .typ::<commands::ingest::LibrarySource>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.
