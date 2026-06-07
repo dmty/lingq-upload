@@ -83,6 +83,10 @@ if [[ -n "$EXPECTED_SHA256" && -f "$DEST" ]]; then
         exit 1
     fi
     echo "OK kafka_shimo.epub sha256 matches expected."
+    exit 0
 fi
 
-exit 0
+# No fixture was produced. Fail loudly so seed scripts and humans know the
+# Kafka snapshot stays unseeded instead of silently believing it succeeded.
+printf 'extract_shimo: not yet implemented — see TODO above. kafka_shimo.epub NOT produced.\n' >&2
+exit 1
