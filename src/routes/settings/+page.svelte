@@ -170,4 +170,18 @@
       </button>
     </div>
   </div>
+
+  <details class="mt-8 rounded-md border border-border bg-surface p-4 text-sm">
+    <summary
+      class="cursor-pointer text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+    >
+      Advanced
+    </summary>
+    <p class="mt-3 text-fg-muted">
+      <a href="/upload" class="text-accent hover:underline">
+        One-shot upload (legacy)
+      </a>
+      — single chapter + audio upload, kept for power users and smoke tests.
+    </p>
+  </details>
 </section>
