@@ -16,8 +16,9 @@ use tokio_util::sync::CancellationToken;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::{run_project_job, JobSink};
+use lingq_upload_lib::core::matcher::{MismatchCondition, MismatchResponse};
 use lingq_upload_lib::core::project::{
-    ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
+    ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
@@ -52,6 +53,7 @@ enum RecordedEvent {
     },
     Cancelled,
     Result(bool),
+    NeedsMatch,
 }
 
 impl JobSink for RecordingSink {
@@ -74,6 +76,17 @@ impl JobSink for RecordingSink {
     fn result(&mut self, ok: bool, _payload: serde_json::Value) {
         self.events.lock().unwrap().push(RecordedEvent::Result(ok));
     }
+    fn needs_match(
+        &mut self,
+        _title: String,
+        _chapters: usize,
+        _tracks: usize,
+        _condition: MismatchCondition,
+        _options: Vec<MismatchResponse>,
+        _preselect: MismatchResponse,
+    ) {
+        self.events.lock().unwrap().push(RecordedEvent::NeedsMatch);
+    }
 }
 
 struct Fixture {
@@ -94,14 +107,18 @@ fn make_chapter_files(dir: &Path, count: usize) -> Vec<PathBuf> {
 }
 
 async fn make_fixture(chapters: usize) -> Fixture {
+    make_fixture_with_counts(chapters, chapters).await
+}
+
+async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
     let server = Server::new_async().await;
     let store: Arc<dyn ProjectStore> = Arc::new(InMemoryProjectStore::new());
 
-    // Stage N copies of the probe fixture into a fresh audio folder.
+    // Stage `tracks` copies of the probe fixture into a fresh audio folder.
     let audio_dir = tempfile::tempdir().unwrap();
     let probe = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/audio/probe_3min.mp3");
-    for i in 0..chapters {
+    for i in 0..tracks {
         let dst = audio_dir.path().join(format!("track_{:02}.mp3", i + 1));
         std::fs::copy(&probe, &dst).unwrap();
     }
@@ -365,6 +382,83 @@ async fn resume_skips_chapters_already_uploaded() {
     let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
     assert_eq!(project.receipts.len(), 3);
     assert_eq!(project.receipts[0].lesson_id, Some(999));
+
+    let _ = fixture.audio_dir;
+}
+
+/// PairAccept with more tracks than chapters: paired chapters use real
+/// chapter text; leftover tracks ship as degraded audio-only lessons with
+/// a single-space body. 2 chapters + 4 tracks → 4 import calls, 4 receipts;
+/// receipts 0/1 carry chapter body, 2/3 are degraded with " ".
+#[tokio::test]
+async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
+    if !ffmpeg_available() {
+        eprintln!("ffmpeg/ffprobe not on PATH — skipping pair_accept_leftover test");
+        return;
+    }
+    let mut fixture = make_fixture_with_counts(2, 4).await;
+    mock_collection(&mut fixture.server, 4242);
+    mock_imports(&mut fixture.server, 4, 5000);
+
+    // Record the PairAccept decision up front so the orchestrator skips the
+    // NeedsMatch pause and runs the plan_from_decision path.
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.matcher_decision = Some(MatcherDecision {
+        condition: MismatchCondition::CountOff,
+        response: MismatchResponse::PairAccept,
+        chapter_count: 2,
+        track_count: 4,
+        user_overrode: false,
+        decided_at: Utc::now(),
+    });
+    fixture.store.put(&project).unwrap();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        "ja",
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let events = sink.events.lock().unwrap().clone();
+    let done_count = events
+        .iter()
+        .filter(|e| matches!(e, RecordedEvent::ChapterDone { .. }))
+        .count();
+    assert_eq!(done_count, 4, "expected 4 ChapterDone events; got {:?}", events);
+    assert!(matches!(events.last(), Some(RecordedEvent::Result(true))));
+
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert_eq!(project.receipts.len(), 4, "four receipts (2 paired + 2 leftover)");
+
+    // Paired receipts (chapter_index 0, 1) are not degraded.
+    let paired: Vec<_> = project
+        .receipts
+        .iter()
+        .filter(|r| r.chapter_index < 2)
+        .collect();
+    assert_eq!(paired.len(), 2);
+    assert!(paired.iter().all(|r| !r.degraded), "paired receipts must not be degraded");
+
+    // Leftover receipts (chapter_index 2, 3 — synthetic = track index) ARE
+    // degraded. The orchestrator emits `chapter_index: k` for leftovers so
+    // resume-skip semantics work without colliding with paired chapters.
+    let leftover: Vec<_> = project
+        .receipts
+        .iter()
+        .filter(|r| r.chapter_index >= 2)
+        .collect();
+    assert_eq!(leftover.len(), 2, "got {:?}", project.receipts);
+    assert!(leftover.iter().all(|r| r.degraded), "leftover receipts must be degraded");
 
     let _ = fixture.audio_dir;
 }
