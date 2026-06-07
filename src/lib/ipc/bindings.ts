@@ -57,10 +57,8 @@ async manualSourceFromFiles(epub: string, audio: string, lang: string, title: st
 },
 /**
  * Scan a Calibre or Libation library root and return all candidates.
- * 
- * `source` is `"calibre"` or `"libation"`.
  */
-async cmdIngestScan(source: string, root: string) : Promise<Result<Candidate[], AppError>> {
+async cmdIngestScan(source: LibrarySource, root: string) : Promise<Result<Candidate[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_ingest_scan", { source, root }) };
 } catch (e) {
@@ -134,10 +132,15 @@ async cmdCreateProject(candidate: Candidate, language: string, collectionTitle: 
 /**
  * Resolve a create-project conflict by user choice.
  * 
- * - `Replace` writes blindly (same as legacy behavior).
- * - `Skip` returns the existing project's id without writing.
- * - `NewProject` appends `" (copy)"` to the title (loops until unique)
- * so the derived `content_hash` differs, then writes.
+ * - `Replace` overwrites the existing project at the conflict id.
+ * - `Skip` returns the conflict id directly without re-reading the store
+ * (the conflict was already detected in `cmd_create_project`; a second
+ * `store.get` would race against a delete).
+ * - `NewProject` mutates the candidate's *title* and re-derives the id
+ * until it lands on an unused content hash. The id is hashed from
+ * `candidate.title + authors[0]`, so mutating `collection_title` alone
+ * keeps the hash constant and loops forever — append `" (copy)"` to
+ * `candidate.title` instead, capped at `MAX_COPY_ATTEMPTS`.
  */
 async cmdCreateProjectWithResolution(candidate: Candidate, language: string, collectionTitle: string, resolution: ConflictResolution) : Promise<Result<ProjectId, AppError>> {
     try {
@@ -223,12 +226,24 @@ export type Collection = { id: number; title: string }
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string }
+export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
+/**
+ * Emitted when the orchestrator can't auto-pair chapters and tracks
+ * and needs the user to pick a [`MismatchResponse`]. Terminal: once
+ * emitted no further events fire for this job — the UI navigates to
+ * `/match`, the user resolves, and the next job kicks off fresh.
+ */
+{ kind: "NeedsMatch"; job_id: string; title: string; chapters: number; tracks: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
 export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null }
 export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
+/**
+ * Bookshelf source for `cmd_ingest_scan`. Modelled as an enum so specta
+ * emits a TS union and the frontend can't pass a misspelled string.
+ */
+export type LibrarySource = "calibre" | "libation"
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
