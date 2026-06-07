@@ -265,6 +265,18 @@ fn chapter_title(chapters: &[Chapter], idx: usize) -> String {
         .unwrap_or_else(|| format!("Chapter {}", idx + 1))
 }
 
+/// Title for an audio-only lesson minted from a leftover track. Prefers the
+/// track's filename stem; falls back to "Track {n}" (1-based).
+fn audio_only_title(track: &AudioTrack, track_index: usize) -> String {
+    track
+        .path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("Track {}", track_index + 1))
+}
+
 #[derive(Debug, Clone)]
 struct Step {
     chapter_index: usize,
@@ -349,14 +361,47 @@ fn plan_from_decision(
                 }],
             })
         }
-        PairAccept | PairDrop => {
+        PairAccept => {
+            // Pair chapters[i] ↔ tracks[i] for i in 0..chapters.len().
+            // Any extra tracks beyond chapters.len() ship as audio-only
+            // lessons (degraded, synthetic chapter_index = chapters.len()+k).
+            let mut steps: Vec<Step> = (0..chapters.len())
+                .map(|i| Step {
+                    chapter_index: i,
+                    track_index: i,
+                    degraded: false,
+                    text_override: None,
+                    title_override: None,
+                })
+                .collect();
+            for (k, track) in tracks.iter().enumerate().skip(chapters.len()) {
+                let title = audio_only_title(track, k);
+                steps.push(Step {
+                    chapter_index: chapters.len() + (k - chapters.len()),
+                    track_index: k,
+                    degraded: true,
+                    // LingQ rejects empty `text`; a single space satisfies the
+                    // required field for an audio-only lesson.
+                    text_override: Some(" ".to_string()),
+                    title_override: Some(title),
+                });
+            }
+            PlanOrPause::Plan(Plan { steps })
+        }
+        PairDrop => {
+            // Pair chapters[i] ↔ tracks[i] for i in 0..min(c, t); drop the
+            // leftover side entirely (no upload, no receipt).
             let n = chapters.len().min(tracks.len());
-            if n != chapters.len() || n != tracks.len() {
-                tracing::warn!(
+            let dropped_chapters = chapters.len().saturating_sub(n);
+            let dropped_tracks = tracks.len().saturating_sub(n);
+            if dropped_chapters > 0 || dropped_tracks > 0 {
+                tracing::info!(
                     chapters = chapters.len(),
                     tracks = tracks.len(),
                     paired = n,
-                    "matcher decision pairs by min(); leftover side dropped",
+                    dropped_chapters,
+                    dropped_tracks,
+                    "matcher decision PairDrop: leftover items dropped",
                 );
             }
             PlanOrPause::Plan(Plan {
