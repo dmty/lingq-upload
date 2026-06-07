@@ -1,7 +1,19 @@
 # cargo-deny configuration.
-# Schema: https://embarkstudios.github.io/cargo-deny/checks/cfg.html
 #
-# Run locally: cargo install --locked cargo-deny && cargo deny --manifest-path src-tauri/Cargo.toml check
+# Schema:  https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+# Local:   cargo install --locked cargo-deny && \
+#          cargo deny --manifest-path src-tauri/Cargo.toml check
+#
+# Policy summary:
+#   * licenses     — permissive SPDX allowlist; copyleft (GPL/AGPL/LGPL) is
+#                    implicitly disallowed by absence from `allow`.
+#   * advisories   — hard-deny known vulns; warn-only on unmaintained/yanked
+#                    so transitive churn does not block CI.
+#   * bans         — `multiple-versions = "warn"` is informational only; the
+#                    default cargo-deny-action invocation will NOT fail CI on
+#                    duplicates. Promote to "deny" once the dep graph
+#                    stabilises.
+#   * sources      — only crates.io; no git registries.
 
 [graph]
 all-features = false
@@ -23,7 +35,8 @@ ignore = []
 
 # ---------------------------------------------------------------------------
 # licenses: SPDX allowlist. Anything outside this list fails the build.
-# Copyleft (GPL/AGPL/LGPL) is implicitly disallowed by absence from `allow`.
+# Each entry must be tied to a real transitive dep; audit with
+# `cargo deny check licenses` before adding to keep the surface minimal.
 # ---------------------------------------------------------------------------
 [licenses]
 version = 2
@@ -41,18 +54,16 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "BSL-1.0",
-    "OpenSSL",
+    # webpki-roots ships under CDLA-Permissive-2.0; drop when reqwest
+    # switches to system roots.
+    "CDLA-Permissive-2.0",
 ]
 exceptions = []
 
-[[licenses.clarify]]
-name = "ring"
-expression = "MIT AND ISC AND OpenSSL"
-license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
-
 # ---------------------------------------------------------------------------
-# bans: catch duplicate-version crates or known-bad crates. Soft today (warn);
-# tighten once we have a stable dep graph.
+# bans: catch duplicate-version crates or known-bad crates.
+# `multiple-versions = "warn"` is INFORMATIONAL — cargo-deny-action does not
+# fail CI on warnings. Promote to "deny" once the dep graph is stable.
 # ---------------------------------------------------------------------------
 [bans]
 multiple-versions = "warn"
