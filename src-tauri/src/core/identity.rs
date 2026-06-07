@@ -165,7 +165,8 @@ fn normalise(s: &str) -> String {
 fn hex_encode(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        write!(&mut s, "{b:02x}").unwrap();
+        // write! into a String never fails.
+        let _ = write!(&mut s, "{b:02x}");
     }
     s
 }

@@ -51,24 +51,25 @@ impl Queue {
             project_id,
         };
         let id = job.id.clone();
-        self.inner.lock().unwrap().push_back(job);
+        // Single-process queue; a poisoned mutex means real corruption — panic.
+        self.inner.lock().expect("queue mutex poisoned").push_back(job);
         id
     }
 
     pub fn current(&self) -> Option<Job> {
-        self.inner.lock().unwrap().front().cloned()
+        self.inner.lock().expect("queue mutex poisoned").front().cloned()
     }
 
     pub fn advance(&self) -> Option<JobId> {
-        self.inner.lock().unwrap().pop_front().map(|j| j.id)
+        self.inner.lock().expect("queue mutex poisoned").pop_front().map(|j| j.id)
     }
 
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap().len()
+        self.inner.lock().expect("queue mutex poisoned").len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.lock().unwrap().is_empty()
+        self.inner.lock().expect("queue mutex poisoned").is_empty()
     }
 
     /// Scan the store for projects with outstanding work and re-enqueue
