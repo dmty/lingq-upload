@@ -8,6 +8,8 @@
     commands,
     type AudioSource,
     type Candidate,
+    type ConflictResolution,
+    type ProjectId,
     type TextSource,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
@@ -15,6 +17,7 @@
   import { joinKey } from "$lib/identity";
   import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
+  import BookPicker from "$lib/components/BookPicker.svelte";
 
   type Source = "manual" | "calibre" | "libation";
 
@@ -25,6 +28,11 @@
   let title = $state("");
   let busy = $state(false);
   let error = $state<string | null>(null);
+  let pickedCandidate = $state<Candidate | null>(null);
+  let conflict = $state<{
+    existing: ProjectId;
+    conflict_title: string;
+  } | null>(null);
 
   let textDropEl = $state<HTMLButtonElement | null>(null);
   let audioDropEl = $state<HTMLButtonElement | null>(null);
@@ -128,8 +136,22 @@
     };
   });
 
+  // When the user switches source modes, drop any in-flight conflict prompt
+  // and any picked library candidate — they belong to the previous mode.
+  $effect(() => {
+    source;
+    conflict = null;
+    pickedCandidate = null;
+  });
+
+  const isManual = $derived(source === "manual");
+
   const canCreate = $derived(
-    !!textPath && !!audioPath && !!lang.trim() && !!title.trim() && !busy,
+    busy
+      ? false
+      : isManual
+        ? !!textPath && !!audioPath && !!lang.trim() && !!title.trim()
+        : pickedCandidate !== null,
   );
 
   async function pickText() {
@@ -159,11 +181,22 @@
     return { kind: "single_file", value: path } as AudioSource;
   }
 
-  async function onCreate() {
-    if (!canCreate) return;
-    busy = true;
-    error = null;
-    const candidate: Candidate = {
+  function buildPayload(): {
+    candidate: Candidate;
+    language: string;
+    title: string;
+  } | null {
+    if (!isManual) {
+      const c = pickedCandidate;
+      if (!c) return null;
+      return {
+        candidate: c,
+        language: c.language ?? "",
+        title: c.title,
+      };
+    }
+    if (!textPath || !audioPath) return null;
+    const c: Candidate = {
       source_id: source,
       title,
       authors: [],
@@ -175,14 +208,62 @@
       chapter_manifest: null,
       metadata_extras: {},
     };
-    const res = await commands.cmdCreateProject(candidate, lang, title);
+    return { candidate: c, language: lang, title };
+  }
+
+  async function onCreate() {
+    if (!canCreate) return;
+    const payload = buildPayload();
+    if (!payload) return;
+    busy = true;
+    error = null;
+    conflict = null;
+    const res = await commands.cmdCreateProject(
+      payload.candidate,
+      payload.language,
+      payload.title,
+    );
     busy = false;
     if (res.status === "error") {
       error = appErrorMessage(res.error);
       return;
     }
-    const key = joinKey(res.data);
-    goto(`/run/${encodeURIComponent(key)}`);
+    if (res.data.status === "created") {
+      goto(`/run/${encodeURIComponent(joinKey(res.data.id))}`);
+      return;
+    }
+    // status === "conflict"
+    conflict = {
+      existing: res.data.existing,
+      conflict_title: res.data.conflict_title,
+    };
+  }
+
+  async function resolve(r: ConflictResolution) {
+    if (!conflict) return;
+    const payload = buildPayload();
+    if (!payload) return;
+    if (r === "skip") {
+      const id = conflict.existing;
+      conflict = null;
+      goto(`/run/${encodeURIComponent(joinKey(id))}`);
+      return;
+    }
+    busy = true;
+    error = null;
+    const res = await commands.cmdCreateProjectWithResolution(
+      payload.candidate,
+      payload.language,
+      payload.title,
+      r,
+    );
+    busy = false;
+    if (res.status === "error") {
+      error = appErrorMessage(res.error);
+      return;
+    }
+    conflict = null;
+    goto(`/run/${encodeURIComponent(joinKey(res.data))}`);
   }
 </script>
 
@@ -197,70 +278,81 @@
   <SourcePicker bind:value={source} />
 
   {#if source !== "manual"}
-    <p
-      class="rounded-sm border border-border bg-surface-sunken p-4 text-sm text-fg-muted"
-    >
-      {source === "calibre" ? "Calibre" : "Libation"} library auto-discovery is staged
-      in the backend (see <code>core::library::reconcile</code>). UI picker for
-      it ships next sprint — use Manual for now.
-    </p>
+    <BookPicker
+      source={source as "calibre" | "libation"}
+      bind:selectedCandidate={pickedCandidate}
+    />
   {/if}
 
-  <fieldset class="space-y-2">
-    <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-      Book (EPUB or HTML)
-    </legend>
-    <DropZone
-      variant="text"
-      path={textPath}
-      hovered={hoverZone === "text"}
-      disabled={busy}
-      onPick={pickText}
-      onClear={() => (textPath = "")}
-      ref={(el) => (textDropEl = el)}
-    />
-  </fieldset>
-
-  <fieldset class="space-y-2">
-    <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-      Audio
-    </legend>
-    <DropZone
-      variant="audio"
-      path={audioPath}
-      hovered={hoverZone === "audio"}
-      disabled={busy}
-      onPick={pickAudio}
-      onClear={() => (audioPath = "")}
-      ref={(el) => (audioDropEl = el)}
-    />
-  </fieldset>
-
-  <div class="grid grid-cols-2 gap-3">
-    <label class="space-y-1">
-      <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Title
-      </span>
-      <input
-        type="text"
-        bind:value={title}
-        class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
+  {#if isManual}
+    <fieldset class="space-y-2">
+      <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+        Book (EPUB or HTML)
+      </legend>
+      <DropZone
+        variant="text"
+        path={textPath}
+        hovered={hoverZone === "text"}
         disabled={busy}
+        onPick={pickText}
+        onClear={() => (textPath = "")}
+        ref={(el) => (textDropEl = el)}
       />
-    </label>
-    <label class="space-y-1">
-      <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Language
-      </span>
-      <input
-        type="text"
-        bind:value={lang}
-        placeholder="ja, en, …"
-        class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
+    </fieldset>
+
+    <fieldset class="space-y-2">
+      <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+        Audio
+      </legend>
+      <DropZone
+        variant="audio"
+        path={audioPath}
+        hovered={hoverZone === "audio"}
         disabled={busy}
+        onPick={pickAudio}
+        onClear={() => (audioPath = "")}
+        ref={(el) => (audioDropEl = el)}
       />
-    </label>
-  </div>
+    </fieldset>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="space-y-1">
+        <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+          Title
+        </span>
+        <input
+          type="text"
+          bind:value={title}
+          class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
+          disabled={busy}
+        />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+          Language
+        </span>
+        <input
+          type="text"
+          bind:value={lang}
+          placeholder="ja, en, …"
+          class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
+          disabled={busy}
+        />
+      </label>
+    </div>
+  {:else if pickedCandidate}
+    <div class="rounded-sm border border-border bg-surface-sunken p-3 text-sm">
+      <div class="font-medium text-fg">
+        Selected: {pickedCandidate.title}
+      </div>
+      <div class="mt-0.5 text-xs text-fg-muted">
+        {pickedCandidate.authors.length
+          ? pickedCandidate.authors.join(", ")
+          : "Unknown author"}
+        — {pickedCandidate.language ?? "language unknown"}
+      </div>
+    </div>
+  {/if}
 
   {#if error}
     <p
@@ -268,6 +360,51 @@
     >
       {error}
     </p>
+  {/if}
+
+  {#if conflict !== null}
+    <div
+      class="rounded-md border border-warning/40 bg-warning/10 p-4 space-y-3"
+    >
+      <p class="text-sm text-fg">
+        A project already exists for <em>{conflict.conflict_title}</em>. What do
+        you want to do?
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() => resolve("replace")}
+          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
+        >
+          Replace
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() => resolve("skip")}
+          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
+        >
+          Skip and open existing
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() => resolve("new_project")}
+          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
+        >
+          Create a copy
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() => (conflict = null)}
+          class="ml-auto rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-fg hover:bg-surface-sunken disabled:text-fg-subtle"
+        >
+          Back
+        </button>
+      </div>
+    </div>
   {/if}
 
   <div class="flex justify-end">
