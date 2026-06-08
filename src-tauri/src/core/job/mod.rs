@@ -124,7 +124,7 @@ pub async fn run_project_job(
         "job: resolved inputs",
     );
 
-    project.advance(ProjectStage::Parsed)?;
+    advance_if_behind(&mut project, ProjectStage::Parsed)?;
     persist_project(store.as_ref(), &project)?;
 
     // Decide pairing. If decision is missing AND counts mismatch, ask the UI
@@ -162,7 +162,8 @@ pub async fn run_project_job(
         }
     };
 
-    project.advance(ProjectStage::Mapped)?;
+    advance_if_behind(&mut project, ProjectStage::Mapped)?;
+    prepopulate_receipts(&mut project, &plan);
     persist_project(store.as_ref(), &project)?;
 
     // Resolve the collection up front. Idempotent on the server side.
@@ -282,8 +283,8 @@ pub async fn run_project_job(
             "job: imported lesson"
         );
 
-        // Upsert a receipt for this chapter. Build the freshly-uploaded
-        // receipt once, then either replace an existing slot or append.
+        // Receipts are pre-populated at Mapped; the upload loop only mutates
+        // existing slots via the atomic patch_chapter write.
         let receipt = ChapterReceipt {
             chapter_index: step.chapter_index,
             track_index: Some(step.track_index),
@@ -291,18 +292,23 @@ pub async fn run_project_job(
             degraded: step.degraded,
             uploaded_at: Some(Utc::now()),
         };
-        match project
+        let slot_idx = project
             .receipts
-            .iter_mut()
-            .find(|r| r.chapter_index == step.chapter_index)
-        {
-            Some(slot) => *slot = receipt,
-            None => project.receipts.push(receipt),
-        }
+            .iter()
+            .position(|r| r.chapter_index == step.chapter_index)
+            .ok_or_else(|| {
+                AppError::Other("receipt slot missing — receipts not pre-populated".into())
+            })?;
+        project.receipts[slot_idx] = receipt.clone();
+        store
+            .patch_chapter(&project.id, slot_idx, receipt)
+            .map_err(|e| AppError::Other(format!("store.patch_chapter: {e}")))?;
+        // Trade-off: queue_cursor / completed_lesson_ids / last_activity_at are
+        // updated in memory only and persist via the final put at end-of-loop.
+        // Resume keys off receipts[].lesson_id, so a crash here is still safe.
         project.queue_cursor = step.chapter_index + 1;
         project.completed_lesson_ids.push(lesson_id);
         project.last_activity_at = Some(Utc::now());
-        persist_project(store.as_ref(), &project)?;
 
         sink.chapter_done(step.chapter_index, lesson_id, step.degraded);
         let pct = (step_pos as f32 + 1.0) / total.max(1) as f32;
@@ -326,6 +332,40 @@ fn persist_project(store: &dyn ProjectStore, project: &Project) -> Result<(), Ap
     store
         .put(project)
         .map_err(|e| AppError::Other(format!("store.put: {e}")))
+}
+
+/// Advance the project to `to` only if it isn't already at or past it. Lets the
+/// orchestrator re-enter mid-pipeline (after a resume) without tripping
+/// `advance`'s backward-transition guard.
+fn advance_if_behind(project: &mut Project, to: ProjectStage) -> Result<(), AppError> {
+    if project.stage() >= to {
+        return Ok(());
+    }
+    project
+        .advance(to)
+        .map_err(|e| AppError::Other(e.to_string()))
+}
+
+/// Idempotently append a placeholder receipt for every plan step that doesn't
+/// already have one. The upload loop only mutates these slots — it never grows
+/// the Vec — so the slot index for `patch_chapter` is stable from here on.
+fn prepopulate_receipts(project: &mut Project, plan: &Plan) {
+    for step in &plan.steps {
+        if project
+            .receipts
+            .iter()
+            .any(|r| r.chapter_index == step.chapter_index)
+        {
+            continue;
+        }
+        project.receipts.push(ChapterReceipt {
+            chapter_index: step.chapter_index,
+            track_index: Some(step.track_index),
+            lesson_id: None,
+            degraded: step.degraded,
+            uploaded_at: None,
+        });
+    }
 }
 
 fn chapter_title(chapters: &[Chapter], idx: usize) -> String {
