@@ -251,6 +251,19 @@ async cmdCancelJob(jobId: string) : Promise<Result<null, AppError>> {
 }
 },
 /**
+ * Signal cancellation for every active job whose project id matches. Lets the
+ * Run screen cancel without first knowing the server-issued `job_id` — the
+ * jobless start-race window and post-reload state both lose that handle.
+ */
+async cmdProjectCancel(projectId: ProjectId) : Promise<Result<number, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_project_cancel", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Replay persisted receipts so the Run screen can render already-uploaded
  * chapters as green chips immediately on cold rehydration, without re-running
  * the job.
