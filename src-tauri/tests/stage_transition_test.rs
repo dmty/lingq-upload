@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use chrono::{TimeZone, Utc};
 use lingq_upload_lib::core::identity::ProjectId;
+use lingq_upload_lib::core::job::next_stage;
 use lingq_upload_lib::core::project::{
     Project, ProjectSettings, ProjectSources, ProjectStage, StageError, SCHEMA_V1,
 };
@@ -114,6 +115,28 @@ fn advance_then_put_round_trips_through_json_store() {
     let got = store.get(&p.id).unwrap().unwrap();
     assert_eq!(got.stage(), ProjectStage::Parsed);
     assert_eq!(got.last_transition_at, p.last_transition_at);
+}
+
+#[test]
+fn next_stage_returns_none_for_done() {
+    let p = sample("Done", ProjectStage::Done);
+    assert_eq!(next_stage(&p), None);
+}
+
+#[test]
+fn next_stage_returns_successor_for_every_other_stage() {
+    let cases = [
+        (ProjectStage::New, Some(ProjectStage::Parsed)),
+        (ProjectStage::Parsed, Some(ProjectStage::Mapped)),
+        (ProjectStage::Mapped, Some(ProjectStage::Transcoded)),
+        (ProjectStage::Transcoded, Some(ProjectStage::Uploaded)),
+        (ProjectStage::Uploaded, Some(ProjectStage::Done)),
+        (ProjectStage::Done, None),
+    ];
+    for (from, expected) in cases {
+        let p = sample("Table", from);
+        assert_eq!(next_stage(&p), expected, "from {from:?}");
+    }
 }
 
 #[test]

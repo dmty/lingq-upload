@@ -18,7 +18,8 @@ use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::{run_project_job, JobSink};
 use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 use lingq_upload_lib::core::project::{
-    ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
+    ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, ProjectStage,
+    SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
@@ -52,7 +53,7 @@ enum RecordedEvent {
         degraded: bool,
     },
     Cancelled,
-    Result(bool),
+    Result(bool, serde_json::Value),
     NeedsMatch,
 }
 
@@ -79,8 +80,11 @@ impl JobSink for RecordingSink {
     fn cancelled(&mut self) {
         self.events.lock().unwrap().push(RecordedEvent::Cancelled);
     }
-    fn result(&mut self, ok: bool, _payload: serde_json::Value) {
-        self.events.lock().unwrap().push(RecordedEvent::Result(ok));
+    fn result(&mut self, ok: bool, payload: serde_json::Value) {
+        self.events
+            .lock()
+            .unwrap()
+            .push(RecordedEvent::Result(ok, payload));
     }
     fn needs_match(
         &mut self,
@@ -249,7 +253,10 @@ async fn happy_path_three_chapters_three_tracks() {
     assert_eq!(chapter_dones[2].0, 2);
 
     assert!(matches!(events.first(), Some(RecordedEvent::Started)));
-    assert!(matches!(events.last(), Some(RecordedEvent::Result(true))));
+    assert!(matches!(
+        events.last(),
+        Some(RecordedEvent::Result(true, _))
+    ));
 
     let project = fixture
         .store
@@ -452,7 +459,10 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         "expected 4 ChapterDone events; got {:?}",
         events
     );
-    assert!(matches!(events.last(), Some(RecordedEvent::Result(true))));
+    assert!(matches!(
+        events.last(),
+        Some(RecordedEvent::Result(true, _))
+    ));
 
     let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
     assert_eq!(
@@ -486,6 +496,134 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         leftover.iter().all(|r| r.degraded),
         "leftover receipts must be degraded"
     );
+
+    let _ = fixture.audio_dir;
+}
+
+/// A project already at `Done` short-circuits before any I/O. The orchestrator
+/// emits exactly `Started` + `Result { ok: true, payload.skipped == true }`;
+/// no `Progress`, no `ChapterDone`.
+#[tokio::test]
+async fn done_project_short_circuits_with_skipped_payload() {
+    let fixture = make_fixture(3).await;
+
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.stage = ProjectStage::Done;
+    fixture.store.put(&project).unwrap();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        "ja",
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let events = sink.events.lock().unwrap().clone();
+    assert_eq!(events.len(), 2, "got {:?}", events);
+    assert!(matches!(events[0], RecordedEvent::Started));
+    match &events[1] {
+        RecordedEvent::Result(true, payload) => {
+            assert_eq!(payload["skipped"], serde_json::json!(true));
+            assert_eq!(payload["reason"], serde_json::json!("already_done"));
+        }
+        other => panic!("expected Result(true, skipped); got {other:?}"),
+    }
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, RecordedEvent::ChapterDone { .. })));
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, RecordedEvent::Progress(_))));
+
+    let _ = fixture.audio_dir;
+}
+
+/// Done short-circuit fires before `resolve_audio_tracks`, so a project
+/// pointing at a missing audio source still completes successfully when the
+/// stage is `Done` — confirming ffmpeg/audio probing is never reached.
+#[tokio::test]
+async fn done_project_does_not_spawn_ffmpeg_even_when_audio_missing() {
+    let fixture = make_fixture(3).await;
+
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.stage = ProjectStage::Done;
+    project.sources.audio = Some(AudioSource::Folder(PathBuf::from(
+        "/nonexistent/audio/folder/for/test",
+    )));
+    fixture.store.put(&project).unwrap();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        "ja",
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let events = sink.events.lock().unwrap().clone();
+    assert!(matches!(
+        events.last(),
+        Some(RecordedEvent::Result(true, _))
+    ));
+
+    let _ = fixture.audio_dir;
+}
+
+/// A fresh `New` project, run end to end on the happy path, finishes at
+/// `Done` with a stamped `last_transition_at`.
+#[tokio::test]
+async fn new_project_advances_through_lifecycle_stages_in_order() {
+    if !ffmpeg_available() {
+        eprintln!("ffmpeg/ffprobe not on PATH — skipping lifecycle stage test");
+        return;
+    }
+    let mut fixture = make_fixture(2).await;
+    mock_collection(&mut fixture.server, 4242);
+    mock_imports(&mut fixture.server, 2, 6000);
+
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert_eq!(
+        project.stage(),
+        ProjectStage::New,
+        "fresh project starts New"
+    );
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        "ja",
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert_eq!(project.stage(), ProjectStage::Done);
+    assert!(project.last_transition_at.is_some());
 
     let _ = fixture.audio_dir;
 }

@@ -3,6 +3,7 @@ use specta::Type;
 use thiserror::Error;
 
 use crate::core::audio::AudioError;
+use crate::core::project::StageError;
 use crate::core::text::TextError;
 use crate::ingest::IngestError;
 use crate::lingq::LingqError;
@@ -43,5 +44,11 @@ impl From<std::io::Error> for AppError {
 impl From<SecretError> for AppError {
     fn from(e: SecretError) -> Self {
         AppError::Secrets(e)
+    }
+}
+
+impl From<StageError> for AppError {
+    fn from(e: StageError) -> Self {
+        AppError::Other(e.to_string())
     }
 }
