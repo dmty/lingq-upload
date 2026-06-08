@@ -465,6 +465,8 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Decision:** The persisted state machine (`ProjectStage` in `core/project.rs`), the project-level cancellation token map (`commands::jobs::JobCancelMap`), and the atomic `ProjectStore::patch_chapter` write path all exist to make crash recovery *invisible* to the user. The UI never names the recovery event.
 
+**Scope:** the contract covers *user-visible* rendered text — anything reachable by reading the DOM, screen-reader output, or attribute payloads (`aria-label`, `title`, `alt`). Developer-facing prose — source comments, tracing log messages, test names, commit messages — is exempt. Resilience plumbing has to be discussable in code.
+
 **Banned words anywhere a user can read them** — labels, toasts, banners, modal copy, route titles, chip states, error strings surfaced to the surface:
 
 - `crash`, `recover`, `recovery`, `interrupted`, `restored`.

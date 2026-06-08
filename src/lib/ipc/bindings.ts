@@ -358,7 +358,14 @@ export type ProjectSources = { text: TextSource; audio?: AudioSource | null; cha
  * Distinct from `events::Stage`, which is the verb of an in-flight job
  * (transcoding, uploading, parsing). The two enums are non-interchangeable.
  */
-export type ProjectStage = "new" | "parsed" | "mapped" | "transcoded" | "uploaded" | "done"
+export type ProjectStage = "new" | "parsed" | "mapped" | 
+/**
+ * Reserved slot between Mapped and Uploaded. The current orchestrator
+ * interleaves transcode + upload per chapter and jumps Mapped → Done at
+ * end-of-loop. This variant lights up when the carver introduces a
+ * distinct pre-upload transcode pass.
+ */
+"transcoded" | "uploaded" | "done"
 export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null }
 /**
  * Lightweight projection of a [`crate::core::project::ChapterReceipt`] for

@@ -24,6 +24,10 @@ pub enum ProjectStage {
     New,
     Parsed,
     Mapped,
+    /// Reserved slot between Mapped and Uploaded. The current orchestrator
+    /// interleaves transcode + upload per chapter and jumps Mapped → Done at
+    /// end-of-loop. This variant lights up when the carver introduces a
+    /// distinct pre-upload transcode pass.
     Transcoded,
     Uploaded,
     Done,

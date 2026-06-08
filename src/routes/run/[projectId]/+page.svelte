@@ -38,7 +38,7 @@
   let starting = $state(false);
 
   function receiptRow(r: ChapterReceipt): Row {
-    const uploaded = r.lesson_id !== null && r.lesson_id !== undefined;
+    const uploaded = r.lesson_id != null;
     return {
       index: r.chapter_index,
       title: `Chapter ${r.chapter_index + 1}`,
@@ -109,7 +109,10 @@
   }
 
   async function cancel() {
-    if (!project) return;
+    if (!project) {
+      error = "No project loaded — cannot cancel.";
+      return;
+    }
     const res = await commands.cmdProjectCancel(project.id);
     if (res.status === "error") {
       error = appErrorMessage(res.error);

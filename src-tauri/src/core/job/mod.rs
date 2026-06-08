@@ -306,17 +306,24 @@ pub async fn run_project_job(
             .iter()
             .position(|r| r.chapter_index == step.chapter_index)
             .ok_or_else(|| {
-                AppError::Other("receipt slot missing — receipts not pre-populated".into())
+                tracing::error!(
+                    chapter = step.chapter_index,
+                    receipt_count = project.receipts.len(),
+                    "receipt slot missing — pre-populate at Mapped must precede the upload loop",
+                );
+                AppError::Other(format!(
+                    "receipt slot missing for chapter {}; receipts not pre-populated",
+                    step.chapter_index
+                ))
             })?;
         project.receipts[slot_idx] = receipt.clone();
         store
             .patch_chapter(&project.id, slot_idx, receipt)
             .map_err(|e| AppError::Other(format!("store.patch_chapter: {e}")))?;
-        // Trade-off: queue_cursor / completed_lesson_ids / last_activity_at are
-        // updated in memory only and persist via the final put at end-of-loop.
-        // Resume keys off receipts[].lesson_id, so a crash here is still safe.
+        // queue_cursor + last_activity_at are in-memory hints; the end-of-loop
+        // put persists them. completed_lesson_ids is rebuilt from receipts at
+        // end-of-loop so it never drifts from the receipt truth.
         project.queue_cursor = step.chapter_index + 1;
-        project.completed_lesson_ids.push(lesson_id);
         project.last_activity_at = Some(Utc::now());
 
         sink.chapter_done(step.chapter_index, lesson_id, step.degraded);
@@ -327,7 +334,12 @@ pub async fn run_project_job(
         );
     }
 
-    project.advance(ProjectStage::Done)?;
+    project.completed_lesson_ids = project
+        .receipts
+        .iter()
+        .filter_map(|r| r.lesson_id)
+        .collect();
+    advance_if_behind(&mut project, ProjectStage::Done)?;
     persist_project(store.as_ref(), &project)?;
 
     sink.result(
