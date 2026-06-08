@@ -461,6 +461,31 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Why directory move (not OS trash):** A `fs::rename` on the same filesystem is atomic and platform-uniform. `tauri-plugin-trash` adds a dependency and is unaware of project semantics — it would scatter `<id>/project.json` files into the user's recycle bin with no coherent restore path, and Linux recycle-bin behaviour varies. The in-project trash is fully owned by the app, ships zero extra plugins, and round-trips through a single `rename` in either direction.
 
+## AD-025 — Invisible resilience as a user-experience contract
+
+**Decision:** The persisted state machine (`ProjectStage` in `core/project.rs`), the project-level cancellation token map (`commands::jobs::JobCancelMap`), and the atomic `ProjectStore::patch_chapter` write path all exist to make crash recovery *invisible* to the user. The UI never names the recovery event.
+
+**Banned words anywhere a user can read them** — labels, toasts, banners, modal copy, route titles, chip states, error strings surfaced to the surface:
+
+- `crash`, `recover`, `recovery`, `interrupted`, `restored`.
+- `resume` outside a user-driven action button (the Start/Resume button on the Run screen is the only allowed usage).
+
+**Allowed concrete behaviours:**
+
+- On app start, the Run screen rehydrates `project.receipts` from `JsonProjectStore::get` and renders them as chips. Receipts with `lesson_id == Some(_)` show as "done"; receipts with `lesson_id == None` show as "queued". The user sees their queue, not a recovery event.
+- Cancellation surfaces a single chip-state transition: `running → queued`. No `cancelled` chip variant exists.
+- The on-disk lifecycle stage (`ProjectStage::Mapped`, `Transcoded`, `Uploaded`, `Done`) is plumbing — never rendered as user copy. `JobEvent::Result { skipped: true }` for a `Done` re-run silently no-ops the run.
+
+**Verification:** `e2e/invisible-resume.spec.ts` greps the rendered DOM of `/library`, `/add`, and `/run/<id>` for the banned-word list (case-insensitive). Button labels are excluded from the grep via a DOM walk that strips `button, [role="button"]` before reading `innerText`. The spec is mandatory in CI (the `playwright` job on macOS).
+
+**Why it matters:** The librarian's most expensive moment is the first reopen after a crash mid-upload. A modal that says "Recovery required" wins the architecture battle and loses the user — it teaches them the app is fragile. Silence at that moment teaches the opposite: their queue resumes, the chips light up green, and the next chapter starts uploading. The plumbing carries the surprise; the user carries the confidence.
+
+**Consequences:**
+
+- `JobEvent::Cancelled` is a terminal event for the runner but the UI consumes it by calling `reloadProject()` — no dedicated banner, no toast.
+- `StoreError::Corrupt` is the single exception. A corrupt `project.json` is a developer-grade failure (not a recovery event) and may surface a loud recovery prompt. All other failure modes route through silent rehydration.
+- New routes added in future sprints must run through this DOM-grep spec before merging.
+
 ## Open architecture questions
 
 1. **Re-import / diff behaviour** — when the same Candidate is re-scanned (Calibre edit, Libation re-rip), what's the per-chapter conflict policy? Overwrite / append / skip / prompt? Current default: append-by-default, prompt on conflict.
