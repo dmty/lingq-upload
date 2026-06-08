@@ -315,7 +315,7 @@ export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | 
  */
 export type MismatchInspection = { title: string; chapter_count: number; track_count: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview: BucketPreview[] | null }
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
-export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null }
+export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null }
 /**
  * Canonical project identity (AD-021).
  * 
@@ -326,6 +326,14 @@ export type Project = { schema_version?: number; id: ProjectId; sources: Project
 export type ProjectId = { content_hash: string; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
 export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
 export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
+/**
+ * Persisted lifecycle stage of a Project (AD-022).
+ * 
+ * Distinct from `events::Stage`, which describes the verb of an in-flight job
+ * (transcoding, uploading, parsing). `ProjectStage` is monotonic — see
+ * `Project::advance`. The two enums are intentionally non-interchangeable.
+ */
+export type ProjectStage = "new" | "parsed" | "mapped" | "transcoded" | "uploaded" | "done"
 export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null }
 /**
  * Errors raised by the secrets layer, lifted from the keyring backend.

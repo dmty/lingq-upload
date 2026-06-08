@@ -1,0 +1,27 @@
+error[E0308]: mismatched types
+ --> tests/trybuild/stage_not_interchangeable.rs:8:23
+  |
+8 |     wants_event_stage(ProjectStage::New);
+  |     ----------------- ^^^^^^^^^^^^^^^^^ expected `Stage`, found `ProjectStage`
+  |     |
+  |     arguments to this function are incorrect
+  |
+note: function defined here
+ --> tests/trybuild/stage_not_interchangeable.rs:4:4
+  |
+4 | fn wants_event_stage(_s: Stage) {}
+  |    ^^^^^^^^^^^^^^^^^ ---------
+
+error[E0308]: mismatched types
+ --> tests/trybuild/stage_not_interchangeable.rs:9:25
+  |
+9 |     wants_project_stage(Stage::Transcoding);
+  |     ------------------- ^^^^^^^^^^^^^^^^^^ expected `ProjectStage`, found `Stage`
+  |     |
+  |     arguments to this function are incorrect
+  |
+note: function defined here
+ --> tests/trybuild/stage_not_interchangeable.rs:5:4
+  |
+5 | fn wants_project_stage(_s: ProjectStage) {}
+  |    ^^^^^^^^^^^^^^^^^^^ ----------------

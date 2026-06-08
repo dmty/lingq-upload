@@ -160,6 +160,8 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
         series: None,
         lingq_collection_id: None,
         last_activity_at: None,
+        stage: Default::default(),
+        last_transition_at: None,
     };
     store.put(&project).unwrap();
 

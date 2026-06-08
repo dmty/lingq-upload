@@ -191,6 +191,8 @@ fn build_project(
         series: None,
         lingq_collection_id: None,
         last_activity_at: None,
+        stage: Default::default(),
+        last_transition_at: None,
     };
     (id, project)
 }

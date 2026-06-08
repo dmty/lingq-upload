@@ -4,7 +4,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::{
-    ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
+    ChapterReceipt, Project, ProjectSettings, ProjectSources, ProjectStage, SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{
     safe_path_segment, InMemoryProjectStore, JsonProjectStore, ListHealth, ProjectStore, StoreError,
@@ -42,6 +42,8 @@ fn sample(title: &str, language: &str) -> Project {
         series: None,
         lingq_collection_id: None,
         last_activity_at: None,
+        stage: ProjectStage::New,
+        last_transition_at: None,
     }
 }
 

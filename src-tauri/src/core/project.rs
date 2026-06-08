@@ -3,12 +3,38 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use thiserror::Error;
 
 use crate::core::identity::ProjectId;
 use crate::core::matcher::{MismatchCondition, MismatchResponse};
 use crate::ingest::{AudioSource, ChapterManifest, SeriesRef, TextSource};
 
 pub const SCHEMA_V1: u32 = 1;
+
+/// Persisted lifecycle stage of a Project. Monotonic — see `Project::advance`.
+///
+/// Distinct from `events::Stage`, which is the verb of an in-flight job
+/// (transcoding, uploading, parsing). The two enums are non-interchangeable.
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ProjectStage {
+    #[default]
+    New,
+    Parsed,
+    Mapped,
+    Transcoded,
+    Uploaded,
+    Done,
+}
+
+#[derive(Debug, Error, PartialEq, Eq, Clone, Copy)]
+#[error("invalid stage transition: {from:?} -> {to:?}")]
+pub struct StageError {
+    pub from: ProjectStage,
+    pub to: ProjectStage,
+}
 
 fn schema_v1() -> u32 {
     SCHEMA_V1
@@ -86,6 +112,33 @@ pub struct Project {
     pub lingq_collection_id: Option<i64>,
     #[serde(default)]
     pub last_activity_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub stage: ProjectStage,
+    #[serde(default)]
+    pub last_transition_at: Option<DateTime<Utc>>,
+}
+
+impl Project {
+    pub fn stage(&self) -> ProjectStage {
+        self.stage
+    }
+
+    /// Move forward through the lifecycle. Same-stage calls are idempotent
+    /// no-ops (so a crash-restart re-advance doesn't restamp). Backward
+    /// movement is rejected without mutation.
+    pub fn advance(&mut self, to: ProjectStage) -> Result<(), StageError> {
+        if to < self.stage {
+            return Err(StageError {
+                from: self.stage,
+                to,
+            });
+        }
+        if to != self.stage {
+            self.stage = to;
+            self.last_transition_at = Some(Utc::now());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
