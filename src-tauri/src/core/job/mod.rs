@@ -18,12 +18,26 @@ use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
     auto_match, BucketPreview, MatchOutcome, MismatchCondition, MismatchResponse,
 };
-use crate::core::project::{ChapterReceipt, MatcherDecision, Project};
+use crate::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectStage};
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
 use crate::ingest::{AudioSource, TextSource};
 use crate::lingq::{ImportLessonRequest, LessonStatus, LingqClient};
+
+/// Returns the next lifecycle stage the project should advance to, or `None`
+/// when the project is already `Done`. Pure function; does not look at receipts
+/// or filesystem.
+pub fn next_stage(p: &Project) -> Option<ProjectStage> {
+    match p.stage() {
+        ProjectStage::New => Some(ProjectStage::Parsed),
+        ProjectStage::Parsed => Some(ProjectStage::Mapped),
+        ProjectStage::Mapped => Some(ProjectStage::Transcoded),
+        ProjectStage::Transcoded => Some(ProjectStage::Uploaded),
+        ProjectStage::Uploaded => Some(ProjectStage::Done),
+        ProjectStage::Done => None,
+    }
+}
 
 /// Sink that receives [`crate::events::JobEvent`]-equivalent notifications.
 ///
@@ -80,6 +94,14 @@ pub async fn run_project_job(
         }
     };
 
+    if next_stage(&project).is_none() {
+        sink.result(
+            true,
+            serde_json::json!({"skipped": true, "reason": "already_done"}),
+        );
+        return Ok(());
+    }
+
     let tracks = match resolve_audio_tracks(&project).await {
         Ok(t) => t,
         Err(e) => {
@@ -101,6 +123,9 @@ pub async fn run_project_job(
         tracks = tracks.len(),
         "job: resolved inputs",
     );
+
+    project.advance(ProjectStage::Parsed)?;
+    persist_project(store.as_ref(), &project)?;
 
     // Decide pairing. If decision is missing AND counts mismatch, ask the UI
     // via the dedicated `NeedsMatch` terminal event. Don't reuse
@@ -136,6 +161,9 @@ pub async fn run_project_job(
             return Err(err);
         }
     };
+
+    project.advance(ProjectStage::Mapped)?;
+    persist_project(store.as_ref(), &project)?;
 
     // Resolve the collection up front. Idempotent on the server side.
     let collection = match client
@@ -283,6 +311,9 @@ pub async fn run_project_job(
             Some(format!("Uploaded chapter {}", step.chapter_index + 1)),
         );
     }
+
+    project.advance(ProjectStage::Done)?;
+    persist_project(store.as_ref(), &project)?;
 
     sink.result(
         true,
