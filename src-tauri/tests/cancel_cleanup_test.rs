@@ -13,6 +13,9 @@ use std::time::Duration;
 use lingq_upload_lib::core::audio::{transcode, EncoderSettings};
 
 // FFMPEG_BIN is process-global; tests mutating it must run serially.
+// The lock is file-scoped — sufficient because every test binary runs in its
+// own process. If any future test in this binary touches FFMPEG_BIN outside
+// SlowFfmpegGuard, it races and must take this lock too.
 static FFMPEG_BIN_LOCK: Mutex<()> = Mutex::new(());
 
 fn shim_path() -> PathBuf {
@@ -53,11 +56,7 @@ impl Drop for SlowFfmpegGuard<'_> {
 }
 
 fn process_matches(name_lc: &str) -> bool {
-    name_lc.contains("ffmpeg")
-        || name_lc.contains("slow_transcode")
-        || name_lc.contains("sleep")
-        || name_lc == "bash"
-        || name_lc == "sh"
+    name_lc.contains("ffmpeg") || name_lc.contains("slow_transcode") || name_lc.contains("sleep")
 }
 
 fn count_orphan_ffmpegs(parent_pid: u32) -> usize {

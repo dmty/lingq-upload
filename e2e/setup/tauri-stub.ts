@@ -53,9 +53,14 @@ export const tauriStubInitScript = `
             series: null,
             lingq_collection_id: null,
             last_activity_at: null,
-            stage: "Mapped",
+            stage: "mapped",
             last_transition_at: null,
         }),
+        // Mismatch inspection for the /match route. None = no decision yet,
+        // route renders the empty resolver shell without any decision copy.
+        cmd_matcher_inspect: () => null,
+        // Trash list for the /settings route. Empty list keeps the panel quiet.
+        cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't
         // emit anything from the stub yet — specs that need driven events
         // stay skipped until this grows.

@@ -179,6 +179,9 @@ pub async fn cmd_cancel_job(
 
 /// Tauri-free core of [`cmd_project_cancel`]. Iterates the map and fires every
 /// token whose entry matches `project_id`. Returns the number of tokens fired.
+///
+/// The return value is for tests and `tracing` diagnostics — the frontend
+/// ignores it; cancellation is fire-and-forget from the UI's view.
 pub fn cancel_project_impl(map: &JobCancelMap, project_id: &ProjectId) -> usize {
     let tokens: Vec<CancellationToken> = {
         let guard = lock_cancels(map);

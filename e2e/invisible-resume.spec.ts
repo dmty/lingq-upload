@@ -30,27 +30,60 @@ async function nonButtonText(page: Page): Promise<string> {
   });
 }
 
+// Screen-reader-only spans, aria-live regions, and decorative imagery can
+// carry forbidden words invisible to innerText. Walk every aria-label,
+// title, alt, and aria-describedby payload too — AT users count.
+async function ariaAttributeText(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const attrs = ["aria-label", "title", "alt", "aria-describedby"];
+    const out: string[] = [];
+    for (const el of Array.from(document.querySelectorAll("*"))) {
+      for (const a of attrs) {
+        const v = el.getAttribute(a);
+        if (v) out.push(v);
+      }
+    }
+    return out.join(" \n ").toLowerCase();
+  });
+}
+
 test.describe("invisible resilience (AD-025)", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(tauriStubInitScript);
   });
 
-  for (const route of ["/library", "/add", "/run/some-project"]) {
+  for (const route of [
+    "/",
+    "/library",
+    "/add",
+    "/settings",
+    "/match/some-project",
+    "/run/some-project",
+  ]) {
     test(`forbidden recovery words absent on ${route}`, async ({ page }) => {
       await page.goto(route);
       await page.waitForLoadState("networkidle");
 
-      const text = await nonButtonText(page);
+      const visible = await nonButtonText(page);
+      const aria = await ariaAttributeText(page);
 
       for (const word of FORBIDDEN_ANYWHERE) {
         expect(
-          text,
-          `forbidden word "${word}" found in DOM on ${route}`,
+          visible,
+          `forbidden word "${word}" found in visible DOM on ${route}`,
+        ).not.toContain(word);
+        expect(
+          aria,
+          `forbidden word "${word}" found in aria/title/alt on ${route}`,
         ).not.toContain(word);
       }
       expect(
-        text,
+        visible,
         `"${FORBIDDEN_OUTSIDE_BUTTON}" leaked outside button on ${route}`,
+      ).not.toContain(FORBIDDEN_OUTSIDE_BUTTON);
+      expect(
+        aria,
+        `"${FORBIDDEN_OUTSIDE_BUTTON}" leaked into aria/title/alt on ${route}`,
       ).not.toContain(FORBIDDEN_OUTSIDE_BUTTON);
     });
   }
