@@ -11,47 +11,88 @@
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
 
-  type Q = {
-    title?: string;
-    chapters?: string;
-    tracks?: string;
-    condition?: MismatchCondition;
-    options?: string;
-    preselect?: MismatchResponse;
-  };
-
-  const params = $derived<Q>(Object.fromEntries(page.url.searchParams));
-  const title = $derived(params.title ?? "Untitled");
-  const chapters = $derived(Number(params.chapters ?? "0"));
-  const tracks = $derived(Number(params.tracks ?? "0"));
-  const condition = $derived<MismatchCondition>(
-    params.condition ?? "count_off",
-  );
-  const options = $derived<MismatchResponse[]>(
-    (params.options?.split(",") as MismatchResponse[]) ?? ["cancel"],
-  );
-
-  // The `NeedsMatch` JobEvent carries `bucket_preview` only for ManyToFew.
-  // Run page stashes it in sessionStorage keyed by project id before
-  // navigating; URL params can't carry the array cleanly.
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
-  const bucketPreview = $derived.by<BucketPreview[] | null>(() => {
-    if (typeof sessionStorage === "undefined") return null;
-    const raw = sessionStorage.getItem(previewKey);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as BucketPreview[];
-    } catch {
-      return null;
-    }
-  });
 
-  let selected = $state<MismatchResponse>(
-    (page.url.searchParams.get("preselect") as MismatchResponse) ?? "cancel",
-  );
+  // The Run page seeds these via URL params on the live NeedsMatch event;
+  // a cold entry from /library carries no params and must re-probe via
+  // `cmd_matcher_inspect`. Local $state lets either source populate the form.
+  let title = $state<string>("Untitled");
+  let chapters = $state(0);
+  let tracks = $state(0);
+  let condition = $state<MismatchCondition>("count_off");
+  let options = $state<MismatchResponse[]>(["cancel"]);
+  let bucketPreview = $state<BucketPreview[] | null>(null);
+  let selected = $state<MismatchResponse>("cancel");
+  let hydrating = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
+
+  function applyParams(): boolean {
+    const p = page.url.searchParams;
+    const c = Number(p.get("chapters") ?? "0");
+    const t = Number(p.get("tracks") ?? "0");
+    const opts = p.get("options")?.split(",") as MismatchResponse[] | undefined;
+    if (!p.has("condition") && c === 0 && t === 0 && !opts) return false;
+    title = p.get("title") ?? "Untitled";
+    chapters = c;
+    tracks = t;
+    condition = (p.get("condition") as MismatchCondition) ?? "count_off";
+    options = opts ?? ["cancel"];
+    selected =
+      (p.get("preselect") as MismatchResponse) ?? options[0] ?? "cancel";
+    if (typeof sessionStorage !== "undefined") {
+      const raw = sessionStorage.getItem(previewKey);
+      if (raw) {
+        try {
+          bucketPreview = JSON.parse(raw) as BucketPreview[];
+        } catch {
+          bucketPreview = null;
+        }
+      }
+    }
+    return true;
+  }
+
+  async function hydrateFromBackend() {
+    if (!projectKey) {
+      hydrating = false;
+      return;
+    }
+    const loaded = await commands.cmdProjectLoad(projectKey);
+    if (loaded.status === "error") {
+      error = appErrorMessage(loaded.error);
+      hydrating = false;
+      return;
+    }
+    const inspected = await commands.cmdMatcherInspect(loaded.data.id);
+    if (inspected.status === "error") {
+      error = appErrorMessage(inspected.error);
+      hydrating = false;
+      return;
+    }
+    if (inspected.data == null) {
+      goto(`/run/${projectKey}`);
+      return;
+    }
+    const data = inspected.data;
+    title = data.title;
+    chapters = data.chapter_count;
+    tracks = data.track_count;
+    condition = data.condition;
+    options = data.options;
+    selected = data.preselect;
+    bucketPreview = data.bucket_preview;
+    hydrating = false;
+  }
+
+  $effect(() => {
+    if (!applyParams()) {
+      void hydrateFromBackend();
+    } else {
+      hydrating = false;
+    }
+  });
 
   function formatDuration(sec: number): string {
     const total = Math.max(0, Math.round(sec));
@@ -120,17 +161,21 @@
     <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
   </header>
 
-  <MismatchEvidence {title} {chapters} {tracks} {condition} />
+  {#if hydrating}
+    <p class="text-sm text-fg-muted">Re-probing project sources…</p>
+  {:else}
+    <MismatchEvidence {title} {chapters} {tracks} {condition} />
 
-  <div class="space-y-2">
-    {#each options as opt (opt)}
-      <ResponseCard
-        response={opt}
-        selected={selected === opt}
-        onSelect={() => (selected = opt)}
-      />
-    {/each}
-  </div>
+    <div class="space-y-2">
+      {#each options as opt (opt)}
+        <ResponseCard
+          response={opt}
+          selected={selected === opt}
+          onSelect={() => (selected = opt)}
+        />
+      {/each}
+    </div>
+  {/if}
 
   {#if selected === "split_proportional" && bucketPreview && bucketPreview.length > 0}
     <div class="rounded-md border border-border bg-surface p-4">
@@ -184,7 +229,7 @@
     <button
       type="button"
       onclick={confirm}
-      disabled={busy}
+      disabled={busy || hydrating}
       class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
     >
       Confirm

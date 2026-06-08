@@ -345,6 +345,51 @@ enum PlanOrPause {
     Failed(String),
 }
 
+/// Re-derived mismatch payload for a project parked in `needs_match`.
+///
+/// Mirrors the `NeedsMatch` job event so the Resolve UI can hydrate from a
+/// cold reload without replaying the upload job.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct MismatchInspection {
+    pub title: String,
+    pub chapter_count: usize,
+    pub track_count: usize,
+    pub condition: MismatchCondition,
+    pub options: Vec<MismatchResponse>,
+    pub preselect: MismatchResponse,
+    pub bucket_preview: Option<Vec<BucketPreview>>,
+}
+
+/// Re-probe a project's sources and recompute the mismatch payload.
+///
+/// Returns `None` when the project pairs cleanly (no mismatch) or already
+/// carries a `matcher_decision`. The caller should redirect the user back to
+/// the run/library view in that case.
+pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspection>, AppError> {
+    if project.matcher_decision.is_some() {
+        return Ok(None);
+    }
+    let tracks = resolve_audio_tracks(project).await?;
+    let chapters = resolve_chapters(&project.sources.text)?;
+    match build_plan(project, &chapters, &tracks) {
+        PlanOrPause::NeedsMatch {
+            condition,
+            options,
+            preselect,
+            bucket_preview,
+        } => Ok(Some(MismatchInspection {
+            title: project.settings.collection_title.clone(),
+            chapter_count: chapters.len(),
+            track_count: tracks.len(),
+            condition,
+            options,
+            preselect,
+            bucket_preview,
+        })),
+        _ => Ok(None),
+    }
+}
+
 fn build_plan(project: &Project, chapters: &[Chapter], tracks: &[AudioTrack]) -> PlanOrPause {
     if let Some(decision) = &project.matcher_decision {
         return plan_from_decision(decision, chapters, tracks);

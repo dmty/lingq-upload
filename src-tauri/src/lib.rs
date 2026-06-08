@@ -35,6 +35,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::add_project::cmd_create_project,
             commands::add_project::cmd_create_project_with_resolution,
             commands::matcher::cmd_matcher_resolve,
+            commands::matcher::cmd_matcher_inspect,
             commands::project::cmd_project_load,
             commands::jobs::cmd_start_project_job,
             commands::jobs::cmd_cancel_job,
@@ -66,6 +67,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::matcher::MismatchCondition>()
         .typ::<core::matcher::MismatchResponse>()
         .typ::<core::matcher::BucketPreview>()
+        .typ::<core::job::MismatchInspection>()
         .typ::<core::library::LibraryIndex>()
         .typ::<core::library::LibraryEntry>()
         .typ::<core::library::LibraryStatus>()
