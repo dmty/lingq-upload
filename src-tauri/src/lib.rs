@@ -1,7 +1,7 @@
 mod commands;
 pub mod core;
 mod error;
-mod events;
+pub mod events;
 pub mod ingest;
 pub mod lingq;
 mod secrets;

@@ -60,6 +60,8 @@ fn build_project(candidate: &Candidate, language: String, collection_title: Stri
         series: candidate.series.clone(),
         lingq_collection_id: None,
         last_activity_at: None,
+        stage: Default::default(),
+        last_transition_at: None,
     }
 }
 
