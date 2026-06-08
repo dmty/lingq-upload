@@ -177,6 +177,38 @@ pub async fn cmd_cancel_job(
     Ok(())
 }
 
+/// Tauri-free core of [`cmd_project_cancel`]. Iterates the map and fires every
+/// token whose entry matches `project_id`. Returns the number of tokens fired.
+pub fn cancel_project_impl(map: &JobCancelMap, project_id: &ProjectId) -> usize {
+    let tokens: Vec<CancellationToken> = {
+        let guard = lock_cancels(map);
+        guard
+            .values()
+            .filter(|(pid, _)| pid == project_id)
+            .map(|(_, tok)| tok.clone())
+            .collect()
+    };
+    let fired = tokens.len();
+    for tok in tokens {
+        tok.cancel();
+    }
+    fired
+}
+
+/// Signal cancellation for every active job whose project id matches. Lets the
+/// Run screen cancel without first knowing the server-issued `job_id` — the
+/// jobless start-race window and post-reload state both lose that handle.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_project_cancel(
+    cancels: tauri::State<'_, JobCancelMap>,
+    project_id: ProjectId,
+) -> Result<usize, AppError> {
+    let fired = cancel_project_impl(cancels.inner(), &project_id);
+    tracing::info!(project = %project_id.join_key(), fired, "project cancel signalled");
+    Ok(fired)
+}
+
 /// Bridge between the orchestrator's [`JobSink`] trait and the runtime
 /// [`JobEmitter`]. Lives here so `core::job` can stay tauri-free.
 struct EmitterSink<'a, 'b> {

@@ -38,11 +38,12 @@
   let starting = $state(false);
 
   function receiptRow(r: ChapterReceipt): Row {
+    const uploaded = r.lesson_id !== null && r.lesson_id !== undefined;
     return {
       index: r.chapter_index,
       title: `Chapter ${r.chapter_index + 1}`,
-      status: "done",
-      timestamp: r.uploaded_at ?? null,
+      status: uploaded ? "done" : "queued",
+      timestamp: uploaded ? (r.uploaded_at ?? null) : null,
       degraded: !!r.degraded,
       dimmed: false,
     };
@@ -108,8 +109,8 @@
   }
 
   async function cancel() {
-    if (!jobId) return;
-    const res = await commands.cmdCancelJob(jobId);
+    if (!project) return;
+    const res = await commands.cmdProjectCancel(project.id);
     if (res.status === "error") {
       error = appErrorMessage(res.error);
     }
