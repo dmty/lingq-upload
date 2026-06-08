@@ -108,6 +108,43 @@ jobs:
         if: runner.os == 'Linux'
         run: bun tauri build --debug
 
+  playwright:
+    name: e2e (macos)
+    runs-on: macos-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: bun install
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bun run e2e:setup
+
+      - name: Run e2e
+        run: bun run e2e
+
   coverage:
     name: coverage
     runs-on: ubuntu-latest

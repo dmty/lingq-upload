@@ -20,3 +20,4 @@ src-tauri/tests/fixtures/epub/*.epub
 src-tauri/tests/fixtures/epub/dialects/*.epub
 src-tauri/tests/fixtures/calibre/
 src-tauri/tests/fixtures/libation/
+test-results/

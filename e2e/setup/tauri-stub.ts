@@ -15,18 +15,67 @@ export const tauriStubInitScript = `
 
     const handlers = {
         // Library list returns an empty index so the empty-state CTA renders.
-        cmd_library_list: () => ({ projects: [] }),
+        cmd_library_list: () => ({
+            schema_version: 1,
+            generated_at: new Date().toISOString(),
+            entries: [],
+        }),
         // Account/profile probe — empty placeholder keeps the layout calm.
         cmd_account_profile: () => ({ username: null, known_words: {} }),
+        // No LingQ key in the test env — surfaces the dismissable banner,
+        // never any recovery-event copy.
+        cmd_load_lingq_key: () => null,
+        // Project load for the run screen. Returns a minimal project with
+        // no receipts so the chapter list renders empty and the start
+        // button shows "Start" (not "Resume" — which would tax the
+        // forbidden-word filter on /run).
+        cmd_project_load: (args) => ({
+            schema_version: 1,
+            id: {
+                content_hash: (args && args.key) || "stub-project",
+                audible_asin: null,
+                isbn13: null,
+                calibre_uuid: null,
+            },
+            sources: { text: null, audio: null },
+            settings: {
+                language: "en",
+                collection_title: "Stub Project",
+                level: 1,
+                tags: [],
+            },
+            receipts: [],
+            queue_cursor: 0,
+            completed_lesson_ids: [],
+            matcher_decision: null,
+            cover_path: null,
+            authors: [],
+            series: null,
+            lingq_collection_id: null,
+            last_activity_at: null,
+            stage: "Mapped",
+            last_transition_at: null,
+        }),
+        // Event plugin: register a listener, return a numeric id. We don't
+        // emit anything from the stub yet — specs that need driven events
+        // stay skipped until this grows.
+        "plugin:event|listen": () => 1,
+        "plugin:event|unlisten": () => null,
     };
 
     window.__TAURI_INTERNALS__ = {
+        // Webview/window metadata so getCurrentWebview()/getCurrentWindow()
+        // don't throw when /add or any route that uses them mounts.
+        metadata: {
+            currentWindow: { label: "main" },
+            currentWebview: { label: "main" },
+        },
         invoke: async (cmd, _args) => {
             const fn = handlers[cmd];
             if (!fn) {
                 throw new Error('tauri-stub: unmocked command ' + cmd);
             }
-            return fn();
+            return fn(_args);
         },
         transformCallback: (cb) => {
             const id = Math.floor(Math.random() * 2 ** 31);
