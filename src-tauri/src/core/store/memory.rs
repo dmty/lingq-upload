@@ -3,7 +3,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use super::{ProjectStore, StoreError};
 use crate::core::identity::ProjectId;
-use crate::core::project::{Project, ProjectSummary};
+use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub struct InMemoryProjectStore {
     inner: Mutex<BTreeMap<String, Project>>,
@@ -43,5 +43,24 @@ impl ProjectStore for InMemoryProjectStore {
         let mut out: Vec<ProjectSummary> = self.lock().values().map(ProjectSummary::from).collect();
         out.sort_by(|a: &ProjectSummary, b| a.title.cmp(&b.title));
         Ok(out)
+    }
+
+    fn patch_chapter(
+        &self,
+        id: &ProjectId,
+        index: usize,
+        receipt: ChapterReceipt,
+    ) -> Result<(), StoreError> {
+        let key = id.join_key();
+        let mut guard = self.lock();
+        let project = guard
+            .get_mut(&key)
+            .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
+        let len = project.receipts.len();
+        if index >= len {
+            return Err(StoreError::OutOfBounds { index, len });
+        }
+        project.receipts[index] = receipt;
+        Ok(())
     }
 }

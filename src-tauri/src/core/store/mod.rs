@@ -8,7 +8,7 @@ use specta::Type;
 use thiserror::Error;
 
 use crate::core::identity::ProjectId;
-use crate::core::project::{Project, ProjectSummary};
+use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub use json::{JsonProjectStore, ListHealth};
 pub use memory::InMemoryProjectStore;
@@ -22,12 +22,20 @@ pub enum StoreError {
     Corrupt { path: PathBuf, message: String },
     #[error("not found: {key}")]
     NotFound { key: String },
+    #[error("index {index} out of bounds (len {len})")]
+    OutOfBounds { index: usize, len: usize },
 }
 
 pub trait ProjectStore: Send + Sync {
     fn put(&self, p: &Project) -> Result<(), StoreError>;
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError>;
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError>;
+    fn patch_chapter(
+        &self,
+        id: &ProjectId,
+        index: usize,
+        receipt: ChapterReceipt,
+    ) -> Result<(), StoreError>;
 }
 
 /// Filesystem-safe rendering of an identifier (e.g. `ProjectId::join_key()`).
