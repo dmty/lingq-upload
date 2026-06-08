@@ -11,6 +11,8 @@ use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use chrono::{DateTime, Utc};
+
 use crate::core::identity::ProjectId;
 use crate::core::job::{run_project_job, JobSink};
 use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
@@ -19,6 +21,53 @@ use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::lingq::LingqClient;
 use crate::secrets::{RealKeyring, SecretsStore};
+
+/// Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
+/// rehydration. Includes only the fields the Run screen needs to render chips.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type, PartialEq)]
+pub struct ReceiptSnapshot {
+    pub chapter_index: usize,
+    pub lesson_id: Option<i64>,
+    pub degraded: bool,
+    pub uploaded_at: Option<DateTime<Utc>>,
+}
+
+/// Tauri-free core of [`cmd_replay_receipts`]. Returns receipts in chapter
+/// order; gaps in `chapter_index` are not filled — the caller sees exactly
+/// what's persisted.
+pub fn replay_receipts_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<Vec<ReceiptSnapshot>, AppError> {
+    let project = store
+        .get(project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other(format!("project not found: {}", project_id.join_key())))?;
+    let mut snaps: Vec<ReceiptSnapshot> = project
+        .receipts
+        .iter()
+        .map(|r| ReceiptSnapshot {
+            chapter_index: r.chapter_index,
+            lesson_id: r.lesson_id,
+            degraded: r.degraded,
+            uploaded_at: r.uploaded_at,
+        })
+        .collect();
+    snaps.sort_by_key(|s| s.chapter_index);
+    Ok(snaps)
+}
+
+/// Replay persisted receipts so the Run screen can render already-uploaded
+/// chapters as green chips immediately on cold rehydration, without re-running
+/// the job.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_replay_receipts(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<Vec<ReceiptSnapshot>, AppError> {
+    replay_receipts_impl(store.inner().as_ref(), &project_id)
+}
 
 /// Each entry pins both the cancellation token AND the project id so we can
 /// answer "is this project already running?" without scanning the store.

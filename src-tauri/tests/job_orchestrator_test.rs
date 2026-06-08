@@ -341,9 +341,18 @@ async fn cancellation_after_first_chapter_stops_the_run() {
     );
 
     let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    // Receipts are pre-populated at Mapped, so the Vec is full-length even on
+    // a cancelled run. The signal that the run was partial is that some slots
+    // still have `lesson_id = None`.
+    let uploaded = project
+        .receipts
+        .iter()
+        .filter(|r| r.lesson_id.is_some())
+        .count();
     assert!(
-        project.receipts.len() < 3,
-        "expected partial receipts; got {}",
+        uploaded < 3,
+        "expected partial uploads; got {} of {}",
+        uploaded,
         project.receipts.len(),
     );
 

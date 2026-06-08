@@ -249,6 +249,19 @@ async cmdCancelJob(jobId: string) : Promise<Result<null, AppError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Replay persisted receipts so the Run screen can render already-uploaded
+ * chapters as green chips immediately on cold rehydration, without re-running
+ * the job.
+ */
+async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_replay_receipts", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -327,14 +340,18 @@ export type ProjectId = { content_hash: string; audible_asin?: string | null; is
 export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
 export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
 /**
- * Persisted lifecycle stage of a Project (AD-022).
+ * Persisted lifecycle stage of a Project. Monotonic — see `Project::advance`.
  * 
- * Distinct from `events::Stage`, which describes the verb of an in-flight job
- * (transcoding, uploading, parsing). `ProjectStage` is monotonic — see
- * `Project::advance`. The two enums are intentionally non-interchangeable.
+ * Distinct from `events::Stage`, which is the verb of an in-flight job
+ * (transcoding, uploading, parsing). The two enums are non-interchangeable.
  */
 export type ProjectStage = "new" | "parsed" | "mapped" | "transcoded" | "uploaded" | "done"
 export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null }
+/**
+ * Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
+ * rehydration. Includes only the fields the Run screen needs to render chips.
+ */
+export type ReceiptSnapshot = { chapter_index: number; lesson_id: number | null; degraded: boolean; uploaded_at: string | null }
 /**
  * Errors raised by the secrets layer, lifted from the keyring backend.
  * 

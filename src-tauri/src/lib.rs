@@ -1,4 +1,4 @@
-mod commands;
+pub mod commands;
 pub mod core;
 mod error;
 pub mod events;
@@ -39,6 +39,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::project::cmd_project_load,
             commands::jobs::cmd_start_project_job,
             commands::jobs::cmd_cancel_job,
+            commands::jobs::cmd_replay_receipts,
         ])
         // JobEvent isn't a command return; export it explicitly so the frontend
         // can type-narrow the raw "job" event payload.
@@ -75,6 +76,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<commands::add_project::CreateProjectResult>()
         .typ::<commands::add_project::ConflictResolution>()
         .typ::<commands::ingest::LibrarySource>()
+        .typ::<commands::jobs::ReceiptSnapshot>()
 }
 
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.
