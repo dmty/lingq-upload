@@ -225,7 +225,16 @@ pub async fn run_project_job(
         let report = tokio::select! {
             biased;
             _ = cancel.cancelled() => {
-                tracing::info!(at = step_pos, "job: cancelled during transcode");
+                tracing::info!(
+                    at = step_pos,
+                    dst = %dst.display(),
+                    "job: cancelled mid-transcode; ffmpeg child killed via Drop",
+                );
+                if dst.exists() {
+                    if let Err(e) = std::fs::remove_file(&dst) {
+                        tracing::warn!(error = %e, dst = %dst.display(), "job: failed to unlink partial transcode output");
+                    }
+                }
                 persist_project(store.as_ref(), &project)?;
                 sink.cancelled();
                 return Ok(());
