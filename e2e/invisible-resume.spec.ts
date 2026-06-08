@@ -64,27 +64,19 @@ test.describe("invisible resilience (AD-025)", () => {
       await page.goto(route);
       await page.waitForLoadState("networkidle");
 
-      const visible = await nonButtonText(page);
-      const aria = await ariaAttributeText(page);
+      const surfaces = [
+        { name: "visible DOM", text: await nonButtonText(page) },
+        { name: "aria/title/alt", text: await ariaAttributeText(page) },
+      ];
 
-      for (const word of FORBIDDEN_ANYWHERE) {
-        expect(
-          visible,
-          `forbidden word "${word}" found in visible DOM on ${route}`,
-        ).not.toContain(word);
-        expect(
-          aria,
-          `forbidden word "${word}" found in aria/title/alt on ${route}`,
-        ).not.toContain(word);
+      for (const { name, text } of surfaces) {
+        for (const word of [...FORBIDDEN_ANYWHERE, FORBIDDEN_OUTSIDE_BUTTON]) {
+          expect(
+            text,
+            `forbidden word "${word}" found in ${name} on ${route}`,
+          ).not.toContain(word);
+        }
       }
-      expect(
-        visible,
-        `"${FORBIDDEN_OUTSIDE_BUTTON}" leaked outside button on ${route}`,
-      ).not.toContain(FORBIDDEN_OUTSIDE_BUTTON);
-      expect(
-        aria,
-        `"${FORBIDDEN_OUTSIDE_BUTTON}" leaked into aria/title/alt on ${route}`,
-      ).not.toContain(FORBIDDEN_OUTSIDE_BUTTON);
     });
   }
 });

@@ -230,8 +230,8 @@ pub async fn run_project_job(
                     dst = %dst.display(),
                     "job: cancelled mid-transcode; ffmpeg child killed via Drop",
                 );
-                if dst.exists() {
-                    if let Err(e) = std::fs::remove_file(&dst) {
+                if let Err(e) = std::fs::remove_file(&dst) {
+                    if e.kind() != std::io::ErrorKind::NotFound {
                         tracing::warn!(error = %e, dst = %dst.display(), "job: failed to unlink partial transcode output");
                     }
                 }
@@ -359,12 +359,10 @@ fn persist_project(store: &dyn ProjectStore, project: &Project) -> Result<(), Ap
 /// orchestrator re-enter mid-pipeline (after a resume) without tripping
 /// `advance`'s backward-transition guard.
 fn advance_if_behind(project: &mut Project, to: ProjectStage) -> Result<(), AppError> {
-    if project.stage() >= to {
-        return Ok(());
+    if project.stage() < to {
+        project.advance(to)?;
     }
-    project
-        .advance(to)
-        .map_err(|e| AppError::Other(e.to_string()))
+    Ok(())
 }
 
 /// Idempotently append a placeholder receipt for every plan step that doesn't

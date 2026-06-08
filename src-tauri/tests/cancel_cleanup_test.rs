@@ -59,22 +59,6 @@ fn process_matches(name_lc: &str) -> bool {
     name_lc.contains("ffmpeg") || name_lc.contains("slow_transcode") || name_lc.contains("sleep")
 }
 
-fn count_orphan_ffmpegs(parent_pid: u32) -> usize {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
-    let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::new());
-    sys.processes()
-        .values()
-        .filter(|p| {
-            let name = p.name().to_string_lossy().to_lowercase();
-            process_matches(&name)
-                && p.parent()
-                    .map(|pp| pp.as_u32() == parent_pid)
-                    .unwrap_or(false)
-        })
-        .count()
-}
-
 fn list_orphan_names(parent_pid: u32) -> Vec<(u32, String)> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
     let mut sys = System::new();
@@ -83,17 +67,17 @@ fn list_orphan_names(parent_pid: u32) -> Vec<(u32, String)> {
         .values()
         .filter_map(|p| {
             let name = p.name().to_string_lossy().to_lowercase();
-            if process_matches(&name)
-                && p.parent()
-                    .map(|pp| pp.as_u32() == parent_pid)
-                    .unwrap_or(false)
-            {
-                Some((p.pid().as_u32(), name))
-            } else {
-                None
-            }
+            let is_child = p
+                .parent()
+                .map(|pp| pp.as_u32() == parent_pid)
+                .unwrap_or(false);
+            (process_matches(&name) && is_child).then(|| (p.pid().as_u32(), name))
         })
         .collect()
+}
+
+fn count_orphan_ffmpegs(parent_pid: u32) -> usize {
+    list_orphan_names(parent_pid).len()
 }
 
 #[tokio::test]
