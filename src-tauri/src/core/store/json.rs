@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use super::{safe_path_segment, ProjectStore, StoreError};
 use crate::core::identity::ProjectId;
-use crate::core::project::{Project, ProjectSummary};
+use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub struct JsonProjectStore {
     root: PathBuf,
@@ -178,13 +178,17 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
     Ok(())
 }
 
+fn serialise_project(p: &Project, path: &Path) -> Result<Vec<u8>, StoreError> {
+    serde_json::to_vec_pretty(p).map_err(|e| StoreError::Corrupt {
+        path: path.to_path_buf(),
+        message: e.to_string(),
+    })
+}
+
 impl ProjectStore for JsonProjectStore {
     fn put(&self, p: &Project) -> Result<(), StoreError> {
         let path = self.project_path(&p.id);
-        let bytes = serde_json::to_vec_pretty(p).map_err(|e| StoreError::Corrupt {
-            path: path.clone(),
-            message: e.to_string(),
-        })?;
+        let bytes = serialise_project(p, &path)?;
         write_atomic(&path, &bytes)
     }
 
@@ -230,5 +234,24 @@ impl ProjectStore for JsonProjectStore {
 
         out.sort_by(|a, b| a.title.cmp(&b.title));
         Ok(out)
+    }
+
+    fn patch_chapter(
+        &self,
+        id: &ProjectId,
+        index: usize,
+        receipt: ChapterReceipt,
+    ) -> Result<(), StoreError> {
+        let mut project = self
+            .get(id)?
+            .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+        let len = project.receipts.len();
+        if index >= len {
+            return Err(StoreError::OutOfBounds { index, len });
+        }
+        project.receipts[index] = receipt;
+        let path = self.project_path(&project.id);
+        let bytes = serialise_project(&project, &path)?;
+        write_atomic(&path, &bytes)
     }
 }

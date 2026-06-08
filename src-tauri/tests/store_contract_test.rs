@@ -7,7 +7,7 @@ use lingq_upload_lib::core::project::{
     ChapterReceipt, Project, ProjectSettings, ProjectSources, SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{
-    safe_path_segment, InMemoryProjectStore, JsonProjectStore, ListHealth, ProjectStore,
+    safe_path_segment, InMemoryProjectStore, JsonProjectStore, ListHealth, ProjectStore, StoreError,
 };
 use lingq_upload_lib::ingest::TextSource;
 use tempfile::TempDir;
@@ -45,6 +45,20 @@ fn sample(title: &str, language: &str) -> Project {
     }
 }
 
+fn sample_with_receipts(title: &str, language: &str, n: usize) -> Project {
+    let mut p = sample(title, language);
+    p.receipts = (0..n)
+        .map(|i| ChapterReceipt {
+            chapter_index: i,
+            track_index: Some(i),
+            lesson_id: Some(1000 + i as i64),
+            degraded: false,
+            uploaded_at: Some(Utc::now()),
+        })
+        .collect();
+    p
+}
+
 fn run_contract(store: &dyn ProjectStore) {
     let p = sample("Foo Book", "ja");
 
@@ -64,6 +78,73 @@ fn run_contract(store: &dyn ProjectStore) {
 
     let unknown = ProjectId::from_title_author("nope", "nobody");
     assert!(store.get(&unknown).unwrap().is_none());
+
+    patch_chapter_updates_indexed_receipt_only(store);
+    patch_chapter_out_of_bounds_returns_error(store);
+    patch_chapter_not_found_returns_error(store);
+}
+
+fn patch_chapter_updates_indexed_receipt_only(store: &dyn ProjectStore) {
+    let p = sample_with_receipts("Patch Target", "ja", 3);
+    store.put(&p).unwrap();
+
+    let new_receipt = ChapterReceipt {
+        chapter_index: 1,
+        track_index: Some(99),
+        lesson_id: Some(7777),
+        degraded: true,
+        uploaded_at: Some(Utc::now()),
+    };
+    store.patch_chapter(&p.id, 1, new_receipt.clone()).unwrap();
+
+    let after = store.get(&p.id).unwrap().unwrap();
+    assert_eq!(after.receipts.len(), 3);
+    assert_eq!(after.receipts[0], p.receipts[0], "index 0 untouched");
+    assert_eq!(after.receipts[1], new_receipt, "index 1 replaced");
+    assert_eq!(after.receipts[2], p.receipts[2], "index 2 untouched");
+
+    let mut expected = p.clone();
+    expected.receipts[1] = new_receipt;
+    assert_eq!(after, expected, "all other Project fields preserved");
+}
+
+fn patch_chapter_out_of_bounds_returns_error(store: &dyn ProjectStore) {
+    let p = sample_with_receipts("Bounds Target", "ja", 1);
+    store.put(&p).unwrap();
+    let before = store.get(&p.id).unwrap().unwrap();
+
+    let r = ChapterReceipt {
+        chapter_index: 5,
+        track_index: None,
+        lesson_id: None,
+        degraded: false,
+        uploaded_at: None,
+    };
+    match store.patch_chapter(&p.id, 5, r) {
+        Err(StoreError::OutOfBounds { index, len }) => {
+            assert_eq!(index, 5);
+            assert_eq!(len, 1);
+        }
+        other => panic!("expected OutOfBounds, got {other:?}"),
+    }
+
+    let after = store.get(&p.id).unwrap().unwrap();
+    assert_eq!(after, before, "no partial write on OOB");
+}
+
+fn patch_chapter_not_found_returns_error(store: &dyn ProjectStore) {
+    let missing = ProjectId::from_title_author("never-put", "ghost");
+    let r = ChapterReceipt {
+        chapter_index: 0,
+        track_index: None,
+        lesson_id: None,
+        degraded: false,
+        uploaded_at: None,
+    };
+    match store.patch_chapter(&missing, 0, r) {
+        Err(StoreError::NotFound { .. }) => (),
+        other => panic!("expected NotFound, got {other:?}"),
+    }
 }
 
 #[test]
@@ -294,6 +375,38 @@ fn list_dedupe_winner_is_most_recently_modified() {
     let list = store.list().unwrap();
     assert_eq!(list.len(), 1, "duplicate id collapses");
     assert_eq!(list[0].title, "NEW", "most-recently-modified wins");
+}
+
+#[test]
+fn json_store_patch_chapter_atomic() {
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let p = sample_with_receipts("Atomic Patch", "ja", 2);
+    store.put(&p).unwrap();
+
+    let new_receipt = ChapterReceipt {
+        chapter_index: 0,
+        track_index: Some(0),
+        lesson_id: Some(424242),
+        degraded: false,
+        uploaded_at: Some(Utc::now()),
+    };
+    store.patch_chapter(&p.id, 0, new_receipt).unwrap();
+
+    let dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&p.id.join_key()));
+    let entries: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert!(
+        !entries
+            .iter()
+            .any(|n| n.to_string_lossy().ends_with(".tmp")),
+        "no .tmp files: {entries:?}"
+    );
 }
 
 #[test]
