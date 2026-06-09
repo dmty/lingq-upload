@@ -196,6 +196,7 @@ fn build_project(
         last_transition_at: None,
     skipped_chapters: vec![],
     absorb_policy: AbsorbPolicy::default(),
+    mapping: None,
     };
     (id, project)
 }

@@ -48,6 +48,7 @@ fn sample(title: &str, language: &str) -> Project {
         last_transition_at: None,
     skipped_chapters: vec![],
     absorb_policy: AbsorbPolicy::default(),
+    mapping: None,
     }
 }
 

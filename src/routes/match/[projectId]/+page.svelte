@@ -4,6 +4,7 @@
   import {
     commands,
     type BucketPreview,
+    type MappingOp,
     type MismatchCondition,
     type MismatchResponse,
   } from "$lib/ipc/bindings";
@@ -11,6 +12,7 @@
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
   import ChapterPicker from "$lib/components/ChapterPicker.svelte";
+  import MappingGrid from "$lib/components/MappingGrid.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
@@ -139,6 +141,44 @@
     return deviation > 0.3;
   }
 
+  // Track rows for MappingGrid. Derived from the mapping state's pair
+  // assignments plus the parking lot. Real audio metadata (filename,
+  // duration) is not threaded through K2 yet — fixtures use the bare track
+  // id; the field is here so a follow-up can populate without churn.
+  const trackRows = $derived.by(() => {
+    const ms = mapping.mappingState;
+    if (!ms) return [];
+    const ids = new Set<string>();
+    for (const p of ms.pairs) if (p.track_id) ids.add(p.track_id);
+    for (const t of ms.parking_lot ?? []) ids.add(t);
+    return Array.from(ids).map((id) => ({
+      id,
+      filename: id,
+      durationSec: null as number | null,
+    }));
+  });
+
+  const mappingGateOk = $derived.by(() => {
+    void mapping.revertEpoch;
+    const ms = mapping.mappingState;
+    if (!ms) return true;
+    return ms.pairs.every(
+      (p) => (p.touched ?? false) || p.confidence >= 0.6,
+    );
+  });
+
+  function handleMappingOp(op: MappingOp) {
+    void mapping.submitOp(op);
+  }
+
+  function handleConfirmPair(chapterId: string) {
+    void mapping.confirmPair(chapterId);
+  }
+
+  function handleMappingContinue() {
+    void mapping.flush().then(() => goto(`/run/${projectKey}`));
+  }
+
   async function confirm() {
     busy = true;
     error = null;
@@ -188,7 +228,22 @@
     {/if}
   </div>
 
-<section class="mx-auto max-w-2xl flex-1 space-y-6 pt-6">
+<section class="mx-auto max-w-3xl flex-1 space-y-6 pt-6">
+  {#if mapping.mappingState}
+    <header>
+      <h1 class="text-lg font-semibold text-fg">Confirm chapter ↔ track pairing</h1>
+    </header>
+    <MappingGrid
+      chapters={mapping.chapters}
+      tracks={trackRows}
+      mappingState={mapping.mappingState}
+      lastSavedAt={mapping.lastSavedAt}
+      canContinue={mappingGateOk}
+      onOp={handleMappingOp}
+      onConfirmPair={handleConfirmPair}
+      onContinue={handleMappingContinue}
+    />
+  {:else}
   <header>
     <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
   </header>
@@ -267,5 +322,6 @@
       Confirm
     </button>
   </div>
+  {/if}
 </section>
 </div>

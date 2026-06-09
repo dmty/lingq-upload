@@ -1,7 +1,12 @@
 pub mod mismatch;
+pub mod ops;
 pub mod pack;
 
 pub use mismatch::{allowed, classify, MismatchCondition, MismatchResponse};
+pub use ops::{
+    apply as apply_mapping_op, gate_continue, MappingError, MappingOp, MappingPair, MappingState,
+    TrackId,
+};
 pub use pack::{build_preview, proportional_pack, Bucket, BucketPreview};
 
 use serde::{Deserialize, Serialize};
