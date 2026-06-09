@@ -148,7 +148,7 @@ pub async fn run_project_job(
             return Err(e);
         }
     };
-    let chapters = match resolve_chapters(&project.sources.text, epub_bytes.as_deref()) {
+    let chapters = match resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy) {
         Ok(c) => c,
         Err(e) => {
             sink.result(false, serde_json::json!({"error": e.to_string()}));
@@ -514,7 +514,7 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
         return Ok(None);
     }
     let tracks = resolve_audio_tracks(project).await?;
-    let chapters = resolve_chapters(&project.sources.text, None)?;
+    let chapters = resolve_chapters(&project.sources.text, None, None)?;
     match build_plan(project, &chapters, &tracks) {
         PlanOrPause::NeedsMatch {
             condition,
@@ -759,12 +759,17 @@ fn plan_from_decision(
 fn resolve_chapters(
     text: &TextSource,
     cached_epub: Option<&[u8]>,
+    vendor: Option<EpubVendor>,
 ) -> Result<Vec<Chapter>, AppError> {
+    let strategy = match vendor {
+        Some(EpubVendor::Kobo) => HeadingStrategy::Kobo,
+        _ => HeadingStrategy::Kindle,
+    };
     match text {
         TextSource::Epub(p) => match cached_epub {
-            Some(bytes) => crate::core::epub::parse_epub_bytes(bytes, HeadingStrategy::Kindle)
+            Some(bytes) => crate::core::epub::parse_epub_bytes(bytes, strategy)
                 .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
-            None => parse_epub(p, HeadingStrategy::Kindle)
+            None => parse_epub(p, strategy)
                 .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
         },
         TextSource::LooseFiles { paths } => {
