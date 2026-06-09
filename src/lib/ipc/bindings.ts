@@ -335,10 +335,10 @@ export type ChapterEntry = { title: string; start_sec: number; end_sec: number |
 /**
  * Stable identity for a parsed chapter.
  * 
- * Currently a placeholder of the form `idx:{order}`. A future heading
- * strategy will replace the inner form with a deterministic hash derived
- * from `(strategy_name, spine_index, title_normalized)`; the public API
- * keeps the same `ChapterId(String)` shape so callers do not change.
+ * EPUB parsers build the id via [`ChapterId::from_chapter_parts`] so the same
+ * EPUB bytes produce the same id set across runs. Non-EPUB ingest paths
+ * (loose files, manifests) fall back to [`ChapterId::from_order`] — those
+ * chapter sets are anchored by file system layout, not a heading strategy.
  */
 export type ChapterId = string
 /**

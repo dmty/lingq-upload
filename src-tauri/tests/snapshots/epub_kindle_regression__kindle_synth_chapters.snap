@@ -4,19 +4,19 @@ expression: pinned
 ---
 [
   {
-    "id": "kindle:0:24b10d1c6c5c605b",
+    "id": "kindle:d3005f1cdf2dcefc",
     "kind": "body",
     "order": 0,
     "title": "Chapter One"
   },
   {
-    "id": "kindle:1:f3b1b4075843f978",
+    "id": "kindle:b410e57279a44750",
     "kind": "body",
     "order": 1,
     "title": "Chapter Two"
   },
   {
-    "id": "kindle:2:83fd4bb587a0d5ec",
+    "id": "kindle:944dd08c133bef0f",
     "kind": "body",
     "order": 2,
     "title": "Chapter Three"

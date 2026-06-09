@@ -8,7 +8,7 @@
 use std::io::{Cursor, Write};
 
 use insta::assert_json_snapshot;
-use lingq_upload_lib::core::epub::{parse_epub_bytes, ChapterId, HeadingStrategy};
+use lingq_upload_lib::core::epub::{parse_epub_with_strategy, ChapterId, HeadingStrategy};
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
@@ -69,7 +69,7 @@ fn build_kindle_epub() -> Vec<u8> {
 #[test]
 fn kindle_chapters_pin_snapshot() {
     let bytes = build_kindle_epub();
-    let chapters = parse_epub_bytes(&bytes, HeadingStrategy::Kindle).expect("parse kindle");
+    let chapters = parse_epub_with_strategy(&bytes, HeadingStrategy::Kindle).expect("parse kindle");
     let pinned: Vec<_> = chapters
         .iter()
         .map(|c| {
@@ -87,8 +87,8 @@ fn kindle_chapters_pin_snapshot() {
 #[test]
 fn kindle_chapter_ids_are_deterministic() {
     let bytes = build_kindle_epub();
-    let a = parse_epub_bytes(&bytes, HeadingStrategy::Kindle).expect("a");
-    let b = parse_epub_bytes(&bytes, HeadingStrategy::Kindle).expect("b");
+    let a = parse_epub_with_strategy(&bytes, HeadingStrategy::Kindle).expect("a");
+    let b = parse_epub_with_strategy(&bytes, HeadingStrategy::Kindle).expect("b");
     let ids_a: Vec<ChapterId> = a.iter().map(|c| c.id.clone()).collect();
     let ids_b: Vec<ChapterId> = b.iter().map(|c| c.id.clone()).collect();
     assert_eq!(ids_a, ids_b);

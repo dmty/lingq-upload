@@ -158,6 +158,20 @@ pub async fn run_project_job(
     let skipped_set: HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
 
+    let known_ids: HashSet<&ChapterId> = chapters.iter().map(|c| &c.id).collect();
+    let orphan_skips: Vec<&ChapterId> = skipped_set
+        .iter()
+        .filter(|id| !known_ids.contains(*id))
+        .collect();
+    if !orphan_skips.is_empty() {
+        tracing::warn!(
+            project = %project.id.join_key(),
+            orphan_count = orphan_skips.len(),
+            sample = ?orphan_skips.iter().take(3).map(|id| id.0.as_str()).collect::<Vec<_>>(),
+            "job: persisted skip entries do not match any parsed chapter id; treating as un-skipped",
+        );
+    }
+
     tracing::info!(
         project = %project.id.join_key(),
         chapters = chapters.len(),
@@ -767,10 +781,14 @@ fn resolve_chapters(
     };
     match text {
         TextSource::Epub(p) => match cached_epub {
-            Some(bytes) => crate::core::epub::parse_epub_bytes(bytes, strategy)
+            Some(bytes) => crate::core::epub::parse_epub_with_strategy(bytes, strategy)
                 .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
-            None => parse_epub(p, strategy)
-                .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
+            None => {
+                let bytes = std::fs::read(p)
+                    .map_err(|e| AppError::Other(format!("epub read: {e}")))?;
+                crate::core::epub::parse_epub_with_strategy(&bytes, strategy)
+                    .map_err(|e| AppError::Other(format!("epub parse: {e}")))
+            }
         },
         TextSource::LooseFiles { paths } => {
             let mut sorted: Vec<PathBuf> = paths.clone();

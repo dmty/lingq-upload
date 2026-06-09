@@ -28,7 +28,10 @@ impl KoboStrategy {
     }
 }
 
-const FRONT_MATTER_PREFIXES: &[&str] = &[
+// Exact normalised-title match (not a prefix). A chapter literally titled
+// "Cover Notes" therefore stays Body — false positives are worse than a
+// missed pre-select, since the user can always re-mark it from the UI.
+const FRONT_MATTER_TITLES: &[&str] = &[
     "cover",
     "title",
     "title page",
@@ -43,8 +46,9 @@ const FRONT_MATTER_PREFIXES: &[&str] = &[
     "table of contents",
 ];
 
-const BACK_MATTER_PREFIXES: &[&str] = &[
-    "acknowledg",
+const BACK_MATTER_TITLES: &[&str] = &[
+    "acknowledgments",
+    "acknowledgements",
     "about the author",
     "about the publisher",
     "afterword",
@@ -81,7 +85,10 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
         None => HashMap::new(),
     };
 
-    let mut chapters: Vec<Chapter> = Vec::with_capacity(opf.spine.len());
+    // (spine_href, title, body) tuples for surviving chapters. spine_href is
+    // the original manifest href and acts as the stable hash anchor — that
+    // way dropping an empty chapter does not shift later ids.
+    let mut parsed: Vec<(String, String, String)> = Vec::with_capacity(opf.spine.len());
     for (i, href) in opf.spine.iter().enumerate() {
         let full = match join_zip_path(&opf.base_dir, href) {
             Ok(p) => p,
@@ -100,28 +107,30 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
             .cloned()
             .or_else(|| extract_html_title(&raw))
             .unwrap_or_else(|| format!("Chapter {}", i + 1));
+        parsed.push((href.clone(), title, body));
+    }
+
+    let mut chapters: Vec<Chapter> = Vec::with_capacity(parsed.len());
+    for (i, (spine_href, title, body)) in parsed.into_iter().enumerate() {
+        let kind = classify_kind(&title);
+        let id = ChapterId::from_chapter_parts(KoboStrategy::NAME, &spine_href, &title);
         chapters.push(Chapter {
             order: i,
             title,
             body,
-            ..Default::default()
+            id,
+            kind,
         });
-    }
-
-    for (i, c) in chapters.iter_mut().enumerate() {
-        c.order = i;
-        c.kind = classify_kind(&c.title);
-        c.id = ChapterId::from_chapter_parts(KoboStrategy::NAME, i, &c.title);
     }
     Ok(chapters)
 }
 
 fn classify_kind(title: &str) -> ChapterKind {
     let norm = normalize_title(title);
-    if FRONT_MATTER_PREFIXES.iter().any(|p| norm.starts_with(p)) {
+    if FRONT_MATTER_TITLES.iter().any(|t| *t == norm) {
         return ChapterKind::FrontMatter;
     }
-    if BACK_MATTER_PREFIXES.iter().any(|p| norm.starts_with(p)) {
+    if BACK_MATTER_TITLES.iter().any(|t| *t == norm) {
         return ChapterKind::BackMatter;
     }
     ChapterKind::Body
@@ -203,7 +212,16 @@ fn parse_opf(opf_xml: &str, opf_path: &str) -> Result<OpfData, EpubError> {
 /// Walk `<nav epub:type="toc">` and pull every `<a href>` / inner text pair.
 /// Hrefs are joined against `nav_base` so the returned keys match the spine
 /// resolution.
+///
+/// If the document declares no `epub:type="toc"` on any `<nav>` but contains
+/// exactly one `<nav>` overall, that nav is accepted as the toc. Producers
+/// (some Sigil exports) omit the epub:type attribute when there is only one
+/// nav and the relationship is unambiguous.
+///
+/// Sub-entries from a nested `<ol>` are flattened into the same flat map; the
+/// hash is href-keyed so nested duplicates collapse onto the same chapter.
 fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
+    let nav_count = count_nav_elements(xml);
     let mut out: HashMap<String, String> = HashMap::new();
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
@@ -226,7 +244,10 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                                 .map(|v| v.split_whitespace().any(|t| t == "toc"))
                                 .unwrap_or(false)
                     });
-                    if is_toc {
+                    // Sole-nav relaxation: if the doc has exactly one <nav>
+                    // and that one lacks epub:type, treat it as the toc.
+                    let accept = is_toc || (!in_toc_nav && nav_count == 1);
+                    if accept && !in_toc_nav {
                         in_toc_nav = true;
                         nav_depth = 1;
                     } else if in_toc_nav {
@@ -242,11 +263,6 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                     }
                     text_buf.clear();
                     in_a = true;
-                }
-            }
-            Ok(Event::Empty(e)) => {
-                if in_toc_nav && e.name().as_ref() == b"a" {
-                    // self-closing anchor with no inner text — rare; skip.
                 }
             }
             Ok(Event::Text(t)) => {
@@ -265,7 +281,7 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                             let path = path_part(&href);
                             let resolved = join_zip_path(nav_base, &path).unwrap_or_default();
                             if !resolved.is_empty() {
-                                out.insert(resolved, title);
+                                out.entry(resolved).or_insert(title);
                             }
                         }
                     }
@@ -275,6 +291,7 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                     nav_depth -= 1;
                     if nav_depth <= 0 {
                         in_toc_nav = false;
+                        nav_depth = 0;
                     }
                 }
             }
@@ -285,6 +302,26 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
         buf.clear();
     }
     out
+}
+
+fn count_nav_elements(xml: &str) -> usize {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut count = 0usize;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                if e.name().as_ref() == b"nav" {
+                    count += 1;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    count
 }
 
 fn path_part(href: &str) -> String {
@@ -299,7 +336,10 @@ fn extract_html_title(xml: &str) -> Option<String> {
     let close_rel = find_case_insensitive(&xml[inner_start..], "</title")?;
     let inner = &xml[inner_start..inner_start + close_rel];
     let t = inner.trim();
-    if t.is_empty() {
+    // Reject the generic stub titles boilerplate templates leave behind
+    // ("page", "untitled"). Callers fall back to nav lookup or spine href.
+    let lc = t.to_ascii_lowercase();
+    if t.is_empty() || lc == "page" || lc == "untitled" {
         None
     } else {
         Some(t.to_string())
@@ -574,5 +614,94 @@ mod tests {
             m.get("OEBPS/ch2.xhtml").map(String::as_str),
             Some("Chapter One")
         );
+    }
+
+    #[test]
+    fn parse_nav_titles_ignores_page_list_sibling_nav() {
+        // Two <nav> siblings: only entries from `epub:type="toc"` survive.
+        let nav = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body>
+  <nav epub:type="toc">
+    <ol>
+      <li><a href="ch1.xhtml">Real Chapter</a></li>
+    </ol>
+  </nav>
+  <nav epub:type="page-list">
+    <ol>
+      <li><a href="ch1.xhtml#p1">1</a></li>
+      <li><a href="ch1.xhtml#p2">2</a></li>
+    </ol>
+  </nav>
+</body></html>"#;
+        let m = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m.get("OEBPS/ch1.xhtml").map(String::as_str), Some("Real Chapter"));
+    }
+
+    #[test]
+    fn parse_nav_titles_nested_ol_flattens_top_level_only_first_wins() {
+        // Nested <ol> sub-entries are flattened; the outer (top-level)
+        // anchor lands first so the href→title map keeps the section title.
+        let nav = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body>
+  <nav epub:type="toc">
+    <ol>
+      <li>
+        <a href="part1.xhtml">Part One</a>
+        <ol>
+          <li><a href="part1.xhtml#s1">Section 1</a></li>
+          <li><a href="part1.xhtml#s2">Section 2</a></li>
+        </ol>
+      </li>
+      <li><a href="part2.xhtml">Part Two</a></li>
+    </ol>
+  </nav>
+</body></html>"#;
+        let m = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(
+            m.get("OEBPS/part1.xhtml").map(String::as_str),
+            Some("Part One"),
+            "outer anchor wins; subentries collapse onto same href",
+        );
+        assert_eq!(
+            m.get("OEBPS/part2.xhtml").map(String::as_str),
+            Some("Part Two"),
+        );
+    }
+
+    #[test]
+    fn parse_nav_titles_sole_nav_without_epub_type_accepted() {
+        // Producers sometimes drop epub:type when there's only one nav.
+        let nav = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+  <nav>
+    <ol>
+      <li><a href="ch1.xhtml">Only Chapter</a></li>
+    </ol>
+  </nav>
+</body></html>"#;
+        let m = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(
+            m.get("OEBPS/ch1.xhtml").map(String::as_str),
+            Some("Only Chapter"),
+        );
+    }
+
+    #[test]
+    fn classify_kind_cover_notes_stays_body() {
+        // Entire-title match: a chapter literally called "Cover Notes" is
+        // not front matter.
+        assert_eq!(classify_kind("Cover Notes"), ChapterKind::Body);
+        assert_eq!(classify_kind("Cover Operations"), ChapterKind::Body);
+    }
+
+    #[test]
+    fn extract_html_title_stub_page_returns_none() {
+        assert!(extract_html_title("<html><head><title>page</title></head></html>").is_none());
+        assert!(extract_html_title("<html><head><title>Untitled</title></head></html>").is_none());
+        assert!(extract_html_title("<html><head><title>  </title></head></html>").is_none());
     }
 }

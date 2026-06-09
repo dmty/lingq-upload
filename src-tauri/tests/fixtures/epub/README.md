@@ -7,7 +7,7 @@ skip cleanly when the files are absent so CI stays green.
 ## What lives here
 
 - `kafka_shimo.epub` — 下巻 of 海辺のカフカ. Snapshot fixture for
-  `parse_epub(HeadingStrategy::Kindle)`. Produced by
+  `parse_epub_with_strategy(_, HeadingStrategy::Kindle)`. Produced by
   `scripts/fixtures/extract_shimo.sh` from the combined 上下合本 EPUB.
 - `dialects/` — additional Kindle / Kobo / generic EPUBs that exercise
   alternative heading strategies. Populated by `scripts/fixtures/seed-epub.sh`.
