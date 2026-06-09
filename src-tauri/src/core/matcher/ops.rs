@@ -49,6 +49,11 @@ pub struct MappingPair {
     pub confidence: f32,
     #[serde(default)]
     pub touched: bool,
+    /// Confidence at pair construction. The score gate blocks Continue when
+    /// the original score is red AND the pair is still untouched, even if
+    /// `confidence` was bumped to the recomputed placeholder by an op.
+    #[serde(default)]
+    pub original_confidence: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Default)]
@@ -113,12 +118,13 @@ fn swap(
     } else if let Some(src) = source_idx {
         if src != target_idx {
             state.pairs[src].track_id = None;
-            state.pairs[src].confidence = RECOMPUTED_CONFIDENCE;
+            state.pairs[src].confidence = state.pairs[src].original_confidence;
+            state.pairs[src].touched = true;
         }
     }
 
     if let Some(prev) = displaced {
-        if Some(&prev) != Some(&track_id) && !state.parking_lot.contains(&prev) {
+        if prev != track_id && !state.parking_lot.contains(&prev) {
             state.parking_lot.push(prev);
         }
     }
@@ -173,10 +179,11 @@ fn pair_idx(state: &MappingState, chapter_id: &ChapterId) -> Result<usize, Mappi
         .ok_or_else(|| MappingError::UnknownChapter(chapter_id.to_string()))
 }
 
-/// True iff no pair is both red-confidence (< 0.6) AND untouched. Pure.
+/// True iff no paired pair is both red-`original_confidence` (< 0.6) AND
+/// untouched. Unpaired pairs (`track_id == None`) never block — there is no
+/// pairing to confirm. Pure.
 pub fn gate_continue(state: &MappingState) -> bool {
-    state
-        .pairs
-        .iter()
-        .all(|p| p.touched || p.confidence >= 0.6)
+    state.pairs.iter().all(|p| {
+        p.touched || p.track_id.is_none() || p.original_confidence >= 0.6
+    })
 }

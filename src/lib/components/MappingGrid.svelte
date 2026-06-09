@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import MappingConnector from "./MappingConnector.svelte";
   import ParkingLot from "./ParkingLot.svelte";
   import type {
@@ -51,19 +50,24 @@
   // Bump to force recompute of connector geometry on layout changes.
   let layoutTick = $state(0);
 
-  onMount(() => {
+  $effect(() => {
     if (!gridRef) return;
-    const ro = new ResizeObserver(() => {
+    const mo = new MutationObserver(() => {
       layoutTick++;
     });
-    ro.observe(gridRef);
-    const onScroll = () => layoutTick++;
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    mo.observe(gridRef, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
+    const onLayout = () => layoutTick++;
+    window.addEventListener("scroll", onLayout, true);
+    window.addEventListener("resize", onLayout);
     return () => {
-      ro.disconnect();
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      mo.disconnect();
+      window.removeEventListener("scroll", onLayout, true);
+      window.removeEventListener("resize", onLayout);
     };
   });
 

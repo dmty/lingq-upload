@@ -141,10 +141,9 @@
     return deviation > 0.3;
   }
 
-  // Track rows for MappingGrid. Derived from the mapping state's pair
-  // assignments plus the parking lot. Real audio metadata (filename,
-  // duration) is not threaded through K2 yet — fixtures use the bare track
-  // id; the field is here so a follow-up can populate without churn.
+  // Track rows for MappingGrid. Derived from pair assignments + parking lot.
+  // Filename and duration default to the bare id until the audio pipeline
+  // threads real metadata through.
   const trackRows = $derived.by(() => {
     const ms = mapping.mappingState;
     if (!ms) return [];

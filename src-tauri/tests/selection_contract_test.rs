@@ -166,6 +166,10 @@ fn baseline_project_json_loads_with_default_selection_and_ids() {
         project.skipped_chapters.is_empty(),
         "missing skipped_chapters must default to empty"
     );
+    assert!(
+        project.mapping.is_none(),
+        "missing mapping field must deserialise to None"
+    );
 
     // The fixture also includes a serialised chapter list in
     // `_chapters_for_migration_check` so we can assert the default id

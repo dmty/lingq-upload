@@ -212,14 +212,8 @@ async cmdMatcherInspect(projectId: ProjectId) : Promise<Result<MismatchInspectio
 /**
  * Apply a single mapping-editor op to a project and persist the new state.
  * 
- * `expected_op_id` is the op_id the client believes the server currently
- * holds — i.e. one less than the op_id the new state will carry. If the
- * server's persisted op_id differs we reject. This lets the UI replay an
- * in-flight op on page reload without double-applying it: the client tracks
- * the last-acknowledged op_id locally, and on reload re-sends with the same
- * `expected_op_id` it sent originally. A retry against an already-applied
- * op finds `current_op_id == expected_op_id`, so it is rejected cleanly
- * rather than mutating the state a second time.
+ * Accept only when `expected_op_id == state.op_id + 1`; reject otherwise so
+ * reloads that replay an already-applied op see a clean conflict signal.
  */
 async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: number) : Promise<Result<MappingState, AppError>> {
     try {
@@ -384,7 +378,13 @@ export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kin
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type MappingError = { kind: "UnknownChapter"; message: string } | { kind: "UnknownTrack"; message: string } | { kind: "Invalid"; message: string }
 export type MappingOp = { kind: "swap"; chapter_id: ChapterId; track_id: string } | { kind: "park"; track_id: string } | { kind: "unpark"; track_id: string; chapter_id: ChapterId }
-export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; confidence: number; touched?: boolean }
+export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; confidence: number; touched?: boolean; 
+/**
+ * Confidence at pair construction. The score gate blocks Continue when
+ * the original score is red AND the pair is still untouched, even if
+ * `confidence` was bumped to the recomputed placeholder by an op.
+ */
+original_confidence?: number }
 export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number }
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
 export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"

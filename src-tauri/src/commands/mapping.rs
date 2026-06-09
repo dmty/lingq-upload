@@ -13,14 +13,8 @@ impl From<MappingError> for AppError {
 
 /// Apply a single mapping-editor op to a project and persist the new state.
 ///
-/// `expected_op_id` is the op_id the client believes the server currently
-/// holds — i.e. one less than the op_id the new state will carry. If the
-/// server's persisted op_id differs we reject. This lets the UI replay an
-/// in-flight op on page reload without double-applying it: the client tracks
-/// the last-acknowledged op_id locally, and on reload re-sends with the same
-/// `expected_op_id` it sent originally. A retry against an already-applied
-/// op finds `current_op_id == expected_op_id`, so it is rejected cleanly
-/// rather than mutating the state a second time.
+/// Accept only when `expected_op_id == state.op_id + 1`; reject otherwise so
+/// reloads that replay an already-applied op see a clean conflict signal.
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_apply_mapping_op(
@@ -35,7 +29,7 @@ pub async fn cmd_apply_mapping_op(
         .ok_or_else(|| AppError::Other("project not found".into()))?;
 
     let current = project.mapping.clone().unwrap_or_default();
-    if current.op_id != expected_op_id {
+    if !check_op_id(current.op_id, expected_op_id) {
         return Err(AppError::Other(format!(
             "mapping op_id stale: server={} expected={}",
             current.op_id, expected_op_id
@@ -47,4 +41,31 @@ pub async fn cmd_apply_mapping_op(
         .put(&project)
         .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
     Ok(next)
+}
+
+#[inline]
+fn check_op_id(current: u64, expected: u64) -> bool {
+    expected == current + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_op_id;
+
+    #[test]
+    fn accepts_next_op_id() {
+        assert!(check_op_id(5, 6));
+        assert!(check_op_id(0, 1));
+    }
+
+    #[test]
+    fn rejects_stale_or_future_op_id() {
+        // Replay of an already-applied op (state advanced from 5 to 6, client
+        // retries with 5).
+        assert!(!check_op_id(5, 5));
+        // Same-id retry after the server has moved on.
+        assert!(!check_op_id(6, 5));
+        // Skipped op_id (gap).
+        assert!(!check_op_id(5, 7));
+    }
 }
