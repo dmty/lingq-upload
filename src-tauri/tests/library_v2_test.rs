@@ -1,6 +1,7 @@
 //! Library v2 contract: trash subsystem, status derivation precedence, and
 //! Project schema round-trips with the new fields.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::PathBuf;
 
 use chrono::Utc;
@@ -42,6 +43,7 @@ fn make_project(title: &str) -> Project {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

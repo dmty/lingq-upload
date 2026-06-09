@@ -1,3 +1,4 @@
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -46,6 +47,7 @@ fn sample(title: &str, language: &str) -> Project {
         stage: ProjectStage::New,
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

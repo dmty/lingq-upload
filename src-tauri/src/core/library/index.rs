@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::core::audio::AbsorbPolicy;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -237,6 +239,7 @@ mod tests {
             stage: Default::default(),
             last_transition_at: None,
         skipped_chapters: vec![],
+        absorb_policy: AbsorbPolicy::default(),
         }
     }
 

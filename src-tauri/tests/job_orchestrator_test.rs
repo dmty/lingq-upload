@@ -4,6 +4,7 @@
 //! without ffmpeg installed don't see red — same convention as
 //! `audio_golden.rs`.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
 use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
@@ -167,6 +168,7 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     };
     store.put(&project).unwrap();
 

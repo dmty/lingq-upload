@@ -3,6 +3,7 @@
 //! Covers the per-project skipped-chapter vector across both stores plus the
 //! orchestrator's "skipped chapters never reach LingQ" guarantee.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
 use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
@@ -62,6 +63,7 @@ fn sample(title: &str, n_receipts: usize) -> Project {
         stage: Default::default(),
         last_transition_at: None,
         skipped_chapters: vec![],
+        absorb_policy: AbsorbPolicy::default(),
     }
 }
 
@@ -285,6 +287,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         stage: Default::default(),
         last_transition_at: None,
         skipped_chapters: vec![],
+        absorb_policy: AbsorbPolicy::default(),
     };
     store.put(&project).unwrap();
 

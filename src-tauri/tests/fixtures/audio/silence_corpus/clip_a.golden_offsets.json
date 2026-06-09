@@ -1,0 +1,7 @@
+{
+  "silence_runs_ms": [[5056, 6016], [9024, 10048]],
+  "silence_midpoints_ms": [5536, 9536],
+  "forward_offsets_ms":  [6016, 10048],
+  "backward_offsets_ms": [5056, 9024],
+  "drop_offsets_ms":     [5056, 6016, 9024, 10048]
+}

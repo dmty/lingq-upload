@@ -5,6 +5,7 @@
 //! that no orphan child process survives and the destination file does not
 //! exist.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
 use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
@@ -267,6 +268,7 @@ async fn run_project_job_cancel_unlinks_partial_dst_and_holds_stage() {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     };
     store.put(&project).unwrap();
 

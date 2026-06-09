@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
+use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
 use crate::core::matcher::{MismatchCondition, MismatchResponse};
@@ -128,6 +129,10 @@ pub struct Project {
     /// chapters in the run loop.
     #[serde(default)]
     pub skipped_chapters: Vec<ChapterId>,
+    /// How chapter-divider silence is folded into neighbouring tracks at
+    /// carve time. Default `Forward` preserves legacy behaviour.
+    #[serde(default)]
+    pub absorb_policy: AbsorbPolicy,
 }
 
 impl Project {

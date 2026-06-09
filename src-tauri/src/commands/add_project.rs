@@ -1,3 +1,4 @@
+use crate::core::audio::AbsorbPolicy;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,7 @@ fn build_project(candidate: &Candidate, language: String, collection_title: Stri
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

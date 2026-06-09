@@ -1,5 +1,6 @@
 //! Direct unit tests for `ProjectStage` + `Project::advance` (AD-022).
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::PathBuf;
 
 use chrono::{TimeZone, Utc};
@@ -39,6 +40,7 @@ fn sample(title: &str, stage: ProjectStage) -> Project {
         stage,
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

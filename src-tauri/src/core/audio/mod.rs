@@ -8,10 +8,14 @@ use thiserror::Error;
 use tokio::process::Command;
 
 pub mod batch;
+pub mod carver;
 pub mod probe;
 pub mod track;
 
 pub use batch::{transcode_batch_sequential, TranscodeJob};
+pub use carver::{
+    boundaries_from_silences, carve, AbsorbPolicy, Boundary, CarveError, CarveOpts, SilenceRun,
+};
 pub use probe::{probe_chapters, ChapterAtom};
 pub use track::AudioTrack;
 
