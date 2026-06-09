@@ -190,7 +190,8 @@ for f in synth_chapters_generic.m4b synth_chapters_narrative.m4b synth_chapters_
             }])
         }'
     sz=$(stat -f '%z' "${DEST_DIR}/${f}" 2>/dev/null || stat -c '%s' "${DEST_DIR}/${f}" 2>/dev/null)
-    sha=$(shasum -a 256 "${DEST_DIR}/${f}" | awk '{print $1}')
+    # macOS ships `shasum`; Linux + Git Bash on Windows ship `sha256sum`.
+    sha=$( { sha256sum "${DEST_DIR}/${f}" 2>/dev/null || shasum -a 256 "${DEST_DIR}/${f}"; } | awk '{print $1}')
     printf "size=%s bytes\nsha256=%s\n" "$sz" "$sha"
 done
 
