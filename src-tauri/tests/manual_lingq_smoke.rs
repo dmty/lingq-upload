@@ -3,7 +3,7 @@
 //!
 //! Run: `cargo test --manifest-path src-tauri/Cargo.toml --test manual_lingq_smoke -- --ignored`
 
-use lingq_upload_lib::lingq::LingqClient;
+use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 use secrecy::SecretString;
 
 #[tokio::test]
@@ -11,8 +11,9 @@ use secrecy::SecretString;
 async fn live_whoami() {
     let key = std::env::var("LINGQ_API_KEY").expect("LINGQ_API_KEY required");
     let lang = std::env::var("LINGQ_LANG").unwrap_or_else(|_| "ja".into());
+    let code = LanguageCode::new(&lang).expect("valid lang code");
 
-    let client = LingqClient::new(SecretString::from(key), lang);
+    let client = LingqClient::new(SecretString::from(key), code);
     let res = client.whoami().await.expect("live whoami");
     assert!(res.ok);
 }

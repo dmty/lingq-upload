@@ -1,6 +1,10 @@
-use lingq_upload_lib::lingq::{CollectionId, LingqClient};
+use lingq_upload_lib::lingq::{CollectionId, LanguageCode, LingqClient};
 use mockito::Server;
 use secrecy::SecretString;
+
+fn ja() -> LanguageCode {
+    LanguageCode::new("ja").expect("valid lang")
+}
 
 #[tokio::test]
 async fn list_lessons_paginates_results() {
@@ -25,7 +29,7 @@ async fn list_lessons_paginates_results() {
         .with_body(r#"{"results":[{"pk":12,"title":"C"}],"next":null}"#)
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), ja(), server.url());
     let lessons = client.list_lessons(CollectionId(1)).await.unwrap();
     assert_eq!(lessons.len(), 3);
     assert_eq!(lessons[0].title, "A");
@@ -76,7 +80,7 @@ async fn list_lessons_paginates_bare_array_until_empty_page() {
         .with_body("[]")
         .create_async()
         .await;
-    let client = LingqClient::with_base_url(SecretString::new("k".into()), "ja", server.url());
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), ja(), server.url());
     let lessons = client.list_lessons(CollectionId(9)).await.unwrap();
     assert_eq!(lessons.len(), 150);
     assert_eq!(lessons[0].id, 0);

@@ -213,6 +213,21 @@ jobs:
         with:
           manifest-path: src-tauri/Cargo.toml
 
+  lang-segment-grep:
+    name: lang-segment-grep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: sudo apt-get install -y --no-install-recommends ripgrep
+      - name: Disallow hardcoded /ja/ URL segment in LingQ client
+        shell: bash
+        run: |
+          if rg "/ja/" src-tauri/src/lingq/; then
+            echo "::error::hardcoded /ja/ URL segment found in src-tauri/src/lingq/ — thread the language via LingqClient instead"
+            exit 1
+          fi
+
   unwrap-grep:
     name: unwrap-grep
     runs-on: ubuntu-latest

@@ -23,7 +23,7 @@ use lingq_upload_lib::core::project::{
 };
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
-use lingq_upload_lib::lingq::LingqClient;
+use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 
 fn which(bin: &str) -> Option<PathBuf> {
     SyncCommand::new("which")
@@ -220,7 +220,7 @@ async fn happy_path_three_chapters_three_tracks() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -293,7 +293,7 @@ async fn cancellation_after_first_chapter_stops_the_run() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let token = CancellationToken::new();
@@ -384,7 +384,7 @@ async fn resume_skips_chapters_already_uploaded() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -444,7 +444,7 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -522,7 +522,7 @@ async fn done_project_short_circuits_with_skipped_payload() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -572,7 +572,7 @@ async fn done_project_does_not_spawn_ffmpeg_even_when_audio_missing() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -616,7 +616,7 @@ async fn new_project_advances_through_lifecycle_stages_in_order() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();

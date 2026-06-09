@@ -30,7 +30,7 @@ use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, Mismatch
 use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
-use lingq_upload_lib::lingq::LingqClient;
+use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 use mockito::Server;
 
 fn which(bin: &str) -> Option<PathBuf> {
@@ -219,7 +219,7 @@ async fn chaptered_m4b_routes_to_many_to_few_with_preview() {
     let server = Server::new_async().await;
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -347,7 +347,7 @@ async fn libation_folder_does_not_invoke_atom_probe() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -424,7 +424,7 @@ async fn atomless_single_m4b_falls_back_to_whole_file() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         server.url(),
     ));
     let mut sink = RecordingSink::default();

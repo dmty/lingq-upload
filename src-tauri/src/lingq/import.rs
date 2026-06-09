@@ -32,7 +32,6 @@ pub struct ImportLessonRequest<'a> {
     pub title: &'a str,
     pub text: &'a str,
     pub audio: Option<&'a Path>,
-    pub language: &'a str,
     pub level: u8,
     pub status: LessonStatus,
     pub tags: &'a [&'a str],
@@ -42,14 +41,15 @@ pub struct ImportLessonRequest<'a> {
 const MAX_ATTEMPTS: u32 = 3;
 
 impl LingqClient {
-    /// Import a single lesson with full multipart fields. Per-call language
-    /// override (AD-017). Retries on 5xx with capped, jittered exponential
-    /// backoff (max 3 attempts); 4xx fails fast.
+    /// Import a single lesson with full multipart fields. Language comes from
+    /// the client (AD-017) — both URL segment and multipart `language` field
+    /// derive from `self.lang()`. Retries on 5xx with capped, jittered
+    /// exponential backoff (max 3 attempts); 4xx fails fast.
     pub async fn import_lesson_v2(&self, req: ImportLessonRequest<'_>) -> Result<i64, LingqError> {
         let url = format!(
             "{}/api/v3/{}/lessons/import/",
             self.base_url(),
-            req.language
+            self.lang()
         );
         // Read audio once; multipart Part::bytes accepts owned Vec, so we clone
         // per attempt instead of re-reading from disk.
@@ -73,7 +73,7 @@ impl LingqClient {
             if attempt > 0 {
                 tokio::time::sleep(backoff(attempt)).await;
             }
-            let form = build_form(&req, audio_bytes.as_deref(), audio_name.as_deref())?;
+            let form = build_form(&req, self.lang(), audio_bytes.as_deref(), audio_name.as_deref())?;
             let resp = self
                 .http()
                 .post(&url)
@@ -121,6 +121,7 @@ fn backoff(attempt: u32) -> Duration {
 
 fn build_form(
     req: &ImportLessonRequest<'_>,
+    lang: &str,
     audio_bytes: Option<&[u8]>,
     audio_name: Option<&str>,
 ) -> Result<Form, LingqError> {
@@ -128,7 +129,7 @@ fn build_form(
         .text("title", req.title.to_string())
         .text("text", req.text.to_string())
         .text("collection", req.collection.0.to_string())
-        .text("language", req.language.to_string())
+        .text("language", lang.to_string())
         .text("level", req.level.to_string())
         .text("status", req.status.as_form_str().to_string())
         .text("save", if req.save { "true" } else { "false" }.to_string());

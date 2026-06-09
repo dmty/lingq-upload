@@ -197,7 +197,7 @@ async fn run_project_job_cancel_unlinks_partial_dst_and_holds_stage() {
     };
     use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
     use lingq_upload_lib::ingest::{AudioSource, TextSource};
-    use lingq_upload_lib::lingq::LingqClient;
+    use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
     use mockito::{Matcher, Server};
     use secrecy::SecretString;
     use tokio_util::sync::CancellationToken;
@@ -271,7 +271,7 @@ async fn run_project_job_cancel_unlinks_partial_dst_and_holds_stage() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         server.url(),
     ));
     let mut sink = CancelSink::default();

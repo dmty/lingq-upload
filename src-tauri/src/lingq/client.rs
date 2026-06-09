@@ -8,20 +8,21 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::lingq::error::LingqError;
+use crate::lingq::lang::LanguageCode;
 
 const DEFAULT_BASE_URL: &str = "https://www.lingq.com";
 
 pub struct LingqClient {
     http: Client,
     api_key: SecretString,
-    lang: String,
+    lang: LanguageCode,
     base_url: String,
 }
 
 impl fmt::Debug for LingqClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LingqClient")
-            .field("lang", &self.lang)
+            .field("lang", &self.lang.as_str())
             .field("base_url", &self.base_url)
             .field("api_key", &"<redacted>")
             .finish()
@@ -71,13 +72,13 @@ impl Default for LessonOpts {
 }
 
 impl LingqClient {
-    pub fn new(api_key: SecretString, lang: impl Into<String>) -> Self {
+    pub fn new(api_key: SecretString, lang: LanguageCode) -> Self {
         Self::with_base_url(api_key, lang, DEFAULT_BASE_URL.to_string())
     }
 
     pub fn with_base_url(
         api_key: SecretString,
-        lang: impl Into<String>,
+        lang: LanguageCode,
         base_url: impl Into<String>,
     ) -> Self {
         let http = Client::builder()
@@ -87,7 +88,7 @@ impl LingqClient {
         Self {
             http,
             api_key,
-            lang: lang.into(),
+            lang,
             base_url: base_url.into(),
         }
     }
@@ -105,7 +106,7 @@ impl LingqClient {
     }
 
     pub(crate) fn lang(&self) -> &str {
-        &self.lang
+        self.lang.as_str()
     }
 
     /// Fetch the caller's account profile. Tries the known candidates in order:
@@ -216,9 +217,10 @@ impl LingqClient {
     pub async fn list_my_collections(&self) -> Result<Vec<Collection>, LingqError> {
         let url = format!(
             "{}/api/v3/{}/collections/my/?page_size=200",
-            self.base_url, self.lang
+            self.base_url,
+            self.lang()
         );
-        tracing::debug!(lang = %self.lang, "lingq list_my_collections");
+        tracing::debug!(lang = %self.lang(), "lingq list_my_collections");
 
         let resp = self
             .http
@@ -244,9 +246,10 @@ impl LingqClient {
     pub async fn whoami(&self) -> Result<WhoAmI, LingqError> {
         let url = format!(
             "{}/api/v3/{}/collections/my/?page_size=1",
-            self.base_url, self.lang
+            self.base_url,
+            self.lang()
         );
-        tracing::debug!(lang = %self.lang, "lingq whoami");
+        tracing::debug!(lang = %self.lang(), "lingq whoami");
 
         let resp = self
             .http
@@ -277,7 +280,11 @@ impl LingqClient {
         audio_mp3: &Path,
         opts: &LessonOpts,
     ) -> Result<i64, LingqError> {
-        let url = format!("{}/api/v3/{}/lessons/import/", self.base_url, self.lang);
+        let url = format!(
+            "{}/api/v3/{}/lessons/import/",
+            self.base_url,
+            self.lang()
+        );
 
         let audio_bytes = tokio::fs::read(audio_mp3)
             .await
@@ -297,14 +304,14 @@ impl LingqClient {
             .text("title", title.to_string())
             .text("text", text.to_string())
             .text("collection", collection_id.to_string())
-            .text("language", self.lang.clone())
+            .text("language", self.lang().to_string())
             .text("level", opts.level.clone())
             .text("status", opts.status.clone())
             .text("tags", opts.tags.clone())
             .text("save", opts.save.clone())
             .part("audio", audio_part);
 
-        tracing::debug!(lang = %self.lang, collection = collection_id, "lingq import_lesson");
+        tracing::debug!(lang = %self.lang(), collection = collection_id, "lingq import_lesson");
 
         let resp = self
             .http
@@ -442,7 +449,10 @@ mod tests {
 
     #[test]
     fn debug_redacts_api_key() {
-        let c = LingqClient::new(SecretString::from("super-secret-token".to_string()), "ja");
+        let c = LingqClient::new(
+            SecretString::from("super-secret-token".to_string()),
+            LanguageCode::new("ja").expect("valid lang"),
+        );
         let dbg = format!("{c:?}");
         assert!(!dbg.contains("super-secret-token"));
         assert!(dbg.contains("<redacted>"));
