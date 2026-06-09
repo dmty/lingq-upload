@@ -49,6 +49,7 @@ fn sample_with(id: ProjectId, title: &str) -> Project {
         last_activity_at: None,
         stage: Default::default(),
         last_transition_at: None,
+    skipped_chapters: vec![],
     }
 }
 

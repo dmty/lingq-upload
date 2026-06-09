@@ -87,6 +87,7 @@ fn auto_match_for_counts(c: usize, t: usize) -> MatchOutcome {
             order: i,
             title: format!("c{i}"),
             body: String::new(),
+            ..Default::default()
         })
         .collect();
     let tracks: Vec<AudioTrack> = (0..t)

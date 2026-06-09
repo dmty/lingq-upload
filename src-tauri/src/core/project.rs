@@ -120,6 +120,13 @@ pub struct Project {
     pub stage: ProjectStage,
     #[serde(default)]
     pub last_transition_at: Option<DateTime<Utc>>,
+    /// Chapter orders the user opted out of uploading. Replaced wholesale
+    /// by `ProjectStore::set_selection`. A chapter already uploaded
+    /// (carries a `lesson_id` in `receipts`) is not retroactively deleted
+    /// from LingQ when added here — selection only gates not-yet-uploaded
+    /// chapters in the run loop.
+    #[serde(default)]
+    pub skipped_chapters: Vec<usize>,
 }
 
 impl Project {

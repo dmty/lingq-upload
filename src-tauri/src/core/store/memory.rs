@@ -63,4 +63,21 @@ impl ProjectStore for InMemoryProjectStore {
         project.receipts[index] = receipt;
         Ok(())
     }
+
+    fn set_selection(
+        &self,
+        id: &ProjectId,
+        skipped_ids: &[usize],
+    ) -> Result<(), StoreError> {
+        let key = id.join_key();
+        let mut guard = self.lock();
+        let project = guard
+            .get_mut(&key)
+            .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
+        let mut v: Vec<usize> = skipped_ids.to_vec();
+        v.sort_unstable();
+        v.dedup();
+        project.skipped_chapters = v;
+        Ok(())
+    }
 }

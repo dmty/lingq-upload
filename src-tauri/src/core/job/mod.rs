@@ -110,7 +110,7 @@ pub async fn run_project_job(
         }
     };
     let chapters = match resolve_chapters(&project.sources.text) {
-        Ok(c) => c,
+        Ok(c) => mark_selection(c, &project.skipped_chapters),
         Err(e) => {
             sink.result(false, serde_json::json!({"error": e.to_string()}));
             return Err(e);
@@ -121,6 +121,7 @@ pub async fn run_project_job(
         project = %project.id.join_key(),
         chapters = chapters.len(),
         tracks = tracks.len(),
+        skipped = project.skipped_chapters.len(),
         "job: resolved inputs",
     );
 
@@ -209,6 +210,19 @@ pub async fn run_project_job(
             tracing::info!(
                 chapter = step.chapter_index,
                 "job: skipping previously uploaded chapter",
+            );
+            continue;
+        }
+
+        // User opted this chapter out of the upload — no parse, no
+        // transcode, no LingQ import. The receipt slot stays empty
+        // (lesson_id = None). Already-uploaded chapters are caught
+        // by the resume skip above, so this never deletes anything
+        // from LingQ.
+        if project.skipped_chapters.contains(&step.chapter_index) {
+            tracing::info!(
+                chapter = step.chapter_index,
+                "job: skipping user-deselected chapter",
             );
             continue;
         }
@@ -697,6 +711,21 @@ fn plan_from_decision(
     }
 }
 
+/// Mark user-skipped chapters in-place. The pairing logic still sees the
+/// full chapter list so the matcher's count comparison and bucket alignment
+/// stay stable; the upload loop is what drops `skipped: true` steps.
+fn mark_selection(mut chapters: Vec<Chapter>, skipped_ids: &[usize]) -> Vec<Chapter> {
+    if skipped_ids.is_empty() {
+        return chapters;
+    }
+    for c in chapters.iter_mut() {
+        if skipped_ids.contains(&c.order) {
+            c.skipped = true;
+        }
+    }
+    chapters
+}
+
 fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
     match text {
         TextSource::Epub(p) => parse_epub(p, HeadingStrategy::Kindle)
@@ -716,6 +745,7 @@ fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
                     order: i,
                     title,
                     body,
+                    ..Default::default()
                 });
             }
             Ok(out)
@@ -830,6 +860,7 @@ mod tests {
                 order: *order,
                 title: (*title).to_string(),
                 body: "a".repeat(*n),
+                ..Default::default()
             })
             .collect();
         let tracks = vec![

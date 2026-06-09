@@ -341,7 +341,15 @@ export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | 
  */
 export type MismatchInspection = { title: string; chapter_count: number; track_count: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview: BucketPreview[] | null }
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
-export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null }
+export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
+/**
+ * Chapter orders the user opted out of uploading. Replaced wholesale
+ * by `ProjectStore::set_selection`. A chapter already uploaded
+ * (carries a `lesson_id` in `receipts`) is not retroactively deleted
+ * from LingQ when added here — selection only gates not-yet-uploaded
+ * chapters in the run loop.
+ */
+skipped_chapters?: number[] }
 /**
  * Canonical project identity (AD-021).
  * 

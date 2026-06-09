@@ -7,6 +7,7 @@ fn ch(order: usize, body: &str) -> Chapter {
         order,
         title: format!("c{order}"),
         body: body.to_string(),
+        ..Default::default()
     }
 }
 

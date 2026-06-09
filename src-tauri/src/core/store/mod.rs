@@ -36,6 +36,15 @@ pub trait ProjectStore: Send + Sync {
         index: usize,
         receipt: ChapterReceipt,
     ) -> Result<(), StoreError>;
+    /// Replace the project's skipped-chapter set with `skipped_ids`.
+    /// Atomic on the JSON store (tempfile + fsync + rename, AD-022).
+    /// The slice is deduped and sorted before persistence so the on-disk
+    /// representation is canonical.
+    fn set_selection(
+        &self,
+        id: &ProjectId,
+        skipped_ids: &[usize],
+    ) -> Result<(), StoreError>;
 }
 
 /// Filesystem-safe rendering of an identifier (e.g. `ProjectId::join_key()`).

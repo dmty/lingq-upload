@@ -44,6 +44,7 @@ fn sample(title: &str, language: &str) -> Project {
         last_activity_at: None,
         stage: ProjectStage::New,
         last_transition_at: None,
+    skipped_chapters: vec![],
     }
 }
 
@@ -262,6 +263,49 @@ fn powercut_simulation_keeps_prior_file() {
 
     let got = store.get(&p1.id).unwrap().unwrap();
     assert_eq!(got, p1, "prior file untouched");
+}
+
+#[test]
+fn powercut_simulation_preserves_prior_selection() {
+    // `set_selection` shares the tempfile + fsync + rename path with `put`.
+    // A partial write that never gets renamed must not leak into the
+    // visible project.
+    let tmp = TempDir::new().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let mut p = sample_with_receipts("Selection PowerCut", "ja", 3);
+    p.skipped_chapters = vec![0];
+    store.put(&p).unwrap();
+
+    let pj = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&p.id.join_key()))
+        .join("project.json");
+    let tmp_path = pj.with_extension("json.tmp");
+    std::fs::write(&tmp_path, b"{ partial selection write }").unwrap();
+
+    let got = store.get(&p.id).unwrap().unwrap();
+    assert_eq!(got.skipped_chapters, vec![0]);
+    assert_eq!(got, p, "prior file untouched after partial tmp write");
+
+    // Real selection update must also leave no tmp turds.
+    store.set_selection(&p.id, &[1, 2]).unwrap();
+    let dir = tmp
+        .path()
+        .join("projects")
+        .join(safe_path_segment(&p.id.join_key()));
+    let entries: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert!(
+        !entries
+            .iter()
+            .any(|n| n.to_string_lossy().ends_with(".tmp")),
+        "no .tmp files after set_selection: {entries:?}"
+    );
+    let got = store.get(&p.id).unwrap().unwrap();
+    assert_eq!(got.skipped_chapters, vec![1, 2]);
 }
 
 #[test]
