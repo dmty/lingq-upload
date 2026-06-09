@@ -319,7 +319,7 @@ export type Collection = { id: number; title: string }
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
+export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy?: string | null } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
 /**
  * Emitted when the orchestrator can't auto-pair chapters and tracks
  * and needs the user to pick a [`MismatchResponse`]. Terminal: once

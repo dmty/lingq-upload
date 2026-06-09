@@ -110,7 +110,7 @@ struct RecordingSink {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self) {
+    fn started(&mut self, _strategy: Option<&str>) {
         self.events.lock().unwrap().push(Event::Started);
     }
     fn progress(&mut self, _pct: f32, _message: Option<String>) {

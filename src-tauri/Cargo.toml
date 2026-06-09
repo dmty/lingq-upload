@@ -65,3 +65,4 @@ proptest = "1"
 insta = { version = "1", features = ["json"] }
 trybuild = "1"
 sysinfo = { version = "0.32", default-features = false, features = ["system"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

@@ -12,7 +12,9 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
-use crate::core::epub::{parse_epub, Chapter, ChapterId, HeadingStrategy};
+use crate::core::epub::{
+    autodetect_vendor, parse_epub, Chapter, ChapterId, EpubVendor, HeadingStrategy,
+};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::pack::{build_preview, proportional_pack};
@@ -46,7 +48,7 @@ pub fn next_stage(p: &Project) -> Option<ProjectStage> {
 /// tested without booting tauri. Production wraps a `JobEmitter`; tests wrap
 /// an in-memory recorder.
 pub trait JobSink: Send {
-    fn started(&mut self);
+    fn started(&mut self, strategy: Option<&str>);
     fn progress(&mut self, pct: f32, message: Option<String>);
     fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool);
     fn cancelled(&mut self);
@@ -81,12 +83,36 @@ pub async fn run_project_job(
     cancel: CancellationToken,
     sink: &mut dyn JobSink,
 ) -> Result<(), AppError> {
-    sink.started();
-
-    let mut project = match store
+    let project_opt = store
         .get(&project_id)
-        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-    {
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?;
+
+    let strategy = project_opt
+        .as_ref()
+        .and_then(|p| match &p.sources.text {
+            TextSource::Epub(path) => Some(path.clone()),
+            _ => None,
+        })
+        .map(|path| match autodetect_vendor(&path) {
+            Ok(d) => {
+                tracing::info!(
+                    project = %project_id.join_key(),
+                    vendor = d.vendor.as_str(),
+                    confidence = d.confidence,
+                    signals = ?d.signals,
+                    "epub vendor autodetect",
+                );
+                d.vendor.as_str().to_string()
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "epub vendor autodetect failed; falling back to generic");
+                EpubVendor::Generic.as_str().to_string()
+            }
+        });
+
+    sink.started(strategy.as_deref());
+
+    let mut project = match project_opt {
         Some(p) => p,
         None => {
             let err = AppError::Other("project not found".into());

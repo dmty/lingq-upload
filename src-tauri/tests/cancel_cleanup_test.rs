@@ -161,7 +161,7 @@ struct CancelSink {
 }
 
 impl lingq_upload_lib::core::job::JobSink for CancelSink {
-    fn started(&mut self) {
+    fn started(&mut self, _strategy: Option<&str>) {
         self.events.lock().unwrap().push("started".into());
     }
     fn progress(&mut self, _pct: f32, _message: Option<String>) {}
