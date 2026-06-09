@@ -46,7 +46,11 @@ pub async fn upload_one_shot(
     let store = SecretsStore::new(Box::new(RealKeyring::new()));
     let key = store.load_key()?.ok_or(AppError::MissingApiKey)?;
 
-    job.started(Stage::Parsing);
+    let strategy = match crate::core::epub::autodetect_vendor(&text_path) {
+        Ok(d) => Some(d.vendor.as_str().to_string()),
+        Err(_) => Some(crate::core::epub::EpubVendor::Generic.as_str().to_string()),
+    };
+    job.started(Stage::Parsing, strategy);
     job.progress(0.0, Some("Reading text".into()));
     let text_body = text::read_text_for_upload(&text_path)?;
 

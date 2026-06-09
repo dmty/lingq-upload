@@ -58,7 +58,7 @@ enum RecordedEvent {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self) {
+    fn started(&mut self, _strategy: Option<&str>) {
         self.events.lock().unwrap().push(RecordedEvent::Started);
     }
     fn progress(&mut self, pct: f32, _message: Option<String>) {

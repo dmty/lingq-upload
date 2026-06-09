@@ -220,8 +220,9 @@ struct EmitterSink<'a, 'b> {
 }
 
 impl<'a, 'b> JobSink for EmitterSink<'a, 'b> {
-    fn started(&mut self) {
-        self.inner.started(Stage::Uploading);
+    fn started(&mut self, strategy: Option<&str>) {
+        self.inner
+            .started(Stage::Uploading, strategy.map(|s| s.to_string()));
     }
     fn progress(&mut self, pct: f32, message: Option<String>) {
         self.inner.progress(pct, message);

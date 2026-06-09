@@ -1,12 +1,24 @@
+pub mod detect;
 pub mod parse;
 
 use std::fmt;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
+pub use detect::{detect_vendor, EpubVendor, VendorDetection};
 pub use parse::{parse_epub, HeadingStrategy};
+
+/// Open the EPUB at `path` and run vendor detection. Convenience wrapper used
+/// by the orchestrator so the chosen vendor can be logged on `JobEvent::Started`
+/// before parsing kicks off.
+pub fn autodetect_vendor(path: &Path) -> Result<VendorDetection, EpubError> {
+    let file = std::fs::File::open(path)?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| EpubError::Zip(e.to_string()))?;
+    detect_vendor(&mut zip)
+}
 
 /// Position of a chapter within a project's text.
 ///

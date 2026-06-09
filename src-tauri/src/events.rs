@@ -32,6 +32,11 @@ pub enum JobEvent {
     Started {
         job_id: Uuid,
         stage: Stage,
+        /// Vendor-flavoured heading strategy chosen by autodetection. Optional
+        /// because non-EPUB sources don't have a vendor and older replay logs
+        /// pre-date the field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        strategy: Option<String>,
     },
     StageChanged {
         job_id: Uuid,
@@ -164,10 +169,11 @@ impl<'a> JobEmitter<'a> {
         }
     }
 
-    pub fn started(&mut self, stage: Stage) {
+    pub fn started(&mut self, stage: Stage, strategy: Option<String>) {
         self.emit(JobEvent::Started {
             job_id: self.job_id,
             stage,
+            strategy,
         });
     }
 
@@ -260,6 +266,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Progress {
                 job_id: id,
@@ -282,6 +289,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Uploading,
+                strategy: None,
             },
             JobEvent::Log {
                 job_id: id,
@@ -314,10 +322,12 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Uploading,
+                strategy: None,
             },
         ];
         assert_eq!(validate(&seq), Err("duplicate Started"));
@@ -335,6 +345,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
         ];
         assert_eq!(validate(&seq), Err("non-Started before Started"));
@@ -358,6 +369,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Result {
                 job_id: id,
@@ -380,6 +392,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Result {
                 job_id: id,
@@ -402,6 +415,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Progress {
                 job_id: id,
@@ -420,6 +434,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Parsing,
+                strategy: None,
             },
             JobEvent::Progress {
                 job_id: id,
@@ -465,6 +480,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Transcoding,
+                strategy: None,
             },
             JobEvent::Cancelled { job_id: id },
             JobEvent::Result {
@@ -483,6 +499,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Uploading,
+                strategy: None,
             },
             JobEvent::NeedsMatch {
                 job_id: id,
@@ -505,6 +522,7 @@ mod tests {
             JobEvent::Started {
                 job_id: id,
                 stage: Stage::Uploading,
+                strategy: None,
             },
             JobEvent::NeedsMatch {
                 job_id: id,
