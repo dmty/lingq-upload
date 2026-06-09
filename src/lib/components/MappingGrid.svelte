@@ -193,11 +193,12 @@
     <ul class="space-y-1" data-testid="mapping-chapter-col">
       {#each chapters as chapter (chapter.id)}
         {@const pair = pairFor(chapter.id)}
-        {@const conf = pair?.confidence ?? 0}
+        {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
+        {@const touched = pair?.touched ?? false}
         <li
           bind:this={chapterRowRefs[chapter.id]}
           class="flex items-center gap-2 rounded-sm bg-surface px-2 py-1.5 text-sm {pair
-            ? confidenceClass(conf)
+            ? confidenceClass(displayConf)
             : 'border-l-4 border-l-transparent'}"
           data-testid="mapping-chapter-row"
           data-chapter-id={chapter.id}
@@ -207,18 +208,26 @@
           <span class="flex-1 truncate text-fg">{chapter.title}</span>
           {#if pair}
             <span
-              class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {conf >=
+              class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {displayConf >=
               0.8
                 ? 'text-success'
-                : conf >= 0.6
+                : displayConf >= 0.6
                   ? 'text-warning'
                   : 'text-error'}"
               data-testid="confidence-chip"
-              data-confidence={conf}
-              data-confidence-band={confidenceLabel(conf)}
+              data-confidence={displayConf}
+              data-confidence-band={confidenceLabel(displayConf)}
             >
-              {confidenceLabel(conf)}
+              {confidenceLabel(displayConf)}
             </span>
+            {#if touched}
+              <span
+                class="rounded-sm border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
+                data-testid="manual-badge"
+              >
+                Manual
+              </span>
+            {/if}
           {/if}
           <button
             type="button"
