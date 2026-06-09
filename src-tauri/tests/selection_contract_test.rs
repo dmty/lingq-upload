@@ -12,7 +12,7 @@ use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;
 use tokio_util::sync::CancellationToken;
 
-use lingq_upload_lib::core::epub::{Chapter, ChapterId, ChapterKind};
+use lingq_upload_lib::core::epub::{Chapter, ChapterId, ChapterKind, EpubVendor};
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::{run_project_job, JobSink};
 use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
@@ -210,7 +210,7 @@ struct RecordingSink {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self) {}
+    fn started(&mut self, _strategy: Option<EpubVendor>) {}
     fn progress(&mut self, _pct: f32, _message: Option<String>) {}
     fn chapter_done(&mut self, chapter_index: usize, _lesson_id: i64, _degraded: bool) {
         self.chapter_dones.lock().unwrap().push(chapter_index);
