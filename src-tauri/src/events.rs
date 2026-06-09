@@ -3,6 +3,7 @@ use specta::Type;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use crate::core::epub::EpubVendor;
 use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 
 #[derive(Serialize, Type, Clone, Debug, PartialEq)]
@@ -32,11 +33,10 @@ pub enum JobEvent {
     Started {
         job_id: Uuid,
         stage: Stage,
-        /// Vendor-flavoured heading strategy chosen by autodetection. Optional
-        /// because non-EPUB sources don't have a vendor and older replay logs
-        /// pre-date the field.
+        /// Vendor chosen by autodetection. Optional because non-EPUB sources
+        /// don't have a vendor and older replay logs pre-date the field.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        strategy: Option<String>,
+        strategy: Option<EpubVendor>,
     },
     StageChanged {
         job_id: Uuid,
@@ -169,7 +169,7 @@ impl<'a> JobEmitter<'a> {
         }
     }
 
-    pub fn started(&mut self, stage: Stage, strategy: Option<String>) {
+    pub fn started(&mut self, stage: Stage, strategy: Option<EpubVendor>) {
         self.emit(JobEvent::Started {
             job_id: self.job_id,
             stage,

@@ -96,7 +96,7 @@ struct RecordingSink {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self, _strategy: Option<&str>) {}
+    fn started(&mut self, _strategy: Option<lingq_upload_lib::core::epub::EpubVendor>) {}
     fn progress(&mut self, _pct: f32, _message: Option<String>) {}
     fn chapter_done(&mut self, _chapter_index: usize, _lesson_id: i64, _degraded: bool) {
         *self.chapter_done_count.lock().unwrap() += 1;
@@ -128,7 +128,7 @@ struct KillAfterNSink {
 }
 
 impl JobSink for KillAfterNSink {
-    fn started(&mut self, strategy: Option<&str>) {
+    fn started(&mut self, strategy: Option<lingq_upload_lib::core::epub::EpubVendor>) {
         self.inner.started(strategy);
     }
     fn progress(&mut self, pct: f32, message: Option<String>) {

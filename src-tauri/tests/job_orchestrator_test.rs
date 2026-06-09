@@ -58,7 +58,7 @@ enum RecordedEvent {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self, _strategy: Option<&str>) {
+    fn started(&mut self, _strategy: Option<lingq_upload_lib::core::epub::EpubVendor>) {
         self.events.lock().unwrap().push(RecordedEvent::Started);
     }
     fn progress(&mut self, pct: f32, _message: Option<String>) {

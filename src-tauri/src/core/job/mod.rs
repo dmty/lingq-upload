@@ -48,7 +48,7 @@ pub fn next_stage(p: &Project) -> Option<ProjectStage> {
 /// tested without booting tauri. Production wraps a `JobEmitter`; tests wrap
 /// an in-memory recorder.
 pub trait JobSink: Send {
-    fn started(&mut self, strategy: Option<&str>);
+    fn started(&mut self, strategy: Option<EpubVendor>);
     fn progress(&mut self, pct: f32, message: Option<String>);
     fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool);
     fn cancelled(&mut self);
@@ -87,13 +87,25 @@ pub async fn run_project_job(
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?;
 
-    let strategy = project_opt
+    // Read the EPUB once: vendor detection and the later parse both share the
+    // same byte buffer.
+    let epub_bytes: Option<Vec<u8>> = project_opt
         .as_ref()
         .and_then(|p| match &p.sources.text {
             TextSource::Epub(path) => Some(path.clone()),
             _ => None,
         })
-        .map(|path| match autodetect_vendor(&path) {
+        .and_then(|path| match std::fs::read(&path) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                tracing::warn!(error = %e, "epub read failed; falling back to generic vendor");
+                None
+            }
+        });
+
+    let strategy: Option<EpubVendor> = epub_bytes
+        .as_deref()
+        .map(|bytes| match crate::core::epub::autodetect_vendor_bytes(bytes) {
             Ok(d) => {
                 tracing::info!(
                     project = %project_id.join_key(),
@@ -102,15 +114,15 @@ pub async fn run_project_job(
                     signals = ?d.signals,
                     "epub vendor autodetect",
                 );
-                d.vendor.as_str().to_string()
+                d.vendor
             }
             Err(e) => {
                 tracing::warn!(error = %e, "epub vendor autodetect failed; falling back to generic");
-                EpubVendor::Generic.as_str().to_string()
+                EpubVendor::Generic
             }
         });
 
-    sink.started(strategy.as_deref());
+    sink.started(strategy);
 
     let mut project = match project_opt {
         Some(p) => p,
@@ -136,7 +148,7 @@ pub async fn run_project_job(
             return Err(e);
         }
     };
-    let chapters = match resolve_chapters(&project.sources.text) {
+    let chapters = match resolve_chapters(&project.sources.text, epub_bytes.as_deref()) {
         Ok(c) => c,
         Err(e) => {
             sink.result(false, serde_json::json!({"error": e.to_string()}));
@@ -502,7 +514,7 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
         return Ok(None);
     }
     let tracks = resolve_audio_tracks(project).await?;
-    let chapters = resolve_chapters(&project.sources.text)?;
+    let chapters = resolve_chapters(&project.sources.text, None)?;
     match build_plan(project, &chapters, &tracks) {
         PlanOrPause::NeedsMatch {
             condition,
@@ -744,10 +756,17 @@ fn plan_from_decision(
     }
 }
 
-fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
+fn resolve_chapters(
+    text: &TextSource,
+    cached_epub: Option<&[u8]>,
+) -> Result<Vec<Chapter>, AppError> {
     match text {
-        TextSource::Epub(p) => parse_epub(p, HeadingStrategy::Kindle)
-            .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
+        TextSource::Epub(p) => match cached_epub {
+            Some(bytes) => crate::core::epub::parse_epub_bytes(bytes, HeadingStrategy::Kindle)
+                .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
+            None => parse_epub(p, HeadingStrategy::Kindle)
+                .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
+        },
         TextSource::LooseFiles { paths } => {
             let mut sorted: Vec<PathBuf> = paths.clone();
             sorted.sort();

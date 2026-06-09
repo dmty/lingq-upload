@@ -47,8 +47,8 @@ pub async fn upload_one_shot(
     let key = store.load_key()?.ok_or(AppError::MissingApiKey)?;
 
     let strategy = match crate::core::epub::autodetect_vendor(&text_path) {
-        Ok(d) => Some(d.vendor.as_str().to_string()),
-        Err(_) => Some(crate::core::epub::EpubVendor::Generic.as_str().to_string()),
+        Ok(d) => Some(d.vendor),
+        Err(_) => Some(crate::core::epub::EpubVendor::Generic),
     };
     job.started(Stage::Parsing, strategy);
     job.progress(0.0, Some("Reading text".into()));
