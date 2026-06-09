@@ -254,4 +254,25 @@ impl ProjectStore for JsonProjectStore {
         let bytes = serialise_project(&project, &path)?;
         write_atomic(&path, &bytes)
     }
+
+    fn set_selection(
+        &self,
+        id: &ProjectId,
+        skipped_ids: &[usize],
+    ) -> Result<(), StoreError> {
+        let mut project = self
+            .get(id)?
+            .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+        project.skipped_chapters = canonicalise_selection(skipped_ids);
+        let path = self.project_path(&project.id);
+        let bytes = serialise_project(&project, &path)?;
+        write_atomic(&path, &bytes)
+    }
+}
+
+fn canonicalise_selection(ids: &[usize]) -> Vec<usize> {
+    let mut v: Vec<usize> = ids.to_vec();
+    v.sort_unstable();
+    v.dedup();
+    v
 }

@@ -62,6 +62,7 @@ mod kindle {
                 order: i,
                 title,
                 body,
+                ..Default::default()
             });
         }
         // Re-index `order` after dropping empties.

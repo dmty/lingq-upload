@@ -76,6 +76,13 @@ impl<S: ProjectStore> ProjectStore for PatchSpy<S> {
         self.patch_calls.lock().unwrap().push((id.clone(), index));
         self.inner.patch_chapter(id, index, receipt)
     }
+    fn set_selection(
+        &self,
+        id: &ProjectId,
+        skipped_ids: &[usize],
+    ) -> Result<(), StoreError> {
+        self.inner.set_selection(id, skipped_ids)
+    }
 }
 
 // --- Sinks -------------------------------------------------------------------
@@ -221,6 +228,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         last_activity_at: None,
         stage: Default::default(),
         last_transition_at: None,
+    skipped_chapters: vec![],
     };
     store.put(&project).unwrap();
 
@@ -441,6 +449,7 @@ fn cmd_replay_receipts_returns_persisted_state() {
         last_activity_at: None,
         stage: Default::default(),
         last_transition_at: None,
+    skipped_chapters: vec![],
     };
     store.put(&project).unwrap();
 
