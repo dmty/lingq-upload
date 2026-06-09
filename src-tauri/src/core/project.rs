@@ -136,6 +136,42 @@ pub struct Project {
 }
 
 impl Project {
+    /// Minimal Project value for tests: typed sources, empty receipts, all
+    /// option fields defaulted. New tests should reach for this; the existing
+    /// field-by-field literals still work but break on every field churn.
+    #[doc(hidden)]
+    pub fn new_test(id: ProjectId, title: &str) -> Self {
+        use std::path::PathBuf as PB;
+        Project {
+            schema_version: SCHEMA_V1,
+            id,
+            sources: ProjectSources {
+                text: TextSource::Epub(PB::from("/tmp/x.epub")),
+                audio: None,
+                chapter_manifest: None,
+            },
+            settings: ProjectSettings {
+                language: "ja".into(),
+                collection_title: title.into(),
+                level: 1,
+                tags: vec![],
+            },
+            receipts: vec![],
+            queue_cursor: 0,
+            completed_lesson_ids: vec![],
+            matcher_decision: None,
+            cover_path: None,
+            authors: vec![],
+            series: None,
+            lingq_collection_id: None,
+            last_activity_at: None,
+            stage: Default::default(),
+            last_transition_at: None,
+            skipped_chapters: vec![],
+            absorb_policy: AbsorbPolicy::default(),
+        }
+    }
+
     pub fn stage(&self) -> ProjectStage {
         self.stage
     }

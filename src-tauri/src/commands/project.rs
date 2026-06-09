@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
 use crate::core::project::Project;
@@ -54,6 +55,7 @@ pub async fn cmd_project_load(
     Ok(project)
 }
 
+<<<<<<< HEAD
 /// Replace the project's skipped-chapter set wholesale.
 ///
 /// The picker UI debounces user edits and flushes the resulting selection
@@ -105,4 +107,23 @@ pub async fn cmd_project_chapters(
             .collect()),
         TextSource::Missing => Ok(Vec::new()),
     }
+}
+
+/// Persist the chapter-divider absorb policy for a project.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_set_absorb_policy(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    policy: AbsorbPolicy,
+) -> Result<(), AppError> {
+    let mut project = store
+        .get(&project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    project.absorb_policy = policy;
+    store
+        .put(&project)
+        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
+    Ok(())
 }

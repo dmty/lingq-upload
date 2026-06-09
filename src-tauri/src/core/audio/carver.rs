@@ -37,11 +37,25 @@ pub struct CarveOpts {
 impl Default for CarveOpts {
     fn default() -> Self {
         Self {
-            silence_db: -30.0,
+            // Audiobook noise floors sit around -50 to -60 dB. -45 dB is loud
+            // enough to ignore room tone and quiet enough to detect real gaps.
+            silence_db: -45.0,
             min_silence_ms: 500,
             absorb: AbsorbPolicy::Forward,
         }
     }
+}
+
+/// Distinguishes the role a boundary plays for the caller.
+///
+/// `Cut` is a single split point (Forward / Backward modes — silence is glued
+/// to one neighbour). `DropStart` / `DropEnd` arrive paired and share the same
+/// `track_index`: the span `[DropStart, DropEnd]` is excluded from both tracks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundaryKind {
+    Cut,
+    DropStart,
+    DropEnd,
 }
 
 /// A single cut point in the source audio. `track_index` is the 0-based index
@@ -52,6 +66,7 @@ impl Default for CarveOpts {
 pub struct Boundary {
     pub track_index: usize,
     pub cut_offset_ms: u32,
+    pub kind: BoundaryKind,
 }
 
 /// A detected run of silence in the source audio, in milliseconds from start.
@@ -86,6 +101,7 @@ pub fn boundaries_from_silences(runs: &[SilenceRun], policy: AbsorbPolicy) -> Ve
                 out.push(Boundary {
                     track_index: next_track,
                     cut_offset_ms: run.end_ms,
+                    kind: BoundaryKind::Cut,
                 });
                 next_track += 1;
             }
@@ -93,19 +109,20 @@ pub fn boundaries_from_silences(runs: &[SilenceRun], policy: AbsorbPolicy) -> Ve
                 out.push(Boundary {
                     track_index: next_track,
                     cut_offset_ms: run.start_ms,
+                    kind: BoundaryKind::Cut,
                 });
                 next_track += 1;
             }
             AbsorbPolicy::Drop => {
-                // Two-cut form: an exclusion zone bracketed by start and end.
-                // Track index is the same for both ends so callers can pair them.
                 out.push(Boundary {
                     track_index: next_track,
                     cut_offset_ms: run.start_ms,
+                    kind: BoundaryKind::DropStart,
                 });
                 out.push(Boundary {
                     track_index: next_track,
                     cut_offset_ms: run.end_ms,
+                    kind: BoundaryKind::DropEnd,
                 });
                 next_track += 1;
             }
@@ -175,13 +192,13 @@ fn parse_silencedetect(log: &str) -> Result<Vec<SilenceRun>, CarveError> {
             let secs: f64 = val
                 .parse()
                 .map_err(|e| CarveError::Parse(format!("silence_start {val:?}: {e}")))?;
-            pending_start = Some(seconds_to_ms(secs));
+            pending_start = Some(seconds_to_ms(secs)?);
         } else if let Some(rest) = line.split("silence_end:").nth(1) {
             let val = rest.split_whitespace().next().unwrap_or("");
             let secs: f64 = val
                 .parse()
                 .map_err(|e| CarveError::Parse(format!("silence_end {val:?}: {e}")))?;
-            let end_ms = seconds_to_ms(secs);
+            let end_ms = seconds_to_ms(secs)?;
             if let Some(start_ms) = pending_start.take() {
                 if end_ms > start_ms {
                     runs.push(SilenceRun { start_ms, end_ms });
@@ -192,11 +209,20 @@ fn parse_silencedetect(log: &str) -> Result<Vec<SilenceRun>, CarveError> {
     Ok(runs)
 }
 
-fn seconds_to_ms(secs: f64) -> u32 {
-    if secs.is_sign_negative() || !secs.is_finite() {
-        return 0;
+fn seconds_to_ms(secs: f64) -> Result<u32, CarveError> {
+    if !secs.is_finite() {
+        return Err(CarveError::Parse(format!("non-finite seconds: {secs}")));
     }
-    (secs * 1000.0).round().min(u32::MAX as f64) as u32
+    if secs.is_sign_negative() {
+        return Ok(0);
+    }
+    let ms = (secs * 1000.0).round();
+    if ms > u32::MAX as f64 {
+        return Err(CarveError::Parse(format!(
+            "seconds {secs} overflows u32 ms"
+        )));
+    }
+    Ok(ms as u32)
 }
 
 #[cfg(test)]
@@ -221,7 +247,9 @@ mod tests {
         let b = boundaries_from_silences(&fx(), AbsorbPolicy::Forward);
         assert_eq!(b.len(), 2);
         assert_eq!(b[0].cut_offset_ms, 6_000);
+        assert_eq!(b[0].kind, BoundaryKind::Cut);
         assert_eq!(b[1].cut_offset_ms, 10_000);
+        assert_eq!(b[1].kind, BoundaryKind::Cut);
     }
 
     #[test]
@@ -229,7 +257,9 @@ mod tests {
         let b = boundaries_from_silences(&fx(), AbsorbPolicy::Backward);
         assert_eq!(b.len(), 2);
         assert_eq!(b[0].cut_offset_ms, 5_000);
+        assert_eq!(b[0].kind, BoundaryKind::Cut);
         assert_eq!(b[1].cut_offset_ms, 9_000);
+        assert_eq!(b[1].kind, BoundaryKind::Cut);
     }
 
     #[test]
@@ -237,7 +267,10 @@ mod tests {
         let b = boundaries_from_silences(&fx(), AbsorbPolicy::Drop);
         assert_eq!(b.len(), 4);
         assert_eq!((b[0].cut_offset_ms, b[1].cut_offset_ms), (5_000, 6_000));
+        assert_eq!((b[0].kind, b[1].kind), (BoundaryKind::DropStart, BoundaryKind::DropEnd));
+        assert_eq!(b[0].track_index, b[1].track_index);
         assert_eq!((b[2].cut_offset_ms, b[3].cut_offset_ms), (9_000, 10_000));
+        assert_eq!((b[2].kind, b[3].kind), (BoundaryKind::DropStart, BoundaryKind::DropEnd));
     }
 
     #[test]
@@ -249,6 +282,67 @@ mod tests {
         assert_ne!(f, b);
         assert_ne!(f, d);
         assert_ne!(b, d);
+    }
+
+    #[test]
+    fn no_runs_emits_no_boundaries() {
+        for policy in [AbsorbPolicy::Forward, AbsorbPolicy::Backward, AbsorbPolicy::Drop] {
+            assert!(boundaries_from_silences(&[], policy).is_empty());
+        }
+    }
+
+    #[test]
+    fn single_run_spanning_whole_clip() {
+        // Degenerate input: one silence covering the entire clip. Forward /
+        // Backward still emit one cut, Drop emits a paired exclusion.
+        let runs = [SilenceRun { start_ms: 0, end_ms: 60_000 }];
+        let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
+        assert_eq!(f, vec![Boundary { track_index: 1, cut_offset_ms: 60_000, kind: BoundaryKind::Cut }]);
+        let b = boundaries_from_silences(&runs, AbsorbPolicy::Backward);
+        assert_eq!(b, vec![Boundary { track_index: 1, cut_offset_ms: 0, kind: BoundaryKind::Cut }]);
+        let d = boundaries_from_silences(&runs, AbsorbPolicy::Drop);
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0].cut_offset_ms, 0);
+        assert_eq!(d[1].cut_offset_ms, 60_000);
+    }
+
+    #[test]
+    fn silence_at_t_zero() {
+        let runs = [
+            SilenceRun { start_ms: 0, end_ms: 1_500 },
+            SilenceRun { start_ms: 30_000, end_ms: 31_000 },
+        ];
+        let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
+        assert_eq!(f[0].cut_offset_ms, 1_500);
+        let b = boundaries_from_silences(&runs, AbsorbPolicy::Backward);
+        assert_eq!(b[0].cut_offset_ms, 0);
+    }
+
+    #[test]
+    fn silence_at_clip_end() {
+        let runs = [
+            SilenceRun { start_ms: 10_000, end_ms: 11_000 },
+            SilenceRun { start_ms: 59_500, end_ms: 60_000 },
+        ];
+        let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
+        assert_eq!(f.last().unwrap().cut_offset_ms, 60_000);
+        let b = boundaries_from_silences(&runs, AbsorbPolicy::Backward);
+        assert_eq!(b.last().unwrap().cut_offset_ms, 59_500);
+    }
+
+    #[test]
+    fn overlapping_runs_still_yield_per_run_boundaries() {
+        // ffmpeg silencedetect won't emit this, but the pure function is
+        // total over its input — guard against malformed callers.
+        let runs = [
+            SilenceRun { start_ms: 5_000, end_ms: 7_000 },
+            SilenceRun { start_ms: 6_000, end_ms: 8_000 },
+        ];
+        let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0].cut_offset_ms, 7_000);
+        assert_eq!(f[1].cut_offset_ms, 8_000);
+        assert_ne!(f[0].track_index, f[1].track_index);
     }
 
     #[test]
@@ -275,5 +369,20 @@ mod tests {
         let runs = parse_silencedetect(log).expect("parse");
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].start_ms, 5_000);
+    }
+
+    #[test]
+    fn seconds_to_ms_negative_clamps_to_zero() {
+        assert_eq!(seconds_to_ms(-1.0).unwrap(), 0);
+    }
+
+    #[test]
+    fn seconds_to_ms_overflow_errors() {
+        assert!(matches!(seconds_to_ms(1.0e12), Err(CarveError::Parse(_))));
+    }
+
+    #[test]
+    fn seconds_to_ms_nan_errors() {
+        assert!(matches!(seconds_to_ms(f64::NAN), Err(CarveError::Parse(_))));
     }
 }

@@ -1,12 +1,14 @@
 <script lang="ts">
-  import type { AbsorbPolicy } from "$lib/ipc/bindings";
+  import { commands, type AbsorbPolicy, type ProjectId } from "$lib/ipc/bindings";
 
-  export let absorbPolicy: AbsorbPolicy = "forward";
+  let {
+    projectId,
+    absorbPolicy = $bindable("forward"),
+  }: {
+    projectId: ProjectId;
+    absorbPolicy?: AbsorbPolicy;
+  } = $props();
 
-  // TODO: wire onchange to a Tauri command once the persistence path lands.
-  // For now this is a pure-presentation widget rendered by the project
-  // settings sheet; the parent component reads `absorbPolicy` back out of
-  // bound state when the user saves.
   const policies: Array<{ value: AbsorbPolicy; label: string; hint: string }> = [
     {
       value: "forward",
@@ -24,6 +26,27 @@
       hint: "Silence is excluded from both sides."
     }
   ];
+
+  // Namespace the radio group so two ProjectSettings instances can't collide.
+  const groupName = $derived(`absorb-policy-${projectId.content_hash}`);
+
+  let lastConfirmed: AbsorbPolicy = $state(absorbPolicy);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function onSelect(next: AbsorbPolicy) {
+    if (next === absorbPolicy) return;
+    const prev = lastConfirmed;
+    absorbPolicy = next;
+    if (timer != null) clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const res = await commands.cmdSetAbsorbPolicy(projectId, next);
+      if (res.status === "ok") {
+        lastConfirmed = next;
+      } else {
+        absorbPolicy = prev;
+      }
+    }, 300);
+  }
 </script>
 
 <fieldset class="absorb-policy">
@@ -32,9 +55,10 @@
     <label>
       <input
         type="radio"
-        name="absorb-policy"
+        name={groupName}
         value={p.value}
-        bind:group={absorbPolicy}
+        checked={absorbPolicy === p.value}
+        onchange={() => onSelect(p.value)}
       />
       <span class="label">{p.label}</span>
       <span class="hint">{p.hint}</span>
