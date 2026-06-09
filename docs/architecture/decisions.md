@@ -488,6 +488,50 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 - `StoreError::Corrupt` is the single exception. A corrupt `project.json` is a developer-grade failure (not a recovery event) and may surface a loud recovery prompt. All other failure modes route through silent rehydration.
 - New routes added in future sprints must run through this DOM-grep spec before merging.
 
+## AD-026 — EPUB vendor autodetect and heading-strategy contract
+
+**Decision:** Strategy selection runs through a single discriminator function `core::epub::detect::detect_vendor`. The result drives `parse_epub_bytes`'s dispatch into `KindleStrategy` or `KoboStrategy`. `EpubVendor::Generic` falls back to `Kindle` (lowest-regression default for unknown books). The chosen vendor is surfaced on `JobEvent::Started.strategy: Option<EpubVendor>` so the UI and logs can show which path ran.
+
+**Kobo classification rule:** a body file (XHTML, not CSS / OPF / NCX) must carry either ≥3 `koboSpan` substrings, or be one of ≥3 distinct body files each carrying a `koboSpan` or `font-1[246]0per` marker. XML and CSS comments are stripped before counting. One stray marker in an otherwise-Kindle book does not flip the verdict.
+
+**Confidence:** `VendorDetection.confidence: f32` is logical [0, 1]. Positive matches land ≥ 0.8; unknown / empty EPUBs land ≤ 0.4. The orchestrator does not gate on confidence today — it only logs — but Generic falls back to Kindle so a misclassification degrades to the prior behaviour.
+
+**`Chapter.id` form:** `ChapterId(format!("{strategy}:{spine_index}:{title_hash16}"))` where the title hash is sha256 of the NFKC-normalised, lowercase, whitespace-collapsed title, truncated to 16 hex chars. Stable across re-parse on the same EPUB bytes. Required precondition for re-import diff.
+
+**Reversibility:** `EpubVendor` is a public IPC type (`specta`-exported). Adding variants is additive (TS bindings see a wider union). Renaming variants is a frontend break.
+
+**Where it lives:**
+- `src-tauri/src/core/epub/detect.rs` — discriminator + cluster heuristic.
+- `src-tauri/src/core/epub/{kindle.rs, kobo.rs}` — strategies.
+- `src-tauri/src/core/epub/mod.rs` — `autodetect_vendor`, `autodetect_vendor_bytes`, `parse_epub`, `parse_epub_bytes`.
+- `src-tauri/tests/epub_vendor_detect.rs` — heuristic gates.
+- `src-tauri/tests/epub_kobo_parse.rs` — Kobo strategy snapshot.
+
+**Consequences:**
+- A future vendor (e.g. Apple Books, Adobe) adds a new `EpubVendor::*` variant plus a `*Strategy`. The autodetect heuristic grows by one branch.
+- User override of vendor detection is deferred — the orchestrator logs the chosen strategy so field reports can identify false positives before we add a UI knob.
+
+## AD-027 — Chapter-divider absorption policy
+
+**Decision:** Silence between chapters (the audible gong / 2s of room tone / fade-out) is one of three modes: `AbsorbPolicy::Forward` (silence absorbed into the NEXT chapter — the prototype's behaviour), `Backward` (absorbed into the previous chapter), `Drop` (silence excluded from both). `Forward` is the default for parity. The policy is per-project, persisted in `project.json`.
+
+**Why it's per-project, not global:** different books have different audible dividers. Some use a clean cut; some use a 2s gong the listener wants kept with the previous chapter (so they hear it as a "we just finished" beat). A global default would have to pick one and surprise users on every other book.
+
+**Default migration:** new projects default to `Forward` — byte-equal to the prior carver output. Existing projects without `absorb_policy` deserialise to `Forward` via `#[serde(default)]`. Changing the global default in future requires a `schemaVersion` bump and a migration block in `JsonProjectStore::get`.
+
+**Where it lives:**
+- `src-tauri/src/core/audio/carver.rs` — `carve(audio, opts)`, `AbsorbPolicy`, `CarveOpts`.
+- `src-tauri/src/core/project.rs` — `absorb_policy: AbsorbPolicy`.
+- `src/lib/components/ProjectSettings.svelte` — three-mode radio.
+- `src-tauri/tests/carver_absorb_test.rs` — golden-offset gates.
+- `src-tauri/tests/fixtures/audio/silence_corpus/` — sox-generated WAVs + `golden_offsets.json`.
+
+**Verification gate:** all three modes' computed boundaries are within ±50ms of the expected silence midpoint (recorded in `golden_offsets.json`). Forward and Backward and Drop produce distinct cut offsets ≥ 1 sample apart on the same fixture.
+
+**Consequences:**
+- Carver tests gain a per-policy axis; quality gate Q20 covers this matrix.
+- The UI lets a user change the policy on an unscarved project. Changing it after carving is silently a no-op until the project is re-carved (a stretch behaviour — current implementation simply persists the setting and lets the next run consume it).
+
 ## Open architecture questions
 
 1. **Re-import / diff behaviour** — when the same Candidate is re-scanned (Calibre edit, Libation re-rip), what's the per-chapter conflict policy? Overwrite / append / skip / prompt? Current default: append-by-default, prompt on conflict.
