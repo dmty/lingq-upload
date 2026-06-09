@@ -73,7 +73,7 @@ impl LingqClient {
             if attempt > 0 {
                 tokio::time::sleep(backoff(attempt)).await;
             }
-            let form = build_form(&req, self.lang(), audio_bytes.as_deref(), audio_name.as_deref())?;
+            let form = self.build_form(&req, audio_bytes.as_deref(), audio_name.as_deref())?;
             let resp = self
                 .http()
                 .post(&url)
@@ -102,6 +102,33 @@ impl LingqClient {
         }
         Err(last_err.expect("retry loop ran at least once"))
     }
+
+    fn build_form(
+        &self,
+        req: &ImportLessonRequest<'_>,
+        audio_bytes: Option<&[u8]>,
+        audio_name: Option<&str>,
+    ) -> Result<Form, LingqError> {
+        let mut form = Form::new()
+            .text("title", req.title.to_string())
+            .text("text", req.text.to_string())
+            .text("collection", req.collection.0.to_string())
+            .text("language", self.lang().to_string())
+            .text("level", req.level.to_string())
+            .text("status", req.status.as_form_str().to_string())
+            .text("save", if req.save { "true" } else { "false" }.to_string());
+        if !req.tags.is_empty() {
+            form = form.text("tags", req.tags.join(","));
+        }
+        if let (Some(bytes), Some(name)) = (audio_bytes, audio_name) {
+            let part = Part::bytes(bytes.to_vec())
+                .file_name(name.to_string())
+                .mime_str("audio/mpeg")
+                .map_err(|e| LingqError::Transport(e.to_string()))?;
+            form = form.part("audio", part);
+        }
+        Ok(form)
+    }
 }
 
 /// 200ms * 2^attempt, +/-25% jitter. Pseudo-random based on nanosecond clock —
@@ -117,33 +144,6 @@ fn backoff(attempt: u32) -> Duration {
     let jitter = (r - 0.5) * 0.5; // in [-0.25, 0.25]
     let scaled = (base_ms as f64 * (1.0 + jitter)).max(0.0) as u64;
     Duration::from_millis(scaled)
-}
-
-fn build_form(
-    req: &ImportLessonRequest<'_>,
-    lang: &str,
-    audio_bytes: Option<&[u8]>,
-    audio_name: Option<&str>,
-) -> Result<Form, LingqError> {
-    let mut form = Form::new()
-        .text("title", req.title.to_string())
-        .text("text", req.text.to_string())
-        .text("collection", req.collection.0.to_string())
-        .text("language", lang.to_string())
-        .text("level", req.level.to_string())
-        .text("status", req.status.as_form_str().to_string())
-        .text("save", if req.save { "true" } else { "false" }.to_string());
-    if !req.tags.is_empty() {
-        form = form.text("tags", req.tags.join(","));
-    }
-    if let (Some(bytes), Some(name)) = (audio_bytes, audio_name) {
-        let part = Part::bytes(bytes.to_vec())
-            .file_name(name.to_string())
-            .mime_str("audio/mpeg")
-            .map_err(|e| LingqError::Transport(e.to_string()))?;
-        form = form.part("audio", part);
-    }
-    Ok(form)
 }
 
 async fn parse_lesson_id(resp: reqwest::Response) -> Result<i64, LingqError> {

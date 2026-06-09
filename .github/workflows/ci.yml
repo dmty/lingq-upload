@@ -219,12 +219,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install ripgrep
-        run: sudo apt-get install -y --no-install-recommends ripgrep
-      - name: Disallow hardcoded /ja/ URL segment in LingQ client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ripgrep
+      - name: Disallow hardcoded /ja/ URL segment in src-tauri/src
         shell: bash
         run: |
-          if rg "/ja/" src-tauri/src/lingq/; then
-            echo "::error::hardcoded /ja/ URL segment found in src-tauri/src/lingq/ — thread the language via LingqClient instead"
+          if rg "/ja/" src-tauri/src/ -g '!lingq/lang.rs'; then
+            echo "::error::hardcoded /ja/ URL segment found in src-tauri/src/ — thread the language via LingqClient instead"
             exit 1
           fi
 
