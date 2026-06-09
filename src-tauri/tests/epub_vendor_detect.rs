@@ -9,8 +9,16 @@
 use std::io::{Cursor, Write};
 
 use lingq_upload_lib::core::epub::{detect_vendor, EpubVendor};
+use sha2::{Digest, Sha256};
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+
+/// sha256 of `tests/fixtures/epub/kobo/adversarial_mixed_classes.epub`.
+/// Pinned so a silent rewrite of the binary blob (zip metadata, recompression,
+/// content shift) fails CI loudly. Bump after a deliberate regeneration via
+/// the `writes_adversarial_kobo_fixture_to_disk` `#[ignore]`d test.
+const ADVERSARIAL_KOBO_FIXTURE_SHA256: &str =
+    "12eb2d330b590e350164d7a0df3026030dc88c93509f43009ef7f8a2b012b759";
 
 const CONTAINER_XML: &str = r#"<?xml version="1.0"?>
 <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
@@ -207,6 +215,20 @@ fn adversarial_kobo_fixture_is_committed() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/epub/kobo/adversarial_mixed_classes.epub");
     assert!(path.exists(), "missing committed fixture: {}", path.display());
+}
+
+#[test]
+fn adversarial_kobo_fixture_pinned_by_sha256() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/epub/kobo/adversarial_mixed_classes.epub");
+    let bytes = std::fs::read(&path).expect("read fixture");
+    let mut h = Sha256::new();
+    h.update(&bytes);
+    let hex = hex::encode(h.finalize());
+    assert_eq!(
+        hex, ADVERSARIAL_KOBO_FIXTURE_SHA256,
+        "fixture drifted; update the constant if the regeneration was intentional"
+    );
 }
 
 #[test]

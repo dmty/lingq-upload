@@ -90,6 +90,16 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+      # The ffmpeg-backed silence-detection paths in `carver_absorb_test` are
+      # `#[ignore]`-flagged so devs without ffmpeg on PATH can run the default
+      # suite. CI has ffmpeg installed above, so opt in to the golden-offset
+      # gate explicitly. Windows ffmpeg is flaky in `silencedetect` parsing
+      # under choco — skip there.
+      - name: carver golden-offset gate
+        if: runner.os != 'Windows'
+        working-directory: src-tauri
+        run: cargo test --locked --test carver_absorb_test -- --include-ignored
+
       - name: cargo clippy
         working-directory: src-tauri
         run: cargo clippy --locked -- -D warnings
