@@ -169,6 +169,7 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
         last_transition_at: None,
     skipped_chapters: vec![],
     absorb_policy: AbsorbPolicy::default(),
+    mapping: None,
     };
     store.put(&project).unwrap();
 

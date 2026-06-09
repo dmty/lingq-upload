@@ -55,7 +55,6 @@ pub async fn cmd_project_load(
     Ok(project)
 }
 
-<<<<<<< HEAD
 /// Replace the project's skipped-chapter set wholesale.
 ///
 /// The picker UI debounces user edits and flushes the resulting selection

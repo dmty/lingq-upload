@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
-use crate::core::matcher::{MismatchCondition, MismatchResponse};
+use crate::core::matcher::{MappingState, MismatchCondition, MismatchResponse};
 use crate::ingest::{AudioSource, ChapterManifest, SeriesRef, TextSource};
 
 pub const SCHEMA_V1: u32 = 1;
@@ -133,6 +133,11 @@ pub struct Project {
     /// carve time. Default `Forward` preserves legacy behaviour.
     #[serde(default)]
     pub absorb_policy: AbsorbPolicy,
+    /// Persisted state of the two-column mapping editor: the chapter↔track
+    /// pairing, the parking lot of unpaired tracks, and a monotonic op_id
+    /// used by the UI for idempotent replay on reload.
+    #[serde(default)]
+    pub mapping: Option<MappingState>,
 }
 
 impl Project {
@@ -169,6 +174,7 @@ impl Project {
             last_transition_at: None,
             skipped_chapters: vec![],
             absorb_policy: AbsorbPolicy::default(),
+            mapping: None,
         }
     }
 

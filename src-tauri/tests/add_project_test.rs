@@ -60,6 +60,7 @@ fn make_project(id: ProjectId, title: &str) -> Project {
         last_transition_at: None,
     skipped_chapters: vec![],
     absorb_policy: AbsorbPolicy::default(),
+    mapping: None,
     }
 }
 

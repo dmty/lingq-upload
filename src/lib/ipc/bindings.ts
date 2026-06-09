@@ -210,6 +210,26 @@ async cmdMatcherInspect(projectId: ProjectId) : Promise<Result<MismatchInspectio
 }
 },
 /**
+ * Apply a single mapping-editor op to a project and persist the new state.
+ * 
+ * `expected_op_id` is the op_id the client believes the server currently
+ * holds — i.e. one less than the op_id the new state will carry. If the
+ * server's persisted op_id differs we reject. This lets the UI replay an
+ * in-flight op on page reload without double-applying it: the client tracks
+ * the last-acknowledged op_id locally, and on reload re-sends with the same
+ * `expected_op_id` it sent originally. A retry against an already-applied
+ * op finds `current_op_id == expected_op_id`, so it is rejected cleanly
+ * rather than mutating the state a second time.
+ */
+async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: number) : Promise<Result<MappingState, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_apply_mapping_op", { projectId, op, expectedOpId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Load a persisted project by its `join_key`.
  * 
  * The frontend reaches Match and Run routes with a stringified key in the URL
@@ -362,6 +382,10 @@ export type LibrarySource = "calibre" | "libation"
 export type LibraryStatus = "done" | "running" | "paused" | "needs_match" | "failed" | "idle"
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+export type MappingError = { kind: "UnknownChapter"; message: string } | { kind: "UnknownTrack"; message: string } | { kind: "Invalid"; message: string }
+export type MappingOp = { kind: "swap"; chapter_id: ChapterId; track_id: string } | { kind: "park"; track_id: string } | { kind: "unpark"; track_id: string; chapter_id: ChapterId }
+export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; confidence: number; touched?: boolean }
+export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number }
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
 export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
 /**
@@ -385,7 +409,13 @@ skipped_chapters?: ChapterId[];
  * How chapter-divider silence is folded into neighbouring tracks at
  * carve time. Default `Forward` preserves legacy behaviour.
  */
-absorb_policy?: AbsorbPolicy }
+absorb_policy?: AbsorbPolicy; 
+/**
+ * Persisted state of the two-column mapping editor: the chapter↔track
+ * pairing, the parking lot of unpaired tracks, and a monotonic op_id
+ * used by the UI for idempotent replay on reload.
+ */
+mapping?: MappingState | null }
 /**
  * Canonical project identity (AD-021).
  * 
