@@ -227,6 +227,33 @@ async cmdProjectLoad(key: string) : Promise<Result<Project, AppError>> {
 }
 },
 /**
+ * List the parsed chapters of a project's text source so the picker can
+ * render rows. Re-parses on each call — the picker is short-lived UI so
+ * the cost is acceptable; a future iteration may cache.
+ */
+async cmdProjectChapters(projectId: ProjectId) : Promise<Result<Chapter[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_project_chapters", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Replace the project's skipped-chapter set wholesale.
+ * 
+ * The picker UI debounces user edits and flushes the resulting selection
+ * here. `ProjectStore::set_selection` is atomic per AD-022.
+ */
+async cmdSetSelection(projectId: ProjectId, skippedIds: ChapterId[]) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_selection", { projectId, skippedIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Start an end-to-end project job. Returns immediately with the new job id;
  * the actual work runs on the tokio runtime and streams `JobEvent`s.
  */
@@ -303,6 +330,7 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
  */
 export type BucketPreview = { textRangeStart: number; textRangeEnd: number; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
+export type Chapter = { order: number; title: string; body: string; id?: ChapterId; kind?: ChapterKind }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 /**
  * Stable identity for a parsed chapter.
@@ -313,6 +341,14 @@ export type ChapterEntry = { title: string; start_sec: number; end_sec: number |
  * keeps the same `ChapterId(String)` shape so callers do not change.
  */
 export type ChapterId = string
+/**
+ * Position of a chapter within a project's text.
+ * 
+ * Tagged by the heading strategy at parse time. `Body` is the default;
+ * `FrontMatter` / `BackMatter` flag preface / epilogue chapters so the UI
+ * can preselect them as skipped.
+ */
+export type ChapterKind = "body" | "front_matter" | "back_matter"
 export type ChapterManifest = { chapters: ChapterEntry[] }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }

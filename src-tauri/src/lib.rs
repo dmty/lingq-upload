@@ -37,6 +37,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::matcher::cmd_matcher_resolve,
             commands::matcher::cmd_matcher_inspect,
             commands::project::cmd_project_load,
+            commands::project::cmd_project_chapters,
+            commands::project::cmd_set_selection,
             commands::jobs::cmd_start_project_job,
             commands::jobs::cmd_cancel_job,
             commands::jobs::cmd_project_cancel,
@@ -62,6 +64,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<ingest::IngestError>()
         .typ::<commands::upload::UploadResult>()
         .typ::<core::identity::ProjectId>()
+        .typ::<core::epub::Chapter>()
+        .typ::<core::epub::ChapterKind>()
         .typ::<core::project::Project>()
         .typ::<core::project::ProjectSummary>()
         .typ::<core::project::ChapterReceipt>()

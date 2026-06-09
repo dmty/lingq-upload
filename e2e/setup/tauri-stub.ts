@@ -13,6 +13,31 @@ export const tauriStubInitScript = `
 ;(() => {
     if (window.__TAURI_INTERNALS__) return;
 
+    // Mutable selection state so the picker spec can assert persistence
+    // across navigation. Init scripts re-run on every page.goto so a plain
+    // window-scoped object would reset. We back the skipped map with
+    // sessionStorage so test-controlled navigations preserve state.
+    const SKIPPED_KEY = "__pickerSkipped__";
+    function readSkipped() {
+        try {
+            return JSON.parse(sessionStorage.getItem(SKIPPED_KEY) || "{}");
+        } catch {
+            return {};
+        }
+    }
+    function writeSkipped(m) {
+        try {
+            sessionStorage.setItem(SKIPPED_KEY, JSON.stringify(m));
+        } catch {}
+    }
+    window.__pickerState__ = {
+        get skippedByProject() {
+            return readSkipped();
+        },
+        chaptersByProject: (window.__pickerState__ && window.__pickerState__.chaptersByProject) || {},
+        _writeSkipped: writeSkipped,
+    };
+
     const handlers = {
         // Library list returns an empty index so the empty-state CTA renders.
         cmd_library_list: () => ({
@@ -29,36 +54,55 @@ export const tauriStubInitScript = `
         // no receipts so the chapter list renders empty and the start
         // button shows "Start" (not "Resume" — which would tax the
         // forbidden-word filter on /run).
-        cmd_project_load: (args) => ({
-            schema_version: 1,
-            id: {
-                content_hash: (args && args.key) || "stub-project",
-                audible_asin: null,
-                isbn13: null,
-                calibre_uuid: null,
-            },
-            sources: { text: null, audio: null },
-            settings: {
-                language: "en",
-                collection_title: "Stub Project",
-                level: 1,
-                tags: [],
-            },
-            receipts: [],
-            queue_cursor: 0,
-            completed_lesson_ids: [],
-            matcher_decision: null,
-            cover_path: null,
-            authors: [],
-            series: null,
-            lingq_collection_id: null,
-            last_activity_at: null,
-            stage: "mapped",
-            last_transition_at: null,
-        }),
+        cmd_project_load: (args) => {
+            const key = (args && args.key) || "stub-project";
+            const skipped = readSkipped()[key] || [];
+            return {
+                schema_version: 1,
+                id: {
+                    content_hash: key,
+                    audible_asin: null,
+                    isbn13: null,
+                    calibre_uuid: null,
+                },
+                sources: { text: null, audio: null },
+                settings: {
+                    language: "en",
+                    collection_title: "Stub Project",
+                    level: 1,
+                    tags: [],
+                },
+                receipts: [],
+                queue_cursor: 0,
+                completed_lesson_ids: [],
+                matcher_decision: null,
+                cover_path: null,
+                authors: [],
+                series: null,
+                lingq_collection_id: null,
+                last_activity_at: null,
+                stage: "mapped",
+                last_transition_at: null,
+                skipped_chapters: skipped,
+            };
+        },
+        cmd_project_chapters: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            return window.__pickerState__.chaptersByProject[key] || [];
+        },
+        cmd_set_selection: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const map = readSkipped();
+            map[key] = (args && args.skippedIds) || [];
+            writeSkipped(map);
+            return null;
+        },
         // Mismatch inspection for the /match route. None = no decision yet,
         // route renders the empty resolver shell without any decision copy.
-        cmd_matcher_inspect: () => null,
+        // Tests can pin a fixture via window.__matcherInspection__.
+        cmd_matcher_inspect: () => window.__matcherInspection__ || null,
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't

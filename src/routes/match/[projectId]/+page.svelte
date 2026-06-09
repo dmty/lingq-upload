@@ -10,9 +10,24 @@
   import { appErrorMessage } from "$lib/errors";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
+  import ChapterPicker from "$lib/components/ChapterPicker.svelte";
+  import { mapping } from "$lib/stores/mapping.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
+
+  $effect(() => {
+    if (projectKey) void mapping.load(projectKey);
+  });
+
+  const pickerRows = $derived(
+    mapping.chapters.map((c) => ({
+      id: c.id ?? `idx:${c.order}`,
+      order: c.order,
+      title: c.title,
+      kind: c.kind ?? "body",
+    })),
+  );
 
   // The Run page seeds these via URL params on the live NeedsMatch event;
   // a cold entry from /library carries no params and must re-probe via
@@ -156,7 +171,23 @@
   }
 </script>
 
-<section class="mx-auto max-w-2xl space-y-6 pt-6">
+<div class="flex h-full min-h-screen">
+  <div class="w-72 shrink-0">
+    {#if mapping.status === "ready"}
+      <ChapterPicker
+        projectId={projectKey}
+        chapters={pickerRows}
+        skippedIds={mapping.skippedIds}
+        onChange={(ids) => void mapping.setSkipped(ids)}
+      />
+    {:else}
+      <aside class="border-r border-border bg-surface p-3 text-sm text-fg-muted">
+        Loading chapters…
+      </aside>
+    {/if}
+  </div>
+
+<section class="mx-auto max-w-2xl flex-1 space-y-6 pt-6">
   <header>
     <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
   </header>
@@ -236,3 +267,4 @@
     </button>
   </div>
 </section>
+</div>
