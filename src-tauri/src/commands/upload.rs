@@ -6,11 +6,12 @@ use specta::Type;
 use tauri::AppHandle;
 use uuid::Uuid;
 
+use super::parse_lang;
 use crate::core::{audio, text};
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::ingest::{AudioSource, Candidate, TextSource};
-use crate::lingq::{LanguageCode, LessonOpts, LingqClient};
+use crate::lingq::{LessonOpts, LingqClient};
 use crate::secrets::{RealKeyring, SecretsStore};
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone)]
@@ -67,7 +68,7 @@ pub async fn upload_one_shot(
     job.stage(Stage::Uploading);
     job.progress(0.0, Some("Uploading to LingQ".into()));
 
-    let code = LanguageCode::new(&lang).map_err(AppError::from)?;
+    let code = parse_lang(&lang)?;
     let client = LingqClient::new(SecretString::from(key), code);
     let lesson_id = client
         .import_lesson(

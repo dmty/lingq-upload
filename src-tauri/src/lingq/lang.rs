@@ -6,8 +6,16 @@ use super::error::LingqError;
 
 /// Typed LingQ language code. Validated against `^[a-z]{2,3}$` — matches the
 /// URL segment LingQ uses as a tenant boundary (see AD-017).
+///
+/// # Examples
+///
+/// ```
+/// use lingq_upload_lib::lingq::LanguageCode;
+/// assert!(LanguageCode::new("ja").is_ok());
+/// assert!(LanguageCode::new("JA").is_err());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct LanguageCode(String);
 
 impl LanguageCode {
@@ -28,6 +36,20 @@ impl LanguageCode {
     fn is_valid(code: &str) -> bool {
         let len = code.len();
         (2..=3).contains(&len) && code.bytes().all(|b| b.is_ascii_lowercase())
+    }
+}
+
+impl TryFrom<String> for LanguageCode {
+    type Error = LingqError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(&value)
+    }
+}
+
+impl From<LanguageCode> for String {
+    fn from(code: LanguageCode) -> Self {
+        code.0
     }
 }
 
@@ -66,5 +88,20 @@ mod tests {
         let c = LanguageCode::new("ja").expect("valid");
         assert_eq!(c.as_str(), "ja");
         assert_eq!(c.to_string(), "ja");
+    }
+
+    #[test]
+    fn deserialize_validates_against_schema() {
+        let ok: LanguageCode = serde_json::from_str("\"ja\"").expect("valid lowercase");
+        assert_eq!(ok.as_str(), "ja");
+        assert!(serde_json::from_str::<LanguageCode>("\"JA\"").is_err());
+        assert!(serde_json::from_str::<LanguageCode>("\"japa\"").is_err());
+        assert!(serde_json::from_str::<LanguageCode>("\"\"").is_err());
+    }
+
+    #[test]
+    fn serialize_emits_bare_string() {
+        let c = LanguageCode::new("ko").expect("valid");
+        assert_eq!(serde_json::to_string(&c).expect("serialize"), "\"ko\"");
     }
 }
