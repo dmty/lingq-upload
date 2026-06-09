@@ -22,7 +22,7 @@ use lingq_upload_lib::core::store::{
     InMemoryProjectStore, JsonProjectStore, ProjectStore, StoreError,
 };
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
-use lingq_upload_lib::lingq::LingqClient;
+use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 use tempfile::TempDir;
 
 // --- Sample data ------------------------------------------------------------
@@ -348,7 +348,7 @@ async fn run_skips_marked_chapters_and_imports_only_remainder() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").unwrap(),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
@@ -414,7 +414,7 @@ async fn skipping_after_upload_does_not_delete_existing_lesson() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").unwrap(),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();
