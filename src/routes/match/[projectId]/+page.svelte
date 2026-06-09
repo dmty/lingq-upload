@@ -3,16 +3,19 @@
   import { page } from "$app/state";
   import {
     commands,
+    type AbsorbPolicy,
     type BucketPreview,
     type MappingOp,
     type MismatchCondition,
     type MismatchResponse,
+    type ProjectId as ProjectIdType,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
   import ChapterPicker from "$lib/components/ChapterPicker.svelte";
   import MappingGrid from "$lib/components/MappingGrid.svelte";
+  import ProjectSettings from "$lib/components/ProjectSettings.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
@@ -44,6 +47,24 @@
   let hydrating = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
+
+  // Project-scope settings (absorb policy) live here so the user can adjust
+  // them before locking the mapping in. ProjectSettings owns the debounced
+  // persistence; the page only feeds the current values once loaded.
+  let projectIdValue = $state<ProjectIdType | null>(null);
+  let absorbPolicy = $state<AbsorbPolicy>("forward");
+  let settingsOpen = $state(false);
+
+  $effect(() => {
+    if (!projectKey) return;
+    void (async () => {
+      const loaded = await commands.cmdProjectLoad(projectKey);
+      if (loaded.status === "ok") {
+        projectIdValue = loaded.data.id;
+        absorbPolicy = loaded.data.absorb_policy ?? "forward";
+      }
+    })();
+  });
 
   function applyParams(): boolean {
     const p = page.url.searchParams;
@@ -229,9 +250,29 @@
 
 <section class="mx-auto max-w-3xl flex-1 space-y-6 pt-6">
   {#if mapping.mappingState}
-    <header>
+    <header class="flex items-baseline justify-between gap-3">
       <h1 class="text-lg font-semibold text-fg">Confirm chapter ↔ track pairing</h1>
+      {#if projectIdValue}
+        <button
+          type="button"
+          class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg hover:bg-surface-sunken"
+          aria-expanded={settingsOpen}
+          aria-controls="project-settings-panel"
+          onclick={() => (settingsOpen = !settingsOpen)}
+          data-testid="project-settings-toggle"
+        >
+          Project settings {settingsOpen ? "▲" : "▼"}
+        </button>
+      {/if}
     </header>
+    {#if settingsOpen && projectIdValue}
+      <div id="project-settings-panel" data-testid="project-settings-panel">
+        <ProjectSettings
+          projectId={projectIdValue}
+          bind:absorbPolicy
+        />
+      </div>
+    {/if}
     <MappingGrid
       chapters={mapping.chapters}
       tracks={trackRows}
