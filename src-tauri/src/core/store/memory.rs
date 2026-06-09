@@ -4,6 +4,7 @@ use std::sync::{Mutex, MutexGuard};
 use super::{canonicalise_selection, ProjectStore, StoreError};
 use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
+use crate::core::matcher::{apply_mapping_op as apply_pure, MappingOp, MappingState};
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub struct InMemoryProjectStore {
@@ -77,5 +78,28 @@ impl ProjectStore for InMemoryProjectStore {
             .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
         project.skipped_chapters = canonicalise_selection(skipped_ids);
         Ok(())
+    }
+
+    fn apply_mapping_op(
+        &self,
+        id: &ProjectId,
+        op: MappingOp,
+        expected_op_id: u64,
+    ) -> Result<MappingState, StoreError> {
+        let key = id.join_key();
+        let mut guard = self.lock();
+        let project = guard
+            .get_mut(&key)
+            .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
+        let current = project.mapping.clone().unwrap_or_default();
+        if expected_op_id != current.op_id + 1 {
+            return Err(StoreError::MappingStaleOp {
+                server: current.op_id,
+                expected: expected_op_id,
+            });
+        }
+        let next = apply_pure(&current, op).map_err(StoreError::Mapping)?;
+        project.mapping = Some(next.clone());
+        Ok(next)
     }
 }

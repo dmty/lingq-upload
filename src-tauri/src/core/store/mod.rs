@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
+use crate::core::matcher::{MappingError, MappingOp, MappingState};
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub use json::{JsonProjectStore, ListHealth};
@@ -25,6 +26,10 @@ pub enum StoreError {
     NotFound { key: String },
     #[error("index {index} out of bounds (len {len})")]
     OutOfBounds { index: usize, len: usize },
+    #[error("mapping op_id stale: server={server} expected={expected}")]
+    MappingStaleOp { server: u64, expected: u64 },
+    #[error("mapping error: {0}")]
+    Mapping(MappingError),
 }
 
 pub trait ProjectStore: Send + Sync {
@@ -46,6 +51,17 @@ pub trait ProjectStore: Send + Sync {
         id: &ProjectId,
         skipped_ids: &[ChapterId],
     ) -> Result<(), StoreError>;
+    /// Apply `op` to the project's `MappingState` atomically: load, gate on
+    /// `expected_op_id == state.op_id + 1`, apply, persist — all under the
+    /// per-project write lock so concurrent callers cannot race the RMW.
+    /// Returns either the new state, a stale-op signal, or the underlying
+    /// `MappingError` so callers can preserve the discriminant on the wire.
+    fn apply_mapping_op(
+        &self,
+        id: &ProjectId,
+        op: MappingOp,
+        expected_op_id: u64,
+    ) -> Result<MappingState, StoreError>;
 }
 
 /// Filesystem-safe rendering of an identifier (e.g. `ProjectId::join_key()`).
