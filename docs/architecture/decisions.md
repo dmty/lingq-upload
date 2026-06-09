@@ -496,41 +496,38 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Confidence:** `VendorDetection.confidence: f32` is logical [0, 1]. Positive matches land ≥ 0.8; unknown / empty EPUBs land ≤ 0.4. The orchestrator does not gate on confidence today — it only logs — but Generic falls back to Kindle so a misclassification degrades to the prior behaviour.
 
-**`Chapter.id` form:** `ChapterId(format!("{strategy}:{spine_index}:{title_hash16}"))` where the title hash is sha256 of the NFKC-normalised, lowercase, whitespace-collapsed title, truncated to 16 hex chars. Stable across re-parse on the same EPUB bytes. Required precondition for re-import diff.
+**`Chapter.id` form:** `ChapterId::from_chapter_parts(strategy, spine_key, title)` hashes `(strategy, spine_href, NFKC-lowercased-whitespace-collapsed title)` via sha256, takes the first 16 hex chars, and emits `"{strategy}:{hex16}"`. Stable across re-parse on the same EPUB bytes and across drops of empty mid-spine chapters (the spine href is the anchor, not the post-filter index). `normalize_title` also strips `Default_Ignorable_Code_Point` characters (ZWJ, ZWNJ, BOM, soft hyphen, variation selectors) so a re-save that inserts or removes them does not flip the id. Legacy `idx:N` strings deserialise as `ChapterId` placeholders; the job orchestrator logs a `tracing::warn!` once per project load when persisted skip ids do not match any parsed chapter.
+
+**Public entrypoint:** the path API is `parse_epub(path) -> Result<Vec<Chapter>, EpubError>`; it always autodetects internally. `parse_epub_with_strategy` exists for tests only — production callers cannot bypass autodetect.
 
 **Reversibility:** `EpubVendor` is a public IPC type (`specta`-exported). Adding variants is additive (TS bindings see a wider union). Renaming variants is a frontend break.
 
 **Where it lives:**
 - `src-tauri/src/core/epub/detect.rs` — discriminator + cluster heuristic.
-- `src-tauri/src/core/epub/{kindle.rs, kobo.rs}` — strategies.
-- `src-tauri/src/core/epub/mod.rs` — `autodetect_vendor`, `autodetect_vendor_bytes`, `parse_epub`, `parse_epub_bytes`.
+- `src-tauri/src/core/epub/{kobo.rs, parse.rs}` — strategies (Kindle parser lives inside `parse.rs`).
+- `src-tauri/src/core/epub/mod.rs` — `autodetect_vendor`, `autodetect_vendor_bytes`, `parse_epub`, `parse_epub_bytes`, `ChapterId::from_chapter_parts`.
 - `src-tauri/tests/epub_vendor_detect.rs` — heuristic gates.
 - `src-tauri/tests/epub_kobo_parse.rs` — Kobo strategy snapshot.
+- `src-tauri/tests/epub_kindle_regression.rs` — Kindle baseline snapshot.
 
 **Consequences:**
 - A future vendor (e.g. Apple Books, Adobe) adds a new `EpubVendor::*` variant plus a `*Strategy`. The autodetect heuristic grows by one branch.
 - User override of vendor detection is deferred — the orchestrator logs the chosen strategy so field reports can identify false positives before we add a UI knob.
 
-## AD-027 — Chapter-divider absorption policy
+## AD-027 — Chapter-divider absorb policy is a pure carver function
 
-**Decision:** Silence between chapters (the audible gong / 2s of room tone / fade-out) is one of three modes: `AbsorbPolicy::Forward` (silence absorbed into the NEXT chapter — the prototype's behaviour), `Backward` (absorbed into the previous chapter), `Drop` (silence excluded from both). `Forward` is the default for parity. The policy is per-project, persisted in `project.json`.
+**Decision:** `core::audio::carver` is a pure-function module. `boundaries_from_silences` maps detected `SilenceRun`s to `Boundary` records per `AbsorbPolicy`; `carve` adds the ffmpeg `silencedetect` driver. The orchestrator does not yet consume the output — wiring lands in a follow-up. The on-disk `Project::absorb_policy` field is persisted today so user intent survives until the wire-in.
 
-**Why it's per-project, not global:** different books have different audible dividers. Some use a clean cut; some use a 2s gong the listener wants kept with the previous chapter (so they hear it as a "we just finished" beat). A global default would have to pick one and surprise users on every other book.
+**Boundary shape:** every `Boundary` carries a `BoundaryKind`:
 
-**Default migration:** new projects default to `Forward` — byte-equal to the prior carver output. Existing projects without `absorb_policy` deserialise to `Forward` via `#[serde(default)]`. Changing the global default in future requires a `schemaVersion` bump and a migration block in `JsonProjectStore::get`.
+- `Forward` / `Backward` emit one `BoundaryKind::Cut` per silence run (silence is absorbed into the next / previous chapter).
+- `Drop` emits a paired `(BoundaryKind::DropStart, BoundaryKind::DropEnd)` per silence run, sharing one `track_index`. The span between them is excluded from both neighbours. The tagged form lets the future carve consumer distinguish "start of cut" from "end of cut" without re-deriving from position.
 
-**Where it lives:**
-- `src-tauri/src/core/audio/carver.rs` — `carve(audio, opts)`, `AbsorbPolicy`, `CarveOpts`.
-- `src-tauri/src/core/project.rs` — `absorb_policy: AbsorbPolicy`.
-- `src/lib/components/ProjectSettings.svelte` — three-mode radio.
-- `src-tauri/tests/carver_absorb_test.rs` — golden-offset gates.
-- `src-tauri/tests/fixtures/audio/silence_corpus/` — sox-generated WAVs + `golden_offsets.json`.
+**Defaults:** `CarveOpts::silence_db = -45.0`, `min_silence_ms = 500`, `absorb = Forward`. -45 dB sits between hard-zero and the -50…-60 dB noise floors typical in audiobook narration; tighter than -30 dB which mis-detects on real material.
 
-**Verification gate:** all three modes' computed boundaries are within ±50ms of the expected silence midpoint (recorded in `golden_offsets.json`). Forward and Backward and Drop produce distinct cut offsets ≥ 1 sample apart on the same fixture.
+**Persistence:** `Project::absorb_policy` (`#[serde(default)]` → `Forward`) is mutated by `cmd_set_absorb_policy`. The Tauri command is debounced from the Svelte radio (~300ms) and silently reverts on error (AD-025).
 
-**Consequences:**
-- Carver tests gain a per-policy axis; quality gate Q20 covers this matrix.
-- The UI lets a user change the policy on an unscarved project. Changing it after carving is silently a no-op until the project is re-carved (a stretch behaviour — current implementation simply persists the setting and lets the next run consume it).
+**Fixtures:** `src-tauri/tests/fixtures/audio/silence_corpus/clip_{a,b}.wav` are immutable test inputs pinned by sha256. Regenerate via `scripts/fixtures/gen_silence_corpus.sh`. The ffmpeg-backed integration tests are `#[ignore]`-flagged and opt-in via `cargo test -- --include-ignored`; setting `LINGQ_E2E_AUDIO=0` skips them when run that way.
 
 ## Open architecture questions
 

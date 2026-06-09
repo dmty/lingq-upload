@@ -12,9 +12,7 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
-use crate::core::epub::{
-    autodetect_vendor, parse_epub, Chapter, ChapterId, EpubVendor, HeadingStrategy,
-};
+use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::pack::{build_preview, proportional_pack};
