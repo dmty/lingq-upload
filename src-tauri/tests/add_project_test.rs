@@ -6,6 +6,7 @@
 //! re-derive the same `candidate_to_id` path and prove the loop and
 //! deduping behaviour through the underlying primitives.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -58,6 +59,7 @@ fn make_project(id: ProjectId, title: &str) -> Project {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

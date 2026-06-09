@@ -67,6 +67,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<core::epub::Chapter>()
         .typ::<core::epub::ChapterKind>()
         .typ::<commands::project::ChapterMeta>()
+        .typ::<core::audio::AbsorbPolicy>()
         .typ::<core::project::Project>()
         .typ::<core::project::ProjectSummary>()
         .typ::<core::project::ChapterReceipt>()

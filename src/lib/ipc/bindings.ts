@@ -315,6 +315,16 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
 
 /** user-defined types **/
 
+/**
+ * How a silent chapter-divider is folded into its neighbour tracks.
+ * 
+ * `Forward` is the legacy behaviour and the default for newly created
+ * projects: every cut lands at the END of the silent run, so the silence
+ * glues onto the NEXT chapter. `Backward` cuts at the START of the silence
+ * (silence stays with the PREVIOUS chapter). `Drop` emits a paired (start,
+ * end) so the silent run is excised from both sides.
+ */
+export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Other"; message: string }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
@@ -401,7 +411,12 @@ export type Project = { schema_version?: number; id: ProjectId; sources: Project
  * from LingQ when added here — selection only gates not-yet-uploaded
  * chapters in the run loop.
  */
-skipped_chapters?: ChapterId[] }
+skipped_chapters?: ChapterId[]; 
+/**
+ * How chapter-divider silence is folded into neighbouring tracks at
+ * carve time. Default `Forward` preserves legacy behaviour.
+ */
+absorb_policy?: AbsorbPolicy }
 /**
  * Canonical project identity (AD-021).
  * 

@@ -16,6 +16,7 @@
 //!   * Drift indicator render + tooltip on the Mismatch UI's bucket
 //!     preview rows (requires a browser).
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
 use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
@@ -194,6 +195,7 @@ fn build_project(
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     };
     (id, project)
 }

@@ -1,3 +1,4 @@
+use crate::core::audio::AbsorbPolicy;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -132,6 +133,7 @@ pub fn candidate_to_project(c: &Candidate) -> Project {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 

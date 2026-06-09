@@ -3,6 +3,7 @@
 //! Skips when `ffmpeg`/`ffprobe` are missing from PATH — same convention as
 //! `job_orchestrator_test.rs`.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
 use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
@@ -230,6 +231,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     };
     store.put(&project).unwrap();
 
@@ -451,6 +453,7 @@ fn cmd_replay_receipts_returns_persisted_state() {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     };
     store.put(&project).unwrap();
 

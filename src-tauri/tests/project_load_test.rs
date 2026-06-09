@@ -5,6 +5,7 @@
 //! against a real `JsonProjectStore` — that's the only logic the command
 //! adds on top of the store.
 
+use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::PathBuf;
 
 use chrono::Utc;
@@ -50,6 +51,7 @@ fn sample_with(id: ProjectId, title: &str) -> Project {
         stage: Default::default(),
         last_transition_at: None,
     skipped_chapters: vec![],
+    absorb_policy: AbsorbPolicy::default(),
     }
 }
 
