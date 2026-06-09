@@ -281,7 +281,7 @@
   }
 
   function uploadAnother() {
-    // Sally's "sticky destination": keep lang + collection.
+    // Sticky destination: keep lang + collection for the next upload.
     textPath = "";
     audioPath = "";
     title = "";

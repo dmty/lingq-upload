@@ -28,9 +28,8 @@ pub enum MatchOutcome {
     },
 }
 
-/// Pair chapters ↔ tracks. Sprint 2 is count-based only: equal counts pair
-/// by index; otherwise classify the mismatch and return the allowed response set.
-/// Manual mapping editor is deferred.
+/// Pair chapters ↔ tracks. Count-based: equal counts pair by index;
+/// otherwise classify the mismatch and return the allowed response set.
 pub fn auto_match(chapters: &[Chapter], tracks: &[AudioTrack]) -> MatchOutcome {
     auto_match_counts(chapters.len(), tracks.len())
 }
