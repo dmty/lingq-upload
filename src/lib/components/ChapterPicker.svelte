@@ -1,6 +1,20 @@
 <script lang="ts">
   import { untrack } from "svelte";
 
+  /**
+   * Selective chapter picker.
+   *
+   * Maintains per-row `checked` state, debounces flushes to the parent
+   * (300 ms), and supports shift-click range toggle plus a non-destructive
+   * "skip front-matter" chip. Virtualisation kicks in above 100 rows —
+   * currently a no-op fallback to a plain scroll list; the 500-row fixture
+   * is expected to render without lag on modern hardware.
+   *
+   * AD-025: a flush that fails silently reverts in the store; the parent
+   * propagates revert via `revertEpoch` so we can re-align row state without
+   * re-seeding on first mount.
+   */
+
   type Kind = "body" | "front_matter" | "back_matter";
 
   type Row = {
@@ -11,26 +25,32 @@
   };
 
   type Props = {
-    projectId: string;
     chapters: Row[];
     skippedIds: string[];
+    /** Bumps when the store reverts an optimistic write. */
+    revertEpoch?: number;
     onChange: (skippedIds: string[]) => void;
+    /** Flush the pending debounced edit immediately. */
+    onFlush?: () => void | Promise<void>;
   };
 
-  const { projectId, chapters, skippedIds, onChange }: Props = $props();
+  const {
+    chapters,
+    skippedIds,
+    revertEpoch = 0,
+    onChange,
+    onFlush,
+  }: Props = $props();
 
   // Per-row checked state. `true` = include, `false` = skip.
   let checked = $state<Record<string, boolean>>({});
   let skipFrontChip = $state(false);
-  // Snapshot of front-matter row state at the moment the chip went on.
-  // Restored when the chip flips back off so manual edits survive.
   let preChipFront = $state<Record<string, boolean> | null>(null);
   let lastClicked = $state<string | null>(null);
 
-  // Seed checked map from props once per chapter-set identity. The
-  // `skippedIds` prop is the *initial* selection — we deliberately do not
-  // re-seed when it changes downstream so user edits aren't overwritten by
-  // the round-trip echo from our own onChange flush.
+  // Seed once per chapter-set identity. We deliberately do not re-seed when
+  // `skippedIds` changes downstream so user edits aren't overwritten by the
+  // round-trip echo from our own onChange flush.
   let lastChaptersRef: Row[] | null = null;
   $effect(() => {
     if (chapters === lastChaptersRef) return;
@@ -42,6 +62,28 @@
         seed[c.id] = !skipSet.has(c.id);
       }
       checked = seed;
+    });
+  });
+
+  // Re-align row state from skippedIds when the store reverts an optimistic
+  // write. Triggered by revertEpoch ticking; first mount is skipped because
+  // the chapters-seed effect above already populated checked.
+  let lastRevertEpoch: number | null = null;
+  $effect(() => {
+    const epoch = revertEpoch;
+    if (lastRevertEpoch === null) {
+      lastRevertEpoch = epoch;
+      return;
+    }
+    if (epoch === lastRevertEpoch) return;
+    lastRevertEpoch = epoch;
+    untrack(() => {
+      const skipSet = new Set(skippedIds);
+      const next: Record<string, boolean> = {};
+      for (const c of chapters) {
+        next[c.id] = !skipSet.has(c.id);
+      }
+      checked = next;
     });
   });
 
@@ -62,11 +104,30 @@
     }, 300);
   }
 
+  function flushNow() {
+    if (flushTimer != null) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+      onChange(currentSkipped());
+    }
+  }
+
+  // Flush pending edit on unmount so navigate-away within the debounce
+  // window doesn't drop the user's selection.
+  $effect(() => {
+    return () => {
+      flushNow();
+      void onFlush?.();
+    };
+  });
+
   function toggleRow(id: string, shiftKey: boolean, newState: boolean) {
     const sorted = rowsSorted();
     const targetIdx = sorted.findIndex((r) => r.id === id);
     if (targetIdx < 0) return;
 
+    // Shift before any prior click: treat the clicked row as the anchor
+    // (Finder convention — no range op, single toggle).
     if (shiftKey && lastClicked != null) {
       const anchorIdx = sorted.findIndex((r) => r.id === lastClicked);
       if (anchorIdx >= 0) {
@@ -93,7 +154,6 @@
 
   function toggleSkipFrontChip() {
     if (!skipFrontChip) {
-      // Going on. Snapshot front-matter rows, then uncheck them.
       const snap: Record<string, boolean> = {};
       const next = { ...checked };
       for (const c of chapters) {
@@ -106,8 +166,6 @@
       checked = next;
       skipFrontChip = true;
     } else {
-      // Going off. Restore the snapshot to undo the chip's effect only,
-      // leaving any manual edits to non-front-matter rows untouched.
       if (preChipFront != null) {
         const next = { ...checked };
         for (const [id, was] of Object.entries(preChipFront)) {
@@ -134,7 +192,6 @@
 <aside
   class="flex h-full flex-col gap-3 border-r border-border bg-surface p-3"
   data-testid="chapter-picker"
-  data-project-id={projectId}
 >
   <header class="flex items-center justify-between gap-2">
     <h2 class="text-sm font-semibold text-fg">Chapters</h2>
@@ -152,7 +209,6 @@
   </header>
 
   {#if isVirtualised}
-    <!-- Virtualisation not wired: no virtual-list dep is currently a project dependency. Falls back to a plain scrollable list; expected to handle 500-row fixture without lag on modern hardware. -->
     <p class="text-[10px] text-fg-muted">{chapters.length} chapters</p>
   {/if}
 

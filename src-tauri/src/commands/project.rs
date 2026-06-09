@@ -1,11 +1,31 @@
 use std::sync::Arc;
 
-use crate::core::epub::{parse_epub, Chapter, ChapterId, HeadingStrategy};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
+use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::project::Project;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::ingest::TextSource;
+
+/// Picker-facing projection of [`Chapter`] without the body. Picker rows only
+/// need identity + label + kind; shipping the body over IPC would cost tens
+/// of MB on book-length inputs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ChapterMeta {
+    pub id: ChapterId,
+    pub order: usize,
+    pub title: String,
+    pub kind: ChapterKind,
+}
+
+impl From<Chapter> for ChapterMeta {
+    fn from(c: Chapter) -> Self {
+        Self { id: c.id, order: c.order, title: c.title, kind: c.kind }
+    }
+}
 
 /// Load a persisted project by its `join_key`.
 ///
@@ -59,32 +79,30 @@ pub async fn cmd_set_selection(
 pub async fn cmd_project_chapters(
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
     project_id: ProjectId,
-) -> Result<Vec<Chapter>, AppError> {
+) -> Result<Vec<ChapterMeta>, AppError> {
     let project = store
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     match &project.sources.text {
-        TextSource::Epub(path) => parse_epub(path, HeadingStrategy::GenericH1)
-            .map_err(|e| AppError::Other(format!("parse_epub: {e}"))),
-        TextSource::LooseFiles { paths } => {
-            let mut chapters = Vec::with_capacity(paths.len());
-            for (i, p) in paths.iter().enumerate() {
-                let body = std::fs::read_to_string(p)
-                    .map_err(|e| AppError::Other(format!("read {}: {e}", p.display())))?;
-                chapters.push(Chapter {
-                    order: i,
-                    title: p
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| format!("Chapter {}", i + 1)),
-                    body,
-                    id: ChapterId::from_order(i),
-                    kind: Default::default(),
-                });
-            }
-            Ok(chapters)
+        TextSource::Epub(path) => {
+            let chapters = parse_epub(path, HeadingStrategy::GenericH1)
+                .map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
+            Ok(chapters.into_iter().map(ChapterMeta::from).collect())
         }
+        TextSource::LooseFiles { paths } => Ok(paths
+            .iter()
+            .enumerate()
+            .map(|(i, p)| ChapterMeta {
+                id: ChapterId::from_order(i),
+                order: i,
+                title: p
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| format!("Chapter {}", i + 1)),
+                kind: ChapterKind::default(),
+            })
+            .collect()),
         TextSource::Missing => Ok(Vec::new()),
     }
 }

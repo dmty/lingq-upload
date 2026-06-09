@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { tauriStubInitScript } from "./setup/tauri-stub";
+import { tauriStubInitScriptFor } from "./setup/tauri-stub";
 
 // Picker persistence smoke. Loads a stub project with 6 chapters, unchecks
 // two of them, navigates away then back, and asserts the same two stay
@@ -40,8 +40,8 @@ function fixtureScript(): string {
 }
 
 test.describe("chapter picker", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(tauriStubInitScript);
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
     await page.addInitScript(fixtureScript());
   });
 

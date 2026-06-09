@@ -9,6 +9,13 @@
 // Only the commands the empty-state path actually invokes need to be
 // stubbed. Add more entries as the smoke surface grows.
 
+export function tauriStubInitScriptFor(workerIndex: number): string {
+  return tauriStubInitScript.replace(
+    "__WORKER_INDEX__",
+    String(workerIndex),
+  );
+}
+
 export const tauriStubInitScript = `
 ;(() => {
     if (window.__TAURI_INTERNALS__) return;
@@ -17,7 +24,10 @@ export const tauriStubInitScript = `
     // across navigation. Init scripts re-run on every page.goto so a plain
     // window-scoped object would reset. We back the skipped map with
     // sessionStorage so test-controlled navigations preserve state.
-    const SKIPPED_KEY = "__pickerSkipped__";
+    // Namespaced by Playwright worker index so parallel workers running
+    // against the same dev server don't observe each other's writes.
+    const WORKER_NS = "__WORKER_INDEX__";
+    const SKIPPED_KEY = "__pickerSkipped__:" + WORKER_NS;
     function readSkipped() {
         try {
             return JSON.parse(sessionStorage.getItem(SKIPPED_KEY) || "{}");
