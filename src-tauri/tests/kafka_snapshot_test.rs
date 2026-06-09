@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use lingq_upload_lib::core::epub::{parse_epub, HeadingStrategy};
+use lingq_upload_lib::core::epub::{parse_epub_with_strategy, HeadingStrategy};
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -28,7 +28,9 @@ fn kafka_shimo_kindle_snapshot() {
         return;
     }
 
-    let chapters = parse_epub(&path, HeadingStrategy::Kindle).expect("parse_epub succeeded");
+    let bytes = std::fs::read(&path).expect("read epub");
+    let chapters =
+        parse_epub_with_strategy(&bytes, HeadingStrategy::Kindle).expect("parse_epub succeeded");
 
     assert_eq!(chapters.len(), 27, "expected 27 chapters in 下巻");
     for c in &chapters {

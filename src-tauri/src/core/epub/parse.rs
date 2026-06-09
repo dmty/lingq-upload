@@ -14,18 +14,39 @@ pub enum HeadingStrategy {
     Kobo,
 }
 
-/// Parse an EPUB file into a Vec<Chapter> using the given heading strategy.
-///
-/// Empty/whitespace-only chapters are dropped. Body text is `strip_ruby`-clean.
-pub fn parse_epub(path: &Path, strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
+/// Parse an EPUB file into a Vec<Chapter>. The heading strategy is derived
+/// internally via [`super::autodetect_vendor`] — callers cannot bypass
+/// detection. Empty/whitespace-only chapters are dropped. Body text is
+/// `strip_ruby`-clean.
+pub fn parse_epub(path: &Path) -> Result<Vec<Chapter>, EpubError> {
     let bytes = std::fs::read(path)?;
-    parse_epub_bytes(&bytes, strategy)
+    parse_epub_bytes(&bytes)
 }
 
 /// In-memory variant of [`parse_epub`]. Used by the orchestrator after the
 /// file has already been slurped + decoded for vendor detection — avoids a
 /// second `open + ZipArchive::new` round-trip.
-pub fn parse_epub_bytes(bytes: &[u8], strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
+pub fn parse_epub_bytes(bytes: &[u8]) -> Result<Vec<Chapter>, EpubError> {
+    let strategy = strategy_from_bytes(bytes);
+    parse_epub_with_strategy(bytes, strategy)
+}
+
+fn strategy_from_bytes(bytes: &[u8]) -> HeadingStrategy {
+    match super::autodetect_vendor_bytes(bytes) {
+        Ok(d) if d.vendor == super::EpubVendor::Kobo => HeadingStrategy::Kobo,
+        _ => HeadingStrategy::Kindle,
+    }
+}
+
+/// Explicit-strategy entrypoint. Production code routes through
+/// [`parse_epub_bytes`] / [`parse_epub`] so detection always runs;
+/// this form exists for tests and snapshots that pin a strategy
+/// regardless of detection. Renamed from the old `parse_epub_bytes`
+/// signature.
+pub fn parse_epub_with_strategy(
+    bytes: &[u8],
+    strategy: HeadingStrategy,
+) -> Result<Vec<Chapter>, EpubError> {
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor).map_err(|e| EpubError::Zip(e.to_string()))?;
     match strategy {
@@ -53,7 +74,9 @@ mod kindle {
         let opf_xml = read_to_string_from_zip(zip, &opf_path)?;
         let (spine_hrefs, base_dir) = parse_opf_spine(&opf_xml, &opf_path)?;
 
-        let mut chapters = Vec::with_capacity(spine_hrefs.len());
+        // (spine_href, title, body) for surviving chapters. spine_href is the
+        // stable hash anchor — dropping empties never shifts later ids.
+        let mut parsed: Vec<(String, String, String)> = Vec::with_capacity(spine_hrefs.len());
         for (i, href) in spine_hrefs.iter().enumerate() {
             let full = match join_zip_path(&base_dir, href) {
                 Ok(p) => p,
@@ -68,18 +91,19 @@ mod kindle {
                 continue;
             }
             let title = extract_first_heading(&raw).unwrap_or_else(|| format!("Chapter {}", i + 1));
+            parsed.push((href.clone(), title, body));
+        }
+
+        let mut chapters = Vec::with_capacity(parsed.len());
+        for (i, (spine_href, title, body)) in parsed.into_iter().enumerate() {
+            let id = ChapterId::from_chapter_parts("kindle", &spine_href, &title);
             chapters.push(Chapter {
                 order: i,
                 title,
                 body,
+                id,
                 ..Default::default()
             });
-        }
-        // Re-index `order` after dropping empties. The chapter id binds the
-        // final order so it must follow re-indexing.
-        for (i, c) in chapters.iter_mut().enumerate() {
-            c.order = i;
-            c.id = ChapterId::from_chapter_parts("kindle", i, &c.title);
         }
         Ok(chapters)
     }

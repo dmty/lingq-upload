@@ -4,26 +4,31 @@ expression: pinned
 ---
 [
   {
+    "id": "kobo:e8c0568cdf64afa6",
     "kind": "front_matter",
     "order": 0,
     "title": "Cover"
   },
   {
+    "id": "kobo:820e36f42f4c05b6",
     "kind": "body",
     "order": 1,
     "title": "The Beginning"
   },
   {
+    "id": "kobo:e2a3512e514ed2b8",
     "kind": "body",
     "order": 2,
     "title": "The Middle"
   },
   {
+    "id": "kobo:54f627ee5b620978",
     "kind": "body",
     "order": 3,
     "title": "The End"
   },
   {
+    "id": "kobo:641383f0afe074c4",
     "kind": "back_matter",
     "order": 4,
     "title": "About the Author"

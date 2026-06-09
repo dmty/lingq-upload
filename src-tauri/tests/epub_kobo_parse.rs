@@ -10,7 +10,8 @@ use std::io::{Cursor, Write};
 
 use insta::assert_json_snapshot;
 use lingq_upload_lib::core::epub::{
-    autodetect_vendor_bytes, parse_epub_bytes, ChapterId, ChapterKind, EpubVendor, HeadingStrategy,
+    autodetect_vendor_bytes, parse_epub_with_strategy, ChapterId, ChapterKind, EpubVendor,
+    HeadingStrategy,
 };
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
@@ -106,7 +107,7 @@ fn build_kobo_epub() -> Vec<u8> {
 #[test]
 fn parses_chapter_count_and_titles_from_nav() {
     let bytes = build_kobo_epub();
-    let chapters = parse_epub_bytes(&bytes, HeadingStrategy::Kobo).expect("parse kobo");
+    let chapters = parse_epub_with_strategy(&bytes, HeadingStrategy::Kobo).expect("parse kobo");
     let pinned: Vec<_> = chapters
         .iter()
         .map(|c| {
@@ -114,6 +115,7 @@ fn parses_chapter_count_and_titles_from_nav() {
                 "order": c.order,
                 "title": c.title,
                 "kind": c.kind,
+                "id": c.id.0,
             })
         })
         .collect();
@@ -126,7 +128,7 @@ fn detected_kobo_routes_through_kobo_strategy() {
     let det = autodetect_vendor_bytes(&bytes).expect("detect");
     assert_eq!(det.vendor, EpubVendor::Kobo);
 
-    let chapters = parse_epub_bytes(&bytes, HeadingStrategy::Kobo).expect("parse");
+    let chapters = parse_epub_with_strategy(&bytes, HeadingStrategy::Kobo).expect("parse");
     assert_eq!(chapters.len(), 5);
     assert_eq!(chapters[0].title, "Cover");
     assert_eq!(chapters[1].title, "The Beginning");
@@ -136,29 +138,132 @@ fn detected_kobo_routes_through_kobo_strategy() {
 #[test]
 fn chapter_ids_are_deterministic_across_calls() {
     let bytes = build_kobo_epub();
-    let a = parse_epub_bytes(&bytes, HeadingStrategy::Kobo).expect("a");
-    let b = parse_epub_bytes(&bytes, HeadingStrategy::Kobo).expect("b");
+    let a = parse_epub_with_strategy(&bytes, HeadingStrategy::Kobo).expect("a");
+    let b = parse_epub_with_strategy(&bytes, HeadingStrategy::Kobo).expect("b");
     let ids_a: Vec<ChapterId> = a.iter().map(|c| c.id.clone()).collect();
     let ids_b: Vec<ChapterId> = b.iter().map(|c| c.id.clone()).collect();
     assert_eq!(ids_a, ids_b, "kobo chapter ids must be deterministic");
-    // Form: kobo:{spine_index}:{16-hex}
+    // Form: kobo:{16-hex}. Anchor is the spine href + normalised title;
+    // no positional index in the surface form so dropping an empty chapter
+    // does not shift later ids.
     for c in &a {
         let id = &c.id.0;
         assert!(id.starts_with("kobo:"), "wrong prefix: {id}");
-        let parts: Vec<&str> = id.splitn(3, ':').collect();
-        assert_eq!(parts.len(), 3);
-        assert_eq!(parts[2].len(), 16, "hash16 expected, got {id}");
+        let parts: Vec<&str> = id.splitn(2, ':').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[1].len(), 16, "hash16 expected, got {id}");
         assert!(
-            parts[2].chars().all(|c| c.is_ascii_hexdigit()),
+            parts[1].chars().all(|c| c.is_ascii_hexdigit()),
             "non-hex chars in {id}"
         );
     }
+
+    // Pin one full id string so a hash drift surfaces immediately.
+    // Cover chapter: spine href "cover.xhtml", title "Cover" from nav.
+    let cover_id = a
+        .iter()
+        .find(|c| c.title == "Cover")
+        .map(|c| c.id.0.clone())
+        .expect("cover chapter present");
+    assert_eq!(
+        cover_id,
+        ChapterId::from_chapter_parts("kobo", "cover.xhtml", "Cover").0,
+        "pinned cover id mismatch — hash anchor drifted",
+    );
+}
+
+#[test]
+fn chapter_ids_stable_when_empty_chapter_dropped() {
+    // Same EPUB twice: once with an empty middle chapter that gets filtered
+    // out, once where that middle is non-empty. Surviving chapters must keep
+    // their ids — dropping an empty must not shift later hash anchors.
+    let empty_body = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title></title></head>
+<body><p>   </p></body></html>"#;
+    let full_body = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>page</title></head>
+<body><p><span class="koboSpan">Middle has text.</span></p></body></html>"#;
+
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata/>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="c1"  href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c2"  href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c3"  href="ch3.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+    <itemref idref="c2"/>
+    <itemref idref="c3"/>
+  </spine>
+</package>"#;
+    let nav = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body>
+  <nav epub:type="toc">
+    <ol>
+      <li><a href="ch1.xhtml">First</a></li>
+      <li><a href="ch2.xhtml">Middle</a></li>
+      <li><a href="ch3.xhtml">Last</a></li>
+    </ol>
+  </nav>
+</body></html>"#;
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>page</title></head>
+<body><p><span class="koboSpan">First text.</span></p></body></html>"#;
+    let ch3 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>page</title></head>
+<body><p><span class="koboSpan">Last text.</span></p></body></html>"#;
+
+    let build = |middle: &str| -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut zip = ZipWriter::new(cursor);
+            let opts =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            for (name, body) in [
+                ("mimetype", b"application/epub+zip" as &[u8]),
+                ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+                ("OEBPS/content.opf", opf.as_bytes()),
+                ("OEBPS/nav.xhtml", nav.as_bytes()),
+                ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+                ("OEBPS/ch2.xhtml", middle.as_bytes()),
+                ("OEBPS/ch3.xhtml", ch3.as_bytes()),
+            ] {
+                zip.start_file(name, opts).unwrap();
+                zip.write_all(body).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buf
+    };
+
+    let with_middle = build(full_body);
+    let without_middle = build(empty_body);
+    let a = parse_epub_with_strategy(&with_middle, HeadingStrategy::Kobo).expect("a");
+    let b = parse_epub_with_strategy(&without_middle, HeadingStrategy::Kobo).expect("b");
+    assert_eq!(a.len(), 3);
+    assert_eq!(b.len(), 2, "empty middle filtered");
+
+    // First and Last keep the same ids regardless of whether Middle survived.
+    let id = |chs: &[lingq_upload_lib::core::epub::Chapter], t: &str| -> String {
+        chs.iter().find(|c| c.title == t).unwrap().id.0.clone()
+    };
+    assert_eq!(id(&a, "First"), id(&b, "First"));
+    assert_eq!(id(&a, "Last"), id(&b, "Last"));
 }
 
 #[test]
 fn front_and_back_matter_classified_by_title() {
     let bytes = build_kobo_epub();
-    let chapters = parse_epub_bytes(&bytes, HeadingStrategy::Kobo).expect("parse");
+    let chapters = parse_epub_with_strategy(&bytes, HeadingStrategy::Kobo).expect("parse");
 
     let cover = chapters.iter().find(|c| c.title == "Cover").expect("cover");
     assert_eq!(cover.kind, ChapterKind::FrontMatter);
@@ -222,7 +327,7 @@ fn missing_nav_falls_back_to_html_title() {
         zip.finish().unwrap();
     }
 
-    let chapters = parse_epub_bytes(&buf, HeadingStrategy::Kobo).expect("parse no-nav");
+    let chapters = parse_epub_with_strategy(&buf, HeadingStrategy::Kobo).expect("parse no-nav");
     assert_eq!(chapters.len(), 2);
     assert_eq!(chapters[0].title, "Prologue");
     assert_eq!(chapters[1].title, "Chapter Two");
