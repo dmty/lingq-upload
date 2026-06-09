@@ -4,6 +4,7 @@
 //! into one sequential pass. Persists project state after every chapter so a
 //! crash or cancel leaves a resumable [`Project`] on disk.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
-use crate::core::epub::{parse_epub, Chapter, HeadingStrategy};
+use crate::core::epub::{parse_epub, Chapter, ChapterId, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::pack::{build_preview, proportional_pack};
@@ -110,18 +111,20 @@ pub async fn run_project_job(
         }
     };
     let chapters = match resolve_chapters(&project.sources.text) {
-        Ok(c) => mark_selection(c, &project.skipped_chapters),
+        Ok(c) => c,
         Err(e) => {
             sink.result(false, serde_json::json!({"error": e.to_string()}));
             return Err(e);
         }
     };
+    let skipped_set: HashSet<ChapterId> =
+        project.skipped_chapters.iter().cloned().collect();
 
     tracing::info!(
         project = %project.id.join_key(),
         chapters = chapters.len(),
         tracks = tracks.len(),
-        skipped = project.skipped_chapters.len(),
+        skipped = skipped_set.len(),
         "job: resolved inputs",
     );
 
@@ -219,7 +222,11 @@ pub async fn run_project_job(
         // (lesson_id = None). Already-uploaded chapters are caught
         // by the resume skip above, so this never deletes anything
         // from LingQ.
-        if project.skipped_chapters.contains(&step.chapter_index) {
+        if chapters
+            .iter()
+            .find(|c| c.order == step.chapter_index)
+            .is_some_and(|c| skipped_set.contains(&c.id))
+        {
             tracing::info!(
                 chapter = step.chapter_index,
                 "job: skipping user-deselected chapter",
@@ -711,21 +718,6 @@ fn plan_from_decision(
     }
 }
 
-/// Mark user-skipped chapters in-place. The pairing logic still sees the
-/// full chapter list so the matcher's count comparison and bucket alignment
-/// stay stable; the upload loop is what drops `skipped: true` steps.
-fn mark_selection(mut chapters: Vec<Chapter>, skipped_ids: &[usize]) -> Vec<Chapter> {
-    if skipped_ids.is_empty() {
-        return chapters;
-    }
-    for c in chapters.iter_mut() {
-        if skipped_ids.contains(&c.order) {
-            c.skipped = true;
-        }
-    }
-    chapters
-}
-
 fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
     match text {
         TextSource::Epub(p) => parse_epub(p, HeadingStrategy::Kindle)
@@ -745,6 +737,7 @@ fn resolve_chapters(text: &TextSource) -> Result<Vec<Chapter>, AppError> {
                     order: i,
                     title,
                     body,
+                    id: ChapterId::from_order(i),
                     ..Default::default()
                 });
             }
@@ -860,6 +853,7 @@ mod tests {
                 order: *order,
                 title: (*title).to_string(),
                 body: "a".repeat(*n),
+                id: ChapterId::from_order(*order),
                 ..Default::default()
             })
             .collect();

@@ -1,14 +1,21 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use super::{safe_path_segment, ProjectStore, StoreError};
+use super::{canonicalise_selection, safe_path_segment, ProjectStore, StoreError};
+use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub struct JsonProjectStore {
     root: PathBuf,
+    /// Per-project write lock. Acquired around read-modify-write paths
+    /// (`patch_chapter`, `set_selection`) so two concurrent edits to the
+    /// same project cannot interleave their loads and lose the older one.
+    write_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 /// Diagnostics emitted by [`JsonProjectStore::health`].
@@ -26,7 +33,23 @@ pub struct ListHealth {
 
 impl JsonProjectStore {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            write_locks: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Hand out (cloning) the `Arc<Mutex<()>>` for `id`, creating it on
+    /// first touch. Callers hold the inner mutex for the entire RMW window.
+    fn write_lock(&self, id: &ProjectId) -> Arc<Mutex<()>> {
+        let key = id.join_key();
+        let mut map = self
+            .write_locks
+            .lock()
+            .expect("write-locks registry poisoned");
+        map.entry(key)
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     }
 
     pub fn root(&self) -> &Path {
@@ -242,6 +265,8 @@ impl ProjectStore for JsonProjectStore {
         index: usize,
         receipt: ChapterReceipt,
     ) -> Result<(), StoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("project write lock poisoned");
         let mut project = self
             .get(id)?
             .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
@@ -258,8 +283,10 @@ impl ProjectStore for JsonProjectStore {
     fn set_selection(
         &self,
         id: &ProjectId,
-        skipped_ids: &[usize],
+        skipped_ids: &[ChapterId],
     ) -> Result<(), StoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("project write lock poisoned");
         let mut project = self
             .get(id)?
             .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
@@ -268,11 +295,4 @@ impl ProjectStore for JsonProjectStore {
         let bytes = serialise_project(&project, &path)?;
         write_atomic(&path, &bytes)
     }
-}
-
-fn canonicalise_selection(ids: &[usize]) -> Vec<usize> {
-    let mut v: Vec<usize> = ids.to_vec();
-    v.sort_unstable();
-    v.dedup();
-    v
 }

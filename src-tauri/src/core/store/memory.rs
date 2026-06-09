@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
-use super::{ProjectStore, StoreError};
+use super::{canonicalise_selection, ProjectStore, StoreError};
+use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
@@ -67,17 +68,14 @@ impl ProjectStore for InMemoryProjectStore {
     fn set_selection(
         &self,
         id: &ProjectId,
-        skipped_ids: &[usize],
+        skipped_ids: &[ChapterId],
     ) -> Result<(), StoreError> {
         let key = id.join_key();
         let mut guard = self.lock();
         let project = guard
             .get_mut(&key)
             .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
-        let mut v: Vec<usize> = skipped_ids.to_vec();
-        v.sort_unstable();
-        v.dedup();
-        project.skipped_chapters = v;
+        project.skipped_chapters = canonicalise_selection(skipped_ids);
         Ok(())
     }
 }

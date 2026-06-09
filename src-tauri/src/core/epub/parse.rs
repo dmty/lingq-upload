@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use super::{Chapter, EpubError};
+use super::{Chapter, ChapterId, EpubError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -32,7 +32,7 @@ mod kindle {
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
-    use super::{Chapter, EpubError, HeadingStrategy};
+    use super::{Chapter, ChapterId, EpubError, HeadingStrategy};
     use crate::core::text::strip_ruby;
 
     pub fn parse(path: &Path, _strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
@@ -65,9 +65,11 @@ mod kindle {
                 ..Default::default()
             });
         }
-        // Re-index `order` after dropping empties.
+        // Re-index `order` after dropping empties. The chapter id is
+        // derived from the final `order`, so it must follow re-indexing.
         for (i, c) in chapters.iter_mut().enumerate() {
             c.order = i;
+            c.id = ChapterId::from_order(i);
         }
         Ok(chapters)
     }

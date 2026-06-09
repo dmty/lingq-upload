@@ -304,6 +304,15 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
 export type BucketPreview = { textRangeStart: number; textRangeEnd: number; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
+/**
+ * Stable identity for a parsed chapter.
+ * 
+ * Currently a placeholder of the form `idx:{order}`. A future heading
+ * strategy will replace the inner form with a deterministic hash derived
+ * from `(strategy_name, spine_index, title_normalized)`; the public API
+ * keeps the same `ChapterId(String)` shape so callers do not change.
+ */
+export type ChapterId = string
 export type ChapterManifest = { chapters: ChapterEntry[] }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
@@ -343,13 +352,13 @@ export type MismatchInspection = { title: string; chapter_count: number; track_c
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
 export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
 /**
- * Chapter orders the user opted out of uploading. Replaced wholesale
+ * Chapter ids the user opted out of uploading. Replaced wholesale
  * by `ProjectStore::set_selection`. A chapter already uploaded
  * (carries a `lesson_id` in `receipts`) is not retroactively deleted
  * from LingQ when added here — selection only gates not-yet-uploaded
  * chapters in the run loop.
  */
-skipped_chapters?: number[] }
+skipped_chapters?: ChapterId[] }
 /**
  * Canonical project identity (AD-021).
  * 

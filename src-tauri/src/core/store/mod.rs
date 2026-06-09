@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
+use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
@@ -37,13 +38,13 @@ pub trait ProjectStore: Send + Sync {
         receipt: ChapterReceipt,
     ) -> Result<(), StoreError>;
     /// Replace the project's skipped-chapter set with `skipped_ids`.
-    /// Atomic on the JSON store (tempfile + fsync + rename, AD-022).
-    /// The slice is deduped and sorted before persistence so the on-disk
-    /// representation is canonical.
+    /// Atomic on the JSON store (tempfile + fsync + rename, AD-022) and
+    /// serialised against concurrent writers to the same project so a
+    /// read-modify-write race cannot drop the older edit.
     fn set_selection(
         &self,
         id: &ProjectId,
-        skipped_ids: &[usize],
+        skipped_ids: &[ChapterId],
     ) -> Result<(), StoreError>;
 }
 
@@ -57,4 +58,13 @@ pub fn safe_path_segment(s: &str) -> String {
             _ => '_',
         })
         .collect()
+}
+
+/// Canonical on-disk form for a skipped-chapter set: sorted by inner string,
+/// deduped. Lifted to a free fn so both stores share one definition.
+pub(crate) fn canonicalise_selection(ids: &[ChapterId]) -> Vec<ChapterId> {
+    let mut v: Vec<ChapterId> = ids.to_vec();
+    v.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    v.dedup();
+    v
 }
