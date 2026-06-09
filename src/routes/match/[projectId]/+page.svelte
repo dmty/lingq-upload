@@ -175,10 +175,11 @@
   <div class="w-72 shrink-0">
     {#if mapping.status === "ready"}
       <ChapterPicker
-        projectId={projectKey}
         chapters={pickerRows}
         skippedIds={mapping.skippedIds}
+        revertEpoch={mapping.revertEpoch}
         onChange={(ids) => void mapping.setSkipped(ids)}
+        onFlush={() => mapping.flush()}
       />
     {:else}
       <aside class="border-r border-border bg-surface p-3 text-sm text-fg-muted">

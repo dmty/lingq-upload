@@ -231,7 +231,7 @@ async cmdProjectLoad(key: string) : Promise<Result<Project, AppError>> {
  * render rows. Re-parses on each call — the picker is short-lived UI so
  * the cost is acceptable; a future iteration may cache.
  */
-async cmdProjectChapters(projectId: ProjectId) : Promise<Result<Chapter[], AppError>> {
+async cmdProjectChapters(projectId: ProjectId) : Promise<Result<ChapterMeta[], AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_project_chapters", { projectId }) };
 } catch (e) {
@@ -350,6 +350,12 @@ export type ChapterId = string
  */
 export type ChapterKind = "body" | "front_matter" | "back_matter"
 export type ChapterManifest = { chapters: ChapterEntry[] }
+/**
+ * Picker-facing projection of [`Chapter`] without the body. Picker rows only
+ * need identity + label + kind; shipping the body over IPC would cost tens
+ * of MB on book-length inputs.
+ */
+export type ChapterMeta = { id: ChapterId; order: number; title: string; kind: ChapterKind }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
 export type ConflictResolution = "replace" | "skip" | "new_project"
