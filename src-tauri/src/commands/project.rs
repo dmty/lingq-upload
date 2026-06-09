@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
+use crate::core::epub::{parse_epub, Chapter, ChapterId, HeadingStrategy};
+use crate::core::identity::ProjectId;
 use crate::core::project::Project;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
+use crate::ingest::TextSource;
 
 /// Load a persisted project by its `join_key`.
 ///
@@ -29,4 +32,59 @@ pub async fn cmd_project_load(
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other(format!("project not found: {key}")))?;
     Ok(project)
+}
+
+/// Replace the project's skipped-chapter set wholesale.
+///
+/// The picker UI debounces user edits and flushes the resulting selection
+/// here. `ProjectStore::set_selection` is atomic per AD-022.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_set_selection(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    skipped_ids: Vec<ChapterId>,
+) -> Result<(), AppError> {
+    store
+        .set_selection(&project_id, &skipped_ids)
+        .map_err(|e| AppError::Other(format!("store.set_selection: {e}")))?;
+    Ok(())
+}
+
+/// List the parsed chapters of a project's text source so the picker can
+/// render rows. Re-parses on each call — the picker is short-lived UI so
+/// the cost is acceptable; a future iteration may cache.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_project_chapters(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<Vec<Chapter>, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    match &project.sources.text {
+        TextSource::Epub(path) => parse_epub(path, HeadingStrategy::GenericH1)
+            .map_err(|e| AppError::Other(format!("parse_epub: {e}"))),
+        TextSource::LooseFiles { paths } => {
+            let mut chapters = Vec::with_capacity(paths.len());
+            for (i, p) in paths.iter().enumerate() {
+                let body = std::fs::read_to_string(p)
+                    .map_err(|e| AppError::Other(format!("read {}: {e}", p.display())))?;
+                chapters.push(Chapter {
+                    order: i,
+                    title: p
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| format!("Chapter {}", i + 1)),
+                    body,
+                    id: ChapterId::from_order(i),
+                    kind: Default::default(),
+                });
+            }
+            Ok(chapters)
+        }
+        TextSource::Missing => Ok(Vec::new()),
+    }
 }
