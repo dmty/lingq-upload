@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use super::{Chapter, ChapterId, EpubError};
+use super::{Chapter, EpubError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -16,42 +16,35 @@ pub enum HeadingStrategy {
 
 /// Parse an EPUB file into a Vec<Chapter> using the given heading strategy.
 ///
-/// Kindle / NavDoc / GenericH1 are implemented; Kobo is deferred.
 /// Empty/whitespace-only chapters are dropped. Body text is `strip_ruby`-clean.
 pub fn parse_epub(path: &Path, strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
-    if matches!(strategy, HeadingStrategy::Kobo) {
-        unimplemented!("Kobo HeadingStrategy deferred to a future sprint");
-    }
-    kindle::parse(path, strategy)
+    let bytes = std::fs::read(path)?;
+    parse_epub_bytes(&bytes, strategy)
 }
 
 /// In-memory variant of [`parse_epub`]. Used by the orchestrator after the
 /// file has already been slurped + decoded for vendor detection — avoids a
 /// second `open + ZipArchive::new` round-trip.
 pub fn parse_epub_bytes(bytes: &[u8], strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
-    if matches!(strategy, HeadingStrategy::Kobo) {
-        unimplemented!("Kobo HeadingStrategy deferred to a future sprint");
-    }
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor).map_err(|e| EpubError::Zip(e.to_string()))?;
-    kindle::parse_from_zip(&mut zip)
+    match strategy {
+        HeadingStrategy::Kobo => super::kobo::parse_from_zip(&mut zip),
+        HeadingStrategy::Kindle | HeadingStrategy::NavDoc | HeadingStrategy::GenericH1 => {
+            kindle::parse_from_zip(&mut zip)
+        }
+    }
 }
 
 mod kindle {
     use std::io::Read;
-    use std::path::Path;
 
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
-    use super::{Chapter, ChapterId, EpubError, HeadingStrategy};
+    use super::super::ChapterId;
+    use super::{Chapter, EpubError};
     use crate::core::text::strip_ruby;
-
-    pub fn parse(path: &Path, _strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
-        let file = std::fs::File::open(path)?;
-        let mut zip = zip::ZipArchive::new(file).map_err(|e| EpubError::Zip(e.to_string()))?;
-        parse_from_zip(&mut zip)
-    }
 
     pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
         zip: &mut zip::ZipArchive<R>,
@@ -82,11 +75,11 @@ mod kindle {
                 ..Default::default()
             });
         }
-        // Re-index `order` after dropping empties. The chapter id is
-        // derived from the final `order`, so it must follow re-indexing.
+        // Re-index `order` after dropping empties. The chapter id binds the
+        // final order so it must follow re-indexing.
         for (i, c) in chapters.iter_mut().enumerate() {
             c.order = i;
-            c.id = ChapterId::from_order(i);
+            c.id = ChapterId::from_chapter_parts("kindle", i, &c.title);
         }
         Ok(chapters)
     }

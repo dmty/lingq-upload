@@ -1,0 +1,31 @@
+---
+source: tests/epub_kobo_parse.rs
+expression: pinned
+---
+[
+  {
+    "kind": "front_matter",
+    "order": 0,
+    "title": "Cover"
+  },
+  {
+    "kind": "body",
+    "order": 1,
+    "title": "The Beginning"
+  },
+  {
+    "kind": "body",
+    "order": 2,
+    "title": "The Middle"
+  },
+  {
+    "kind": "body",
+    "order": 3,
+    "title": "The End"
+  },
+  {
+    "kind": "back_matter",
+    "order": 4,
+    "title": "About the Author"
+  }
+]
