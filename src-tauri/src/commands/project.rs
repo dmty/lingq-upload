@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind, HeadingStrategy};
+use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
 use crate::core::project::Project;
 use crate::core::store::ProjectStore;
@@ -86,7 +86,7 @@ pub async fn cmd_project_chapters(
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     match &project.sources.text {
         TextSource::Epub(path) => {
-            let chapters = parse_epub(path, HeadingStrategy::GenericH1)
+            let chapters = parse_epub(path)
                 .map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
             Ok(chapters.into_iter().map(ChapterMeta::from).collect())
         }
