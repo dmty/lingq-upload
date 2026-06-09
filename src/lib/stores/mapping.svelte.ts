@@ -40,7 +40,12 @@ const state = $state<State>({
 let pendingFlush: Promise<void> = Promise.resolve();
 
 let opDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingOps: MappingOp[] = [];
+type QueuedOp = {
+  op: MappingOp;
+  resolve: () => void;
+  reject: (err: unknown) => void;
+};
+let pendingOps: QueuedOp[] = [];
 
 function scoreGate(s: MappingState | null): boolean {
   if (!s) return true;
@@ -50,28 +55,38 @@ function scoreGate(s: MappingState | null): boolean {
 async function flushPendingOps(): Promise<void> {
   if (pendingOps.length === 0) return;
   if (!state.projectId) {
+    const queued = pendingOps;
     pendingOps = [];
+    for (const q of queued) q.resolve();
     return;
   }
   const projectId = state.projectId;
   const ops = pendingOps;
   pendingOps = [];
-  for (const op of ops) {
+  for (let i = 0; i < ops.length; i++) {
+    const queued = ops[i];
     const current = state.mappingState;
-    if (!current) break;
+    if (!current) {
+      for (let j = i; j < ops.length; j++) ops[j].resolve();
+      break;
+    }
     const prevSnapshot = current;
-    const expected = current.op_id ?? 0;
-    const result = await commands.cmdApplyMappingOp(projectId, op, expected);
+    const expected = (current.op_id ?? 0) + 1;
+    const result = await commands.cmdApplyMappingOp(projectId, queued.op, expected);
     if (result.status === "error") {
       // AD-025: silent revert.
       state.mappingState = prevSnapshot;
       state.revertEpoch += 1;
       // eslint-disable-next-line no-console
       console.warn("cmd_apply_mapping_op failed; reverted optimistic update");
-      break;
+      const err = result.error;
+      queued.reject(err);
+      for (let j = i + 1; j < ops.length; j++) ops[j].reject(err);
+      return;
     }
     state.mappingState = result.data;
     state.lastSavedAt = Date.now();
+    queued.resolve();
   }
 }
 
@@ -153,19 +168,18 @@ export const mapping = {
 
   /**
    * Queue a mapping op. Debounced 500ms — concurrent ops during the window
-   * coalesce into a single flush invocation that drains them in order.
-   * Concurrent calls during an in-flight save are queued (not dropped) via
-   * the same promise chain used by `setSkipped`.
+   * coalesce into a single flush invocation that drains them in order. The
+   * returned promise resolves only after the IPC for this specific op
+   * settles successfully, or rejects when its flush turn fails.
    */
   submitOp(op: MappingOp): Promise<void> {
-    pendingOps.push(op);
-    if (opDebounceTimer != null) clearTimeout(opDebounceTimer);
-    const fire = (resolve: () => void) => {
-      opDebounceTimer = null;
-      pendingFlush = pendingFlush.then(flushPendingOps, flushPendingOps).then(resolve, resolve);
-    };
-    return new Promise<void>((resolve) => {
-      opDebounceTimer = setTimeout(() => fire(resolve), 500);
+    return new Promise<void>((resolve, reject) => {
+      pendingOps.push({ op, resolve, reject });
+      if (opDebounceTimer != null) clearTimeout(opDebounceTimer);
+      opDebounceTimer = setTimeout(() => {
+        opDebounceTimer = null;
+        pendingFlush = pendingFlush.then(flushPendingOps, flushPendingOps);
+      }, 500);
     });
   },
 
@@ -214,7 +228,9 @@ export const mapping = {
     state.error = null;
     state.revertEpoch = 0;
     state.lastSavedAt = null;
+    const drained = pendingOps;
     pendingOps = [];
+    for (const q of drained) q.resolve();
     if (opDebounceTimer != null) {
       clearTimeout(opDebounceTimer);
       opDebounceTimer = null;

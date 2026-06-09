@@ -12,27 +12,22 @@ fn ch(id: &str) -> ChapterId {
     ChapterId(id.into())
 }
 
+fn pair(chapter: &str, track: Option<&str>, confidence: f32, touched: bool) -> MappingPair {
+    MappingPair {
+        chapter_id: ch(chapter),
+        track_id: track.map(|s| s.to_string()),
+        confidence,
+        touched,
+        original_confidence: confidence,
+    }
+}
+
 fn seed_three_pairs() -> MappingState {
     MappingState {
         pairs: vec![
-            MappingPair {
-                chapter_id: ch("c0"),
-                track_id: Some("t0".into()),
-                confidence: 0.9,
-                touched: false,
-            },
-            MappingPair {
-                chapter_id: ch("c1"),
-                track_id: Some("t1".into()),
-                confidence: 0.5,
-                touched: false,
-            },
-            MappingPair {
-                chapter_id: ch("c2"),
-                track_id: Some("t2".into()),
-                confidence: 0.7,
-                touched: false,
-            },
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", Some("t1"), 0.5, false),
+            pair("c2", Some("t2"), 0.7, false),
         ],
         parking_lot: vec![],
         op_id: 0,
@@ -43,18 +38,8 @@ fn seed_three_pairs() -> MappingState {
 fn swap_moves_old_pair_to_parking_lot() {
     let state = MappingState {
         pairs: vec![
-            MappingPair {
-                chapter_id: ch("c0"),
-                track_id: Some("t0".into()),
-                confidence: 0.9,
-                touched: false,
-            },
-            MappingPair {
-                chapter_id: ch("c1"),
-                track_id: Some("t1".into()),
-                confidence: 0.5,
-                touched: false,
-            },
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", Some("t1"), 0.5, false),
         ],
         parking_lot: vec!["t9".into()],
         op_id: 5,
@@ -80,7 +65,8 @@ fn swap_moves_old_pair_to_parking_lot() {
 fn swap_between_chapters_unpairs_source_chapter() {
     let state = seed_three_pairs();
 
-    // Assign c0's t0 to c2; c0 becomes unpaired, c2's prior t2 goes to lot.
+    // Assign c0's t0 to c2; c0 becomes unpaired (touched, confidence reset to
+    // original — visual "no pairing" signal); c2's prior t2 goes to lot.
     let next = apply_mapping_op(
         &state,
         MappingOp::Swap {
@@ -91,6 +77,8 @@ fn swap_between_chapters_unpairs_source_chapter() {
     .unwrap();
 
     assert_eq!(next.pairs[0].track_id, None);
+    assert!(next.pairs[0].touched);
+    assert_eq!(next.pairs[0].confidence, next.pairs[0].original_confidence);
     assert_eq!(next.pairs[2].track_id, Some("t0".into()));
     assert!(next.pairs[2].touched);
     assert!(next.parking_lot.contains(&"t2".to_string()));
@@ -181,18 +169,8 @@ fn op_id_is_monotonic() {
 fn gate_continue_blocks_untouched_red() {
     let state = MappingState {
         pairs: vec![
-            MappingPair {
-                chapter_id: ch("c0"),
-                track_id: Some("t0".into()),
-                confidence: 0.9,
-                touched: false,
-            },
-            MappingPair {
-                chapter_id: ch("c1"),
-                track_id: Some("t1".into()),
-                confidence: 0.4,
-                touched: false,
-            },
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", Some("t1"), 0.4, false),
         ],
         parking_lot: vec![],
         op_id: 0,
@@ -203,12 +181,7 @@ fn gate_continue_blocks_untouched_red() {
 #[test]
 fn gate_continue_clears_after_touch() {
     let state = MappingState {
-        pairs: vec![MappingPair {
-            chapter_id: ch("c1"),
-            track_id: Some("t1".into()),
-            confidence: 0.4,
-            touched: true,
-        }],
+        pairs: vec![pair("c1", Some("t1"), 0.4, true)],
         parking_lot: vec![],
         op_id: 0,
     };
@@ -219,23 +192,42 @@ fn gate_continue_clears_after_touch() {
 fn gate_continue_allows_all_green() {
     let state = MappingState {
         pairs: vec![
-            MappingPair {
-                chapter_id: ch("c0"),
-                track_id: Some("t0".into()),
-                confidence: 0.9,
-                touched: false,
-            },
-            MappingPair {
-                chapter_id: ch("c1"),
-                track_id: Some("t1".into()),
-                confidence: 0.6,
-                touched: false,
-            },
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", Some("t1"), 0.6, false),
         ],
         parking_lot: vec![],
         op_id: 0,
     };
     assert!(gate_continue(&state));
+}
+
+#[test]
+fn gate_continue_ignores_unpaired_chapters() {
+    // An unpaired chapter (track_id == None) with red original_confidence
+    // must never block Continue — there is no pairing to confirm.
+    let state = MappingState {
+        pairs: vec![
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", None, 0.2, false),
+        ],
+        parking_lot: vec!["t1".into()],
+        op_id: 0,
+    };
+    assert!(gate_continue(&state));
+}
+
+#[test]
+fn gate_continue_uses_original_confidence_not_recomputed() {
+    // After Swap, `confidence` jumps to the placeholder RECOMPUTED_CONFIDENCE
+    // (1.0). The gate must still see the original red score until the user
+    // touches the row.
+    let state = seed_three_pairs();
+    // c1 is red (0.5) originally; bump `confidence` to mimic a stale apply
+    // without touching the row.
+    let mut tampered = state.clone();
+    tampered.pairs[1].confidence = 1.0;
+    tampered.pairs[1].touched = false;
+    assert!(!gate_continue(&tampered));
 }
 
 #[test]

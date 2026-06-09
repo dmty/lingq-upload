@@ -144,7 +144,7 @@ export const tauriStubInitScript = `
             const expected = (args && args.expectedOpId) || 0;
             const mappings = readMappings();
             const current = mappings[key] || { pairs: [], parking_lot: [], op_id: 0 };
-            if ((current.op_id || 0) !== expected) {
+            if ((current.op_id || 0) + 1 !== expected) {
                 throw new Error("stale op_id");
             }
             const next = JSON.parse(JSON.stringify(current));
@@ -167,6 +167,7 @@ export const tauriStubInitScript = `
                 const idx = next.pairs.findIndex((p) => p.track_id === op.track_id);
                 if (idx < 0) throw new Error("unknown track");
                 next.pairs[idx].track_id = null;
+                next.pairs[idx].confidence = 1.0;
                 next.pairs[idx].touched = true;
                 next.parking_lot = next.parking_lot || [];
                 if (!next.parking_lot.includes(op.track_id)) next.parking_lot.push(op.track_id);
