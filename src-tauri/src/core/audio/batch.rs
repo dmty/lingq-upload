@@ -5,18 +5,13 @@ use specta::Type;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
-use super::{transcode, AbsorbPolicy, AudioError, EncoderSettings, TranscodeReport};
+use super::{transcode, AudioError, EncoderSettings, TranscodeReport};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct TranscodeJob {
     pub src: PathBuf,
     pub dst: PathBuf,
     pub enc: EncoderSettings,
-    /// Chapter-divider absorption policy applied by an upstream carve pass.
-    /// Threaded onto the job record so future per-track carving can read it
-    /// without an extra lookup; the transcode itself ignores it today.
-    #[serde(default)]
-    pub absorb: AbsorbPolicy,
 }
 
 #[derive(Debug, Error, Serialize, Deserialize, Type)]
@@ -117,7 +112,6 @@ mod tests {
             src: PathBuf::from("/definitely/missing.m4a"),
             dst: PathBuf::from("/tmp/never.mp3"),
             enc: EncoderSettings::default(),
-            absorb: AbsorbPolicy::default(),
         }];
         let result = transcode_batch_sequential(jobs, Some(token), |_, _| {}).await;
         match result {
