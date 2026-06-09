@@ -25,6 +25,18 @@ pub fn parse_epub(path: &Path, strategy: HeadingStrategy) -> Result<Vec<Chapter>
     kindle::parse(path, strategy)
 }
 
+/// In-memory variant of [`parse_epub`]. Used by the orchestrator after the
+/// file has already been slurped + decoded for vendor detection — avoids a
+/// second `open + ZipArchive::new` round-trip.
+pub fn parse_epub_bytes(bytes: &[u8], strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
+    if matches!(strategy, HeadingStrategy::Kobo) {
+        unimplemented!("Kobo HeadingStrategy deferred to a future sprint");
+    }
+    let cursor = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(cursor).map_err(|e| EpubError::Zip(e.to_string()))?;
+    kindle::parse_from_zip(&mut zip)
+}
+
 mod kindle {
     use std::io::Read;
     use std::path::Path;
@@ -38,9 +50,14 @@ mod kindle {
     pub fn parse(path: &Path, _strategy: HeadingStrategy) -> Result<Vec<Chapter>, EpubError> {
         let file = std::fs::File::open(path)?;
         let mut zip = zip::ZipArchive::new(file).map_err(|e| EpubError::Zip(e.to_string()))?;
+        parse_from_zip(&mut zip)
+    }
 
-        let opf_path = read_container_opf_path(&mut zip)?;
-        let opf_xml = read_to_string_from_zip(&mut zip, &opf_path)?;
+    pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
+        zip: &mut zip::ZipArchive<R>,
+    ) -> Result<Vec<Chapter>, EpubError> {
+        let opf_path = read_container_opf_path(zip)?;
+        let opf_xml = read_to_string_from_zip(zip, &opf_path)?;
         let (spine_hrefs, base_dir) = parse_opf_spine(&opf_xml, &opf_path)?;
 
         let mut chapters = Vec::with_capacity(spine_hrefs.len());
@@ -49,7 +66,7 @@ mod kindle {
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            let raw = match read_to_string_from_zip(&mut zip, &full) {
+            let raw = match read_to_string_from_zip(zip, &full) {
                 Ok(s) => s,
                 Err(_) => continue,
             };

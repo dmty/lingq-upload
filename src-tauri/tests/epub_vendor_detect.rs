@@ -199,10 +199,18 @@ fn detect(bytes: &[u8]) -> lingq_upload_lib::core::epub::VendorDetection {
     detect_vendor(&mut zip).expect("detect")
 }
 
-/// Write the synthetic adversarial Kobo fixture out to the committed
-/// fixture path so it can be inspected with standard tooling. Idempotent;
-/// running the suite twice is safe.
+/// Adversarial Kobo fixture is committed to disk; this test only asserts its
+/// presence. Regenerating the bytes is opt-in via `--ignored` so the standard
+/// suite never writes into the source tree.
 #[test]
+fn adversarial_kobo_fixture_is_committed() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/epub/kobo/adversarial_mixed_classes.epub");
+    assert!(path.exists(), "missing committed fixture: {}", path.display());
+}
+
+#[test]
+#[ignore = "regenerates the committed fixture; run explicitly with --ignored"]
 fn writes_adversarial_kobo_fixture_to_disk() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/epub/kobo");
@@ -285,4 +293,110 @@ fn signals_enumerate_marker_buckets() {
             "unknown signal {s}"
         );
     }
+}
+
+/// Pathological case: a Kindle book whose CSS stylesheet repeats
+/// `font-160per` five times. Per-file counting must keep this on the Kindle
+/// side; the cluster floor only applies to XHTML body files.
+#[test]
+fn kindle_book_with_kobo_classes_in_css_only_stays_kindle() {
+    let ncx = r#"<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head/><docTitle><text>K</text></docTitle>
+  <navMap><navPoint id="np1" playOrder="1"><navLabel><text>Ch 1</text></navLabel><content src="ch1.xhtml"/></navPoint></navMap>
+</ncx>"#;
+    let css = r#".font-160per { font-size: 160%; }
+.font-160per::before { content: "" }
+.font-160per > p { margin: 0 }
+.font-160per .x { color: red }
+.font-160per .y { color: blue }"#;
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body><div class="calibre"><p>kindle:position 1</p><p>kf8</p></div></body>
+</html>"#;
+    let entries: Vec<(&'static str, &[u8])> = vec![
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+        ("OEBPS/content.opf", MINIMAL_OPF.as_bytes()),
+        ("OEBPS/toc.ncx", ncx.as_bytes()),
+        ("OEBPS/style.css", css.as_bytes()),
+        ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+    ];
+    let d = detect(&build_epub(&entries));
+    assert_eq!(d.vendor, EpubVendor::Kindle, "signals={:?}", d.signals);
+}
+
+/// `dc:identifier` containing the literal string `koboSpan_dummy` must not
+/// flip a Kindle book — the OPF is never scanned for body markers.
+#[test]
+fn kindle_book_with_kobospan_in_opf_stays_kindle() {
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
+  <metadata>
+    <dc:identifier xmlns:dc="http://purl.org/dc/elements/1.1/" id="id">koboSpan_dummy</dc:identifier>
+  </metadata>
+  <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>"#;
+    let ncx = r#"<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head/><docTitle><text>K</text></docTitle>
+  <navMap><navPoint id="np1" playOrder="1"><navLabel><text>Ch 1</text></navLabel><content src="ch1.xhtml"/></navPoint></navMap>
+</ncx>"#;
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body><div class="calibre"><p>kindle:position 1</p><p>kf8</p></div></body>
+</html>"#;
+    let entries: Vec<(&'static str, &[u8])> = vec![
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+        ("OEBPS/content.opf", opf.as_bytes()),
+        ("OEBPS/toc.ncx", ncx.as_bytes()),
+        ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+    ];
+    let d = detect(&build_epub(&entries));
+    assert_eq!(d.vendor, EpubVendor::Kindle, "signals={:?}", d.signals);
+}
+
+/// Markers buried in XML comments must not feed the cluster count.
+#[test]
+fn xml_comment_markers_do_not_flip_kindle() {
+    let ncx = r#"<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head/><docTitle><text>K</text></docTitle>
+  <navMap><navPoint id="np1" playOrder="1"><navLabel><text>Ch 1</text></navLabel><content src="ch1.xhtml"/></navPoint></navMap>
+</ncx>"#;
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+  <!-- koboSpan koboSpan koboSpan font-160per -->
+  <div class="calibre"><p>kindle:position 1</p><p>kf8</p></div>
+</body></html>"#;
+    let entries: Vec<(&'static str, &[u8])> = vec![
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+        ("OEBPS/content.opf", MINIMAL_OPF.as_bytes()),
+        ("OEBPS/toc.ncx", ncx.as_bytes()),
+        ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+    ];
+    let d = detect(&build_epub(&entries));
+    assert_eq!(d.vendor, EpubVendor::Kindle, "signals={:?}", d.signals);
+}
+
+/// A truncated EPUB (header-only bytes) must surface as a zip-level error,
+/// not silently classify as Generic.
+#[test]
+fn truncated_epub_returns_err() {
+    use lingq_upload_lib::core::epub::EpubError;
+    let full = build_kindle_fixture();
+    let truncated = &full[..full.len().min(16)];
+    let opened = zip::ZipArchive::new(Cursor::new(truncated));
+    let result = match opened {
+        Ok(mut zip) => lingq_upload_lib::core::epub::detect_vendor(&mut zip),
+        Err(e) => Err(EpubError::Zip(e.to_string())),
+    };
+    assert!(
+        matches!(result, Err(EpubError::Zip(_))),
+        "expected EpubError::Zip, got {result:?}",
+    );
 }

@@ -110,7 +110,7 @@ struct RecordingSink {
 }
 
 impl JobSink for RecordingSink {
-    fn started(&mut self, _strategy: Option<&str>) {
+    fn started(&mut self, _strategy: Option<lingq_upload_lib::core::epub::EpubVendor>) {
         self.events.lock().unwrap().push(Event::Started);
     }
     fn progress(&mut self, _pct: f32, _message: Option<String>) {

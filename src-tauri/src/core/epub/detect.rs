@@ -1,9 +1,10 @@
 //! EPUB vendor discriminator.
 //!
 //! Decides between Kindle / Kobo / Generic before the parse pass so the right
-//! [`super::HeadingStrategy`] can be picked centrally. Heuristic is intentionally
-//! cluster-based: a single stray `font-160per` span buried in an otherwise-
-//! Kindle book must not flip the classification.
+//! [`super::HeadingStrategy`] can be picked centrally. Counting is per-file:
+//! a single CSS rule with three repetitions of `font-160per` does not flip
+//! detection on its own, and only body XHTML files contribute to the cluster
+//! decision. Markers buried in `<!-- … -->` comments are excluded.
 //!
 //! Signals are reported back to the caller so logs and tests can observe which
 //! markers fired without re-running the scan.
@@ -40,51 +41,79 @@ pub struct VendorDetection {
     pub signals: Vec<String>,
 }
 
-/// Cluster floor: koboSpan or font-1[246]0per hits must reach this many
-/// distinct occurrences before Kobo classification fires. Lower numbers
-/// produced false positives in adversarial fixtures where a stylesheet
-/// happened to carry one stray Kobo-styled span.
+/// Cluster floor: a single body file must hit this many marker occurrences,
+/// OR this many distinct body files must each carry at least one hit, before
+/// Kobo classification fires. Anything less risks a stray CSS rule flipping
+/// a Kindle book.
 const KOBO_CLUSTER_FLOOR: usize = 3;
 
-/// How many spine entries (best-effort: just the first N XHTML-looking entries
-/// in zip order) get scanned. Real Kobo books spread markers across many files
-/// so even a small window is enough to clear the cluster floor without
+/// Cap on body files scanned. Real Kobo books spread markers across many
+/// files; a small window is enough to clear the cluster floor without
 /// touching every chapter.
-const MAX_FILES_SCANNED: usize = 12;
+const MAX_BODY_FILES_SCANNED: usize = 12;
 
 /// Read budget per file. Kobo markers cluster near the top of each chapter;
 /// avoiding multi-megabyte reads keeps detection cheap for picture books.
 const MAX_BYTES_PER_FILE: usize = 64 * 1024;
 
+#[derive(Clone, Copy)]
+enum FileKind {
+    Body,
+    Css,
+    Ncx,
+}
+
 pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
 ) -> Result<VendorDetection, EpubError> {
-    let candidates = collect_candidate_files(zip);
+    let candidates = collect_candidate_files(zip)?;
 
-    let mut kobo_span_hits = 0usize;
-    let mut font_per_hits = 0usize;
+    let mut max_kobo_span_in_body = 0usize;
+    let mut max_font_per_in_body = 0usize;
+    let mut total_kobo_in_bodies = 0usize;
+    let mut bodies_with_kobo_hit = 0usize;
     let mut kindle_marker_hits = 0usize;
     let mut has_ncx = false;
 
-    for name in &candidates {
+    for (name, kind) in &candidates {
         let body = match read_capped(zip, name) {
             Ok(b) => b,
             Err(_) => continue,
         };
-        kobo_span_hits = kobo_span_hits.saturating_add(count_kobo_span(&body));
-        font_per_hits = font_per_hits.saturating_add(count_font_per(&body));
-        kindle_marker_hits = kindle_marker_hits.saturating_add(count_kindle_markers(&body));
-        if name.ends_with(".ncx") {
-            has_ncx = true;
+        match kind {
+            FileKind::Body => {
+                let stripped = strip_xml_comments(&body);
+                let kobo_span = count_kobo_span(&stripped);
+                let font_per = count_font_per(&stripped);
+                let kobo_total = kobo_span + font_per;
+                max_kobo_span_in_body = max_kobo_span_in_body.max(kobo_span);
+                max_font_per_in_body = max_font_per_in_body.max(font_per);
+                total_kobo_in_bodies = total_kobo_in_bodies.saturating_add(kobo_total);
+                if kobo_total > 0 {
+                    bodies_with_kobo_hit += 1;
+                }
+                kindle_marker_hits =
+                    kindle_marker_hits.saturating_add(count_kindle_markers(&stripped));
+            }
+            FileKind::Css => {
+                // CSS contributes Kindle markers only after comment stripping;
+                // it never feeds the Kobo body cluster.
+                let stripped = strip_css_comments(&body);
+                kindle_marker_hits =
+                    kindle_marker_hits.saturating_add(count_kindle_markers(&stripped));
+            }
+            FileKind::Ncx => {
+                has_ncx = true;
+            }
         }
     }
 
     let mut signals: Vec<String> = Vec::new();
-    if kobo_span_hits > 0 {
-        signals.push(label_count("kobo_span", kobo_span_hits).to_string());
+    if max_kobo_span_in_body > 0 {
+        signals.push(label_count("kobo_span", max_kobo_span_in_body).to_string());
     }
-    if font_per_hits > 0 {
-        signals.push(label_count("font_per", font_per_hits).to_string());
+    if max_font_per_in_body > 0 {
+        signals.push(label_count("font_per", max_font_per_in_body).to_string());
     }
     if kindle_marker_hits > 0 {
         signals.push(label_count("kindle_marker", kindle_marker_hits).to_string());
@@ -93,23 +122,20 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
         signals.push("toc_ncx".to_string());
     }
 
-    let kobo_cluster = kobo_span_hits.max(font_per_hits);
-    let kobo_total = kobo_span_hits + font_per_hits;
+    let max_kobo_in_body = max_kobo_span_in_body.max(max_font_per_in_body);
+    let is_kobo_cluster =
+        max_kobo_in_body >= KOBO_CLUSTER_FLOOR || bodies_with_kobo_hit >= KOBO_CLUSTER_FLOOR;
 
-    let (vendor, confidence) = if kobo_cluster >= KOBO_CLUSTER_FLOOR {
-        // Saturate at ~12 hits for full confidence; more hits don't add signal.
-        let conf = 0.6 + (kobo_total.min(12) as f32) / 30.0;
+    let (vendor, confidence) = if is_kobo_cluster {
+        let conf = 0.6 + (total_kobo_in_bodies.min(12) as f32) / 30.0;
         (EpubVendor::Kobo, conf.min(0.99))
     } else if kindle_marker_hits >= 2 || (has_ncx && kindle_marker_hits >= 1) {
         let conf = 0.6 + (kindle_marker_hits.min(8) as f32) / 20.0;
         (EpubVendor::Kindle, conf.min(0.99))
     } else if has_ncx {
-        // toc.ncx alone is a weak Kindle/EPUB2 hint — strong enough to beat
-        // Generic, weak enough that it doesn't dwarf a Kobo cluster.
         (EpubVendor::Kindle, 0.6)
     } else {
-        // Empty, encrypted, or simply unknown. One stray marker stays here.
-        let weak = kobo_total + kindle_marker_hits;
+        let weak = total_kobo_in_bodies + kindle_marker_hits;
         let conf = if weak == 0 { 0.2 } else { 0.35 };
         (EpubVendor::Generic, conf)
     };
@@ -123,25 +149,38 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
 
 fn collect_candidate_files<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
-) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+) -> Result<Vec<(String, FileKind)>, EpubError> {
+    let mut out: Vec<(String, FileKind)> = Vec::new();
+    let mut body_count = 0usize;
     for i in 0..zip.len() {
-        let Ok(f) = zip.by_index(i) else { continue };
-        let name = f.name().to_string();
+        let name = {
+            let entry = zip
+                .by_index(i)
+                .map_err(|e| EpubError::Zip(e.to_string()))?;
+            entry.name().to_string()
+        };
         let lower = name.to_ascii_lowercase();
-        if lower.ends_with(".xhtml")
+        let kind = if lower.ends_with(".xhtml")
             || lower.ends_with(".html")
             || lower.ends_with(".htm")
-            || lower.ends_with(".ncx")
-            || lower.ends_with(".opf")
         {
-            out.push(name);
-            if out.len() >= MAX_FILES_SCANNED {
-                break;
+            FileKind::Body
+        } else if lower.ends_with(".css") {
+            FileKind::Css
+        } else if lower.ends_with(".ncx") {
+            FileKind::Ncx
+        } else {
+            continue;
+        };
+        if matches!(kind, FileKind::Body) {
+            if body_count >= MAX_BODY_FILES_SCANNED {
+                continue;
             }
+            body_count += 1;
         }
+        out.push((name, kind));
     }
-    out
+    Ok(out)
 }
 
 fn read_capped<R: std::io::Read + std::io::Seek>(
@@ -171,6 +210,46 @@ fn read_capped<R: std::io::Read + std::io::Seek>(
         }
     }
     Ok(buf)
+}
+
+/// Drop `<!-- … -->` blocks in-place. Tolerant of unterminated comments at
+/// EOF (the cap can chop one mid-stream): treat the rest as comment.
+fn strip_xml_comments(bytes: &[u8]) -> Vec<u8> {
+    strip_paired(bytes, b"<!--", b"-->")
+}
+
+fn strip_css_comments(bytes: &[u8]) -> Vec<u8> {
+    strip_paired(bytes, b"/*", b"*/")
+}
+
+fn strip_paired(bytes: &[u8], open: &[u8], close: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + open.len() <= bytes.len() && &bytes[i..i + open.len()] == open {
+            let rest_start = i + open.len();
+            match find_subslice(&bytes[rest_start..], close) {
+                Some(off) => i = rest_start + off + close.len(),
+                None => break,
+            }
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    for i in 0..=haystack.len() - needle.len() {
+        if &haystack[i..i + needle.len()] == needle {
+            return Some(i);
+        }
+    }
+    None
 }
 
 fn count_kobo_span(bytes: &[u8]) -> usize {
@@ -286,5 +365,31 @@ mod tests {
     fn kobo_span_is_case_insensitive() {
         assert_eq!(count_kobo_span(b"<span class=\"koboSpan\""), 1);
         assert_eq!(count_kobo_span(b"KOBOSPAN KOBOSPAN"), 2);
+    }
+
+    #[test]
+    fn strip_xml_comments_drops_block() {
+        let s = b"a<!-- koboSpan koboSpan -->b<!-- x -->c";
+        let out = strip_xml_comments(s);
+        assert_eq!(out, b"abc");
+    }
+
+    #[test]
+    fn strip_css_comments_drops_block() {
+        let s = b".a { /* font-160per */ } .b { color: red }";
+        let out = strip_css_comments(s);
+        assert!(!out.windows(11).any(|w| w == b"font-160per"));
+    }
+
+    #[test]
+    fn as_str_matches_serde_rename() {
+        for v in [EpubVendor::Kindle, EpubVendor::Kobo, EpubVendor::Generic] {
+            let json = serde_json::to_value(v).unwrap();
+            debug_assert_eq!(
+                json.as_str().expect("serialized as string"),
+                v.as_str(),
+                "as_str diverged from serde for {v:?}",
+            );
+        }
     }
 }

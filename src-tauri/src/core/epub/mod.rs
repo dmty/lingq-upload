@@ -9,14 +9,22 @@ use specta::Type;
 use thiserror::Error;
 
 pub use detect::{detect_vendor, EpubVendor, VendorDetection};
-pub use parse::{parse_epub, HeadingStrategy};
+pub use parse::{parse_epub, parse_epub_bytes, HeadingStrategy};
 
 /// Open the EPUB at `path` and run vendor detection. Convenience wrapper used
 /// by the orchestrator so the chosen vendor can be logged on `JobEvent::Started`
 /// before parsing kicks off.
 pub fn autodetect_vendor(path: &Path) -> Result<VendorDetection, EpubError> {
-    let file = std::fs::File::open(path)?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| EpubError::Zip(e.to_string()))?;
+    let bytes = std::fs::read(path)?;
+    autodetect_vendor_bytes(&bytes)
+}
+
+/// In-memory variant. The orchestrator slurps the file once and feeds both
+/// detection and parse through this so we don't reopen + re-build the zip
+/// twice on the hot path.
+pub fn autodetect_vendor_bytes(bytes: &[u8]) -> Result<VendorDetection, EpubError> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|e| EpubError::Zip(e.to_string()))?;
     detect_vendor(&mut zip)
 }
 
