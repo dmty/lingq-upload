@@ -13,6 +13,7 @@ use secrecy::SecretString;
 use tokio_util::sync::CancellationToken;
 
 use lingq_upload_lib::commands::jobs::replay_receipts_impl;
+use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::{run_project_job, JobSink};
 use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
@@ -79,7 +80,7 @@ impl<S: ProjectStore> ProjectStore for PatchSpy<S> {
     fn set_selection(
         &self,
         id: &ProjectId,
-        skipped_ids: &[usize],
+        skipped_ids: &[ChapterId],
     ) -> Result<(), StoreError> {
         self.inner.set_selection(id, skipped_ids)
     }

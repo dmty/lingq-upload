@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
+use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::{
     ChapterReceipt, Project, ProjectSettings, ProjectSources, ProjectStage, SCHEMA_V1,
@@ -273,7 +274,7 @@ fn powercut_simulation_preserves_prior_selection() {
     let tmp = TempDir::new().unwrap();
     let store = JsonProjectStore::new(tmp.path());
     let mut p = sample_with_receipts("Selection PowerCut", "ja", 3);
-    p.skipped_chapters = vec![0];
+    p.skipped_chapters = vec![ChapterId::from_order(0)];
     store.put(&p).unwrap();
 
     let pj = tmp
@@ -285,11 +286,13 @@ fn powercut_simulation_preserves_prior_selection() {
     std::fs::write(&tmp_path, b"{ partial selection write }").unwrap();
 
     let got = store.get(&p.id).unwrap().unwrap();
-    assert_eq!(got.skipped_chapters, vec![0]);
+    assert_eq!(got.skipped_chapters, vec![ChapterId::from_order(0)]);
     assert_eq!(got, p, "prior file untouched after partial tmp write");
 
     // Real selection update must also leave no tmp turds.
-    store.set_selection(&p.id, &[1, 2]).unwrap();
+    store
+        .set_selection(&p.id, &[ChapterId::from_order(1), ChapterId::from_order(2)])
+        .unwrap();
     let dir = tmp
         .path()
         .join("projects")
@@ -305,7 +308,10 @@ fn powercut_simulation_preserves_prior_selection() {
         "no .tmp files after set_selection: {entries:?}"
     );
     let got = store.get(&p.id).unwrap().unwrap();
-    assert_eq!(got.skipped_chapters, vec![1, 2]);
+    assert_eq!(
+        got.skipped_chapters,
+        vec![ChapterId::from_order(1), ChapterId::from_order(2)]
+    );
 }
 
 #[test]
