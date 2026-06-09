@@ -1,7 +1,7 @@
 use secrecy::SecretString;
 
 use crate::error::AppError;
-use crate::lingq::{AccountProfile, Collection, Language, LingqClient};
+use crate::lingq::{AccountProfile, Collection, Language, LanguageCode, LingqClient};
 use crate::secrets::{RealKeyring, SecretsStore};
 
 fn load_api_key() -> Result<String, AppError> {
@@ -13,7 +13,8 @@ fn load_api_key() -> Result<String, AppError> {
 
 fn client_for(lang: &str) -> Result<LingqClient, AppError> {
     let key = load_api_key()?;
-    Ok(LingqClient::new(SecretString::from(key), lang))
+    let code = LanguageCode::new(lang).map_err(AppError::from)?;
+    Ok(LingqClient::new(SecretString::from(key), code))
 }
 
 #[tauri::command]

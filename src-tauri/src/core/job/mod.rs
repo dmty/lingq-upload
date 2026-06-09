@@ -168,11 +168,7 @@ pub async fn run_project_job(
 
     // Resolve the collection up front. Idempotent on the server side.
     let collection = match client
-        .find_or_create_collection(
-            &project.settings.collection_title,
-            "",
-            &project.settings.language,
-        )
+        .find_or_create_collection(&project.settings.collection_title, "")
         .await
     {
         Ok(id) => id,
@@ -271,7 +267,6 @@ pub async fn run_project_job(
             title: &title,
             text: &text,
             audio: Some(&dst),
-            language: &project.settings.language,
             level: project.settings.level,
             status: LessonStatus::Private,
             tags: &[],

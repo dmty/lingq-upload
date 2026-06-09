@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use lingq_upload_lib::lingq::{
-    AccountProfile, Collection, Language, LessonOpts, LingqClient, LingqError,
+    AccountProfile, Collection, LanguageCode, Language, LessonOpts, LingqClient, LingqError,
 };
 use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;
@@ -37,7 +37,8 @@ async fn spawn_server() -> ServerGuard {
 }
 
 fn client_for(server: &ServerGuard, lang: &str, token: &str) -> LingqClient {
-    LingqClient::with_base_url(SecretString::from(token.to_string()), lang, server.url())
+    let code = LanguageCode::new(lang).expect("valid lang code");
+    LingqClient::with_base_url(SecretString::from(token.to_string()), code, server.url())
 }
 
 fn write_tmp_mp3() -> (tempfile::TempDir, PathBuf) {

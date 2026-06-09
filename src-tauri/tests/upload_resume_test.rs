@@ -21,7 +21,7 @@ use lingq_upload_lib::core::project::{
 };
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore, StoreError};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
-use lingq_upload_lib::lingq::LingqClient;
+use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 
 fn which(bin: &str) -> Option<PathBuf> {
     SyncCommand::new("which")
@@ -281,7 +281,7 @@ async fn five_chapters_killed_after_three_resumes_for_two() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
 
@@ -364,7 +364,7 @@ async fn patch_chapter_call_count_matches_chapter_count() {
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),
-        "ja",
+        LanguageCode::new("ja").expect("valid lang"),
         fixture.server.url(),
     ));
     let mut sink = RecordingSink::default();

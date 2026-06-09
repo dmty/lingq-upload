@@ -51,16 +51,15 @@ impl LingqClient {
         &self,
         title: &str,
         description: &str,
-        lang: &str,
     ) -> Result<CollectionId, LingqError> {
-        let guard = lock_for(lang, title);
+        let guard = lock_for(self.lang(), title);
         let _held = guard.lock().await;
 
-        if let Some(id) = self.search_collection(title, lang).await? {
+        if let Some(id) = self.search_collection(title).await? {
             return Ok(id);
         }
 
-        let create_url = format!("{}/api/v3/{}/collections/", self.base_url(), lang);
+        let create_url = format!("{}/api/v3/{}/collections/", self.base_url(), self.lang());
         let body = serde_json::json!({ "title": title, "description": description });
         let resp = self
             .http()
@@ -86,7 +85,7 @@ impl LingqClient {
             s if s.is_client_error() => {
                 let detail = resp.text().await.unwrap_or_default();
                 // Race-after-search: another writer may have just created it.
-                match self.search_collection(title, lang).await? {
+                match self.search_collection(title).await? {
                     Some(id) => Ok(id),
                     None => Err(LingqError::BadRequest(detail)),
                 }
@@ -102,12 +101,11 @@ impl LingqClient {
     async fn search_collection(
         &self,
         title: &str,
-        lang: &str,
     ) -> Result<Option<CollectionId>, LingqError> {
         let search_url = format!(
             "{}/api/v3/{}/collections/?search={}",
             self.base_url(),
-            lang,
+            self.lang(),
             urlencode(title)
         );
         let resp = self

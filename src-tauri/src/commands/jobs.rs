@@ -19,7 +19,7 @@ use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
-use crate::lingq::LingqClient;
+use crate::lingq::{LanguageCode, LingqClient};
 use crate::secrets::{RealKeyring, SecretsStore};
 
 /// Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
@@ -123,7 +123,7 @@ pub async fn cmd_start_project_job(
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
-    let lang = project.settings.language.clone();
+    let lang = LanguageCode::new(&project.settings.language).map_err(AppError::from)?;
     let client = Arc::new(LingqClient::new(SecretString::from(key), lang));
 
     let job_id = Uuid::new_v4();
