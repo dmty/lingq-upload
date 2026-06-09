@@ -3,6 +3,7 @@ use specta::Type;
 use thiserror::Error;
 
 use crate::core::audio::AudioError;
+use crate::core::matcher::MappingError;
 use crate::core::project::StageError;
 use crate::core::text::TextError;
 use crate::ingest::IngestError;
@@ -31,6 +32,10 @@ pub enum AppError {
     Lingq(#[from] LingqError),
     #[error("ingest error: {0}")]
     Ingest(#[from] IngestError),
+    #[error("mapping error: {0}")]
+    Mapping(#[from] MappingError),
+    #[error("mapping op_id stale: server={server} expected={expected}")]
+    MappingStaleOp { server: u64, expected: u64 },
     #[error("{0}")]
     Other(String),
 }

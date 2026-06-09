@@ -212,8 +212,11 @@ async cmdMatcherInspect(projectId: ProjectId) : Promise<Result<MismatchInspectio
 /**
  * Apply a single mapping-editor op to a project and persist the new state.
  * 
- * Accept only when `expected_op_id == state.op_id + 1`; reject otherwise so
- * reloads that replay an already-applied op see a clean conflict signal.
+ * The store performs the load → gate → apply → put cycle under its
+ * per-project write lock so concurrent callers cannot interleave their RMW
+ * windows. Stale-op and `MappingError` discriminants survive intact onto the
+ * IPC boundary; UI may match on `MappingError::UnknownChapter` /
+ * `MappingError::UnknownTrack` / stale-op without parsing prose.
  */
 async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: number) : Promise<Result<MappingState, AppError>> {
     try {
@@ -351,7 +354,7 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
  */
 export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Other"; message: string }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Other"; message: string }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
 /**

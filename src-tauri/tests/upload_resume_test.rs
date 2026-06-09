@@ -85,6 +85,14 @@ impl<S: ProjectStore> ProjectStore for PatchSpy<S> {
     ) -> Result<(), StoreError> {
         self.inner.set_selection(id, skipped_ids)
     }
+    fn apply_mapping_op(
+        &self,
+        id: &ProjectId,
+        op: lingq_upload_lib::core::matcher::MappingOp,
+        expected_op_id: u64,
+    ) -> Result<lingq_upload_lib::core::matcher::MappingState, StoreError> {
+        self.inner.apply_mapping_op(id, op, expected_op_id)
+    }
 }
 
 // --- Sinks -------------------------------------------------------------------

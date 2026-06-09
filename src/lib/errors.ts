@@ -3,6 +3,7 @@ import type {
   AudioError,
   IngestError,
   LingqError,
+  MappingError,
   SecretError,
   TextError,
 } from "$lib/ipc/bindings";
@@ -71,6 +72,17 @@ export function ingestMessage(e: IngestError): string {
   }
 }
 
+export function mappingMessage(e: MappingError): string {
+  switch (e.kind) {
+    case "UnknownChapter":
+      return `Unknown chapter: ${e.message}`;
+    case "UnknownTrack":
+      return `Unknown track: ${e.message}`;
+    case "Invalid":
+      return `Invalid mapping op: ${e.message}`;
+  }
+}
+
 export function appErrorMessage(e: AppError): string {
   switch (e.kind) {
     case "Io":
@@ -91,6 +103,10 @@ export function appErrorMessage(e: AppError): string {
       return textErrorMessage(e.message);
     case "Ingest":
       return ingestMessage(e.message);
+    case "Mapping":
+      return mappingMessage(e.message);
+    case "MappingStaleOp":
+      return `Mapping changed since last sync (server op ${e.message.server}, expected ${e.message.expected}). Reloading.`;
     case "Other":
       return e.message;
   }

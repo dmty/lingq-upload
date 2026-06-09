@@ -8,6 +8,7 @@ use std::time::SystemTime;
 use super::{canonicalise_selection, safe_path_segment, ProjectStore, StoreError};
 use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
+use crate::core::matcher::{apply_mapping_op as apply_pure, MappingOp, MappingState};
 use crate::core::project::{ChapterReceipt, Project, ProjectSummary};
 
 pub struct JsonProjectStore {
@@ -294,5 +295,31 @@ impl ProjectStore for JsonProjectStore {
         let path = self.project_path(&project.id);
         let bytes = serialise_project(&project, &path)?;
         write_atomic(&path, &bytes)
+    }
+
+    fn apply_mapping_op(
+        &self,
+        id: &ProjectId,
+        op: MappingOp,
+        expected_op_id: u64,
+    ) -> Result<MappingState, StoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("project write lock poisoned");
+        let mut project = self
+            .get(id)?
+            .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+        let current = project.mapping.clone().unwrap_or_default();
+        if expected_op_id != current.op_id + 1 {
+            return Err(StoreError::MappingStaleOp {
+                server: current.op_id,
+                expected: expected_op_id,
+            });
+        }
+        let next = apply_pure(&current, op).map_err(StoreError::Mapping)?;
+        project.mapping = Some(next.clone());
+        let path = self.project_path(&project.id);
+        let bytes = serialise_project(&project, &path)?;
+        write_atomic(&path, &bytes)?;
+        Ok(next)
     }
 }
