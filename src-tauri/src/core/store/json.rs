@@ -184,21 +184,36 @@ fn io_err(path: &Path, e: std::io::Error) -> StoreError {
     }
 }
 
-/// Atomic write: write to `path.tmp`, fsync, rename over `path`.
-/// Power-cut between write and rename leaves the prior file intact (D1 AC2).
+/// Atomic write: write to a unique `path.tmp.*`, fsync, rename over `path`,
+/// fsync the parent dir. Power-cut between write and rename leaves the prior
+/// file intact (D1 AC2). The pid + counter suffix keeps concurrent writers
+/// (other processes; in-process callers race only up to the per-project lock)
+/// from sharing one tmp file.
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+    static TMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let parent = path.parent().ok_or_else(|| StoreError::Io {
         path: path.to_path_buf(),
         message: "path has no parent".into(),
     })?;
     fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
-    let tmp = path.with_extension("json.tmp");
+    let tmp = path.with_extension(format!(
+        "json.tmp.{}.{}",
+        std::process::id(),
+        TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    ));
     {
         let mut f = fs::File::create(&tmp).map_err(|e| io_err(&tmp, e))?;
         f.write_all(bytes).map_err(|e| io_err(&tmp, e))?;
         f.sync_all().map_err(|e| io_err(&tmp, e))?;
     }
     fs::rename(&tmp, path).map_err(|e| io_err(path, e))?;
+    // Durability of the rename itself: fsync the directory entry. Windows
+    // cannot open directories as files, so unix-only.
+    #[cfg(unix)]
+    {
+        let dir = fs::File::open(parent).map_err(|e| io_err(parent, e))?;
+        dir.sync_all().map_err(|e| io_err(parent, e))?;
+    }
     Ok(())
 }
 
@@ -211,9 +226,28 @@ fn serialise_project(p: &Project, path: &Path) -> Result<Vec<u8>, StoreError> {
 
 impl ProjectStore for JsonProjectStore {
     fn put(&self, p: &Project) -> Result<(), StoreError> {
+        let lock = self.write_lock(&p.id);
+        let _guard = lock.lock().expect("project write lock poisoned");
         let path = self.project_path(&p.id);
         let bytes = serialise_project(p, &path)?;
         write_atomic(&path, &bytes)
+    }
+
+    fn update(
+        &self,
+        id: &ProjectId,
+        f: &mut dyn FnMut(&mut Project),
+    ) -> Result<Project, StoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("project write lock poisoned");
+        let mut project = self
+            .get(id)?
+            .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+        f(&mut project);
+        let path = self.project_path(&project.id);
+        let bytes = serialise_project(&project, &path)?;
+        write_atomic(&path, &bytes)?;
+        Ok(project)
     }
 
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError> {

@@ -124,7 +124,7 @@ fn swap(
     }
 
     if let Some(prev) = displaced {
-        if prev != track_id && !state.parking_lot.contains(&prev) {
+        if prev != track_id {
             state.parking_lot.push(prev);
         }
     }
@@ -140,11 +140,9 @@ fn park(state: &mut MappingState, track_id: TrackId) -> Result<(), MappingError>
         .ok_or_else(|| MappingError::UnknownTrack(track_id.clone()))?;
 
     state.pairs[idx].track_id = None;
-    state.pairs[idx].confidence = RECOMPUTED_CONFIDENCE;
+    state.pairs[idx].confidence = state.pairs[idx].original_confidence;
     state.pairs[idx].touched = true;
-    if !state.parking_lot.contains(&track_id) {
-        state.parking_lot.push(track_id);
-    }
+    state.parking_lot.push(track_id);
     Ok(())
 }
 
