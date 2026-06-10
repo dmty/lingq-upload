@@ -41,8 +41,7 @@ fn strategy_from_bytes(bytes: &[u8]) -> HeadingStrategy {
 /// Explicit-strategy entrypoint. Production code routes through
 /// [`parse_epub_bytes`] / [`parse_epub`] so detection always runs;
 /// this form exists for tests and snapshots that pin a strategy
-/// regardless of detection. Renamed from the old `parse_epub_bytes`
-/// signature.
+/// regardless of detection.
 pub fn parse_epub_with_strategy(
     bytes: &[u8],
     strategy: HeadingStrategy,
@@ -108,6 +107,10 @@ mod kindle {
         Ok(chapters)
     }
 
+    /// Decompressed-size ceiling per zip entry. EPUB bytes are untrusted; a
+    /// crafted entry can deflate to gigabytes.
+    const MAX_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
+
     /// Read a zip entry as a `String`, sniffing UTF-8 / UTF-16 (LE/BE) BOMs.
     /// EPUBs in the wild are mostly UTF-8 with the occasional UTF-16 (Kindle).
     /// Other encodings return a parse error rather than mojibake.
@@ -115,12 +118,18 @@ mod kindle {
         zip: &mut zip::ZipArchive<R>,
         name: &str,
     ) -> Result<String, EpubError> {
-        let mut f = zip
+        let f = zip
             .by_name(name)
             .map_err(|e| EpubError::Parse(format!("missing {name}: {e}")))?;
         let mut bytes = Vec::new();
-        f.read_to_end(&mut bytes)
+        f.take(MAX_ENTRY_BYTES + 1)
+            .read_to_end(&mut bytes)
             .map_err(|e| EpubError::Io(e.to_string()))?;
+        if bytes.len() as u64 > MAX_ENTRY_BYTES {
+            return Err(EpubError::Parse(format!(
+                "{name}: decompressed entry exceeds {MAX_ENTRY_BYTES} byte cap"
+            )));
+        }
         decode_xml_bytes(&bytes, name)
     }
 
@@ -363,13 +372,14 @@ mod kindle {
         decode_basic_entities(&out)
     }
 
+    // `&amp;` must decode last or `&amp;lt;` double-decodes to `<`.
     fn decode_basic_entities(s: &str) -> String {
-        s.replace("&amp;", "&")
-            .replace("&lt;", "<")
+        s.replace("&lt;", "<")
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
             .replace("&apos;", "'")
             .replace("&#x3000;", "\u{3000}")
+            .replace("&amp;", "&")
     }
 
     fn collapse_whitespace(s: &str) -> String {
@@ -461,6 +471,12 @@ mod kindle {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn decode_basic_entities_amp_decodes_last() {
+            assert_eq!(decode_basic_entities("&amp;lt;"), "&lt;");
+            assert_eq!(decode_basic_entities("&amp;amp;"), "&amp;");
+        }
 
         #[test]
         fn join_zip_path_percent_decodes() {

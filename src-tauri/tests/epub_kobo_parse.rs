@@ -10,8 +10,8 @@ use std::io::{Cursor, Write};
 
 use insta::assert_json_snapshot;
 use lingq_upload_lib::core::epub::{
-    autodetect_vendor_bytes, parse_epub_with_strategy, ChapterId, ChapterKind, EpubVendor,
-    HeadingStrategy,
+    autodetect_vendor_bytes, parse_epub_bytes, parse_epub_with_strategy, ChapterId, ChapterKind,
+    EpubError, EpubVendor, HeadingStrategy,
 };
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
@@ -133,6 +133,11 @@ fn detected_kobo_routes_through_kobo_strategy() {
     assert_eq!(chapters[0].title, "Cover");
     assert_eq!(chapters[1].title, "The Beginning");
     assert_eq!(chapters[4].title, "About the Author");
+
+    // Autodetect routing must reach the same output as the pinned strategy —
+    // i.e. parse_epub_bytes actually goes through detection, not a default.
+    let auto = parse_epub_bytes(&bytes).expect("autodetect parse");
+    assert_eq!(auto, chapters, "autodetect did not route to the Kobo strategy");
 }
 
 #[test]
@@ -332,4 +337,137 @@ fn missing_nav_falls_back_to_html_title() {
     assert_eq!(chapters[0].title, "Prologue");
     assert_eq!(chapters[1].title, "Chapter Two");
     assert_eq!(chapters[0].kind, ChapterKind::FrontMatter);
+}
+
+#[test]
+fn all_undecodable_spine_returns_error_not_empty_ok() {
+    // Both spine files are Shift-JIS — undecodable as utf-8/utf-16. A book
+    // whose every chapter is skipped must surface an error, not Ok(vec![]).
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata/>
+  <manifest>
+    <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+    <itemref idref="c2"/>
+  </spine>
+</package>"#;
+    // "日本語" in Shift-JIS, wrapped in ASCII markup: invalid utf-8, no BOM.
+    let sjis_body: &[u8] = b"<html><body><p>\x93\xfa\x96\x7b\x8c\xea</p></body></html>";
+    let mut buf = Vec::new();
+    {
+        let cursor = Cursor::new(&mut buf);
+        let mut zip = ZipWriter::new(cursor);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in [
+            ("mimetype", b"application/epub+zip" as &[u8]),
+            ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+            ("OEBPS/content.opf", opf.as_bytes()),
+            ("OEBPS/ch1.xhtml", sjis_body),
+            ("OEBPS/ch2.xhtml", sjis_body),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(body).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let err = parse_epub_with_strategy(&buf, HeadingStrategy::Kobo)
+        .expect_err("all-undecodable spine must error");
+    match err {
+        EpubError::Parse(msg) => {
+            assert!(msg.contains("0 of 2"), "diagnostic missing counts: {msg}");
+        }
+        other => panic!("expected Parse error, got {other:?}"),
+    }
+}
+
+#[test]
+fn oversized_chapter_entry_rejected() {
+    // A chapter that inflates past the per-entry cap must be refused instead
+    // of slurped into memory (zip-bomb guard).
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata/>
+  <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>"#;
+    let mut big = b"<html><body><p>".to_vec();
+    big.resize(17 * 1024 * 1024, b'a');
+    let mut buf = Vec::new();
+    {
+        let cursor = Cursor::new(&mut buf);
+        let mut zip = ZipWriter::new(cursor);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in [
+            ("mimetype", b"application/epub+zip" as &[u8]),
+            ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+            ("OEBPS/content.opf", opf.as_bytes()),
+            ("OEBPS/ch1.xhtml", &big),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(body).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let err = parse_epub_with_strategy(&buf, HeadingStrategy::Kobo)
+        .expect_err("oversized chapter must be rejected");
+    match err {
+        EpubError::Parse(msg) => assert!(msg.contains("exceeds"), "got: {msg}"),
+        other => panic!("expected Parse error, got {other:?}"),
+    }
+}
+
+#[test]
+fn dot_segment_spine_hrefs_resolve() {
+    // `./ch1.xhtml` hrefs must hit the same zip entry as `ch1.xhtml` — zip
+    // lookups are byte-literal.
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata/>
+  <manifest>
+    <item id="nav" href="./nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="c1"  href="./ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>"#;
+    let nav = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body>
+  <nav epub:type="toc">
+    <ol><li><a href="./ch1.xhtml">Dotted Chapter</a></li></ol>
+  </nav>
+</body></html>"#;
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body><p><span class="koboSpan">Dot-segment body.</span></p></body></html>"#;
+    let mut buf = Vec::new();
+    {
+        let cursor = Cursor::new(&mut buf);
+        let mut zip = ZipWriter::new(cursor);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in [
+            ("mimetype", b"application/epub+zip" as &[u8]),
+            ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+            ("OEBPS/content.opf", opf.as_bytes()),
+            ("OEBPS/nav.xhtml", nav.as_bytes()),
+            ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(body).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let chapters = parse_epub_with_strategy(&buf, HeadingStrategy::Kobo).expect("parse dotted");
+    assert_eq!(chapters.len(), 1);
+    assert_eq!(chapters[0].title, "Dotted Chapter");
+    assert_eq!(chapters[0].body, "Dot-segment body.");
 }

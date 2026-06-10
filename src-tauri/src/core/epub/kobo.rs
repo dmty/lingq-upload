@@ -16,16 +16,12 @@ use super::{normalize_title, Chapter, ChapterId, ChapterKind, EpubError};
 use crate::core::text::strip_ruby;
 
 /// Marker type for the Kobo strategy. The runtime entry point is
-/// [`parse_from_zip`]; the marker exists so callers can ask the strategy for
-/// its canonical name without instantiating the enum.
+/// [`parse_from_zip`]; the marker exists so callers can name the strategy
+/// without instantiating the enum.
 pub struct KoboStrategy;
 
 impl KoboStrategy {
     pub const NAME: &'static str = "kobo";
-
-    pub fn name(&self) -> &'static str {
-        Self::NAME
-    }
 }
 
 // Exact normalised-title match (not a prefix). A chapter literally titled
@@ -44,6 +40,11 @@ const FRONT_MATTER_TITLES: &[&str] = &[
     "prologue",
     "contents",
     "table of contents",
+    "目次",
+    "まえがき",
+    "はじめに",
+    "序文",
+    "序章",
 ];
 
 const BACK_MATTER_TITLES: &[&str] = &[
@@ -59,6 +60,10 @@ const BACK_MATTER_TITLES: &[&str] = &[
     "index",
     "notes",
     "colophon",
+    "奥付",
+    "あとがき",
+    "解説",
+    "謝辞",
 ];
 
 pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
@@ -68,9 +73,8 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
     let opf_xml = read_to_string_from_zip(zip, &opf_path)?;
     let opf = parse_opf(&opf_xml, &opf_path)?;
 
-    // href→title map sourced from nav.xhtml when present. Hrefs are stored
-    // both as the raw nav href (relative to nav's base dir) and the resolved
-    // zip path so lookups can match either side.
+    // href→title map sourced from nav.xhtml when present. Keys are resolved
+    // zip paths so spine lookups match directly.
     let nav_titles: HashMap<String, String> = match opf.nav_href.as_deref() {
         Some(nav_href) => {
             let full = join_zip_path(&opf.base_dir, nav_href).unwrap_or_default();
@@ -89,14 +93,21 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
     // the original manifest href and acts as the stable hash anchor — that
     // way dropping an empty chapter does not shift later ids.
     let mut parsed: Vec<(String, String, String)> = Vec::with_capacity(opf.spine.len());
+    let mut first_skip: Option<EpubError> = None;
     for (i, href) in opf.spine.iter().enumerate() {
         let full = match join_zip_path(&opf.base_dir, href) {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                first_skip.get_or_insert(e);
+                continue;
+            }
         };
         let raw = match read_to_string_from_zip(zip, &full) {
             Ok(s) => s,
-            Err(_) => continue,
+            Err(e) => {
+                first_skip.get_or_insert(e);
+                continue;
+            }
         };
         let body = clean_chapter_body(&raw);
         if body.trim().is_empty() {
@@ -108,6 +119,18 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
             .or_else(|| extract_html_title(&raw))
             .unwrap_or_else(|| format!("Chapter {}", i + 1));
         parsed.push((href.clone(), title, body));
+    }
+
+    // An all-skips outcome is a broken book (wrong encoding, bad hrefs), not
+    // an empty one — surface it instead of returning Ok(vec![]).
+    if parsed.is_empty() && !opf.spine.is_empty() {
+        let detail = first_skip
+            .map(|e| format!("; first skip: {e}"))
+            .unwrap_or_else(|| "; all spine bodies empty after cleaning".into());
+        return Err(EpubError::Parse(format!(
+            "0 of {} spine entries yielded chapters{detail}",
+            opf.spine.len()
+        )));
     }
 
     let mut chapters: Vec<Chapter> = Vec::with_capacity(parsed.len());
@@ -395,16 +418,27 @@ fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
     Err(EpubError::Parse("no rootfile in container.xml".into()))
 }
 
+/// Decompressed-size ceiling per zip entry. EPUB bytes are untrusted; a
+/// crafted entry can deflate to gigabytes. Real chapter XHTML tops out well
+/// under a megabyte.
+const MAX_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
+
 fn read_to_string_from_zip<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     name: &str,
 ) -> Result<String, EpubError> {
-    let mut f = zip
+    let f = zip
         .by_name(name)
         .map_err(|e| EpubError::Parse(format!("missing {name}: {e}")))?;
     let mut bytes = Vec::new();
-    f.read_to_end(&mut bytes)
+    f.take(MAX_ENTRY_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| EpubError::Io(e.to_string()))?;
+    if bytes.len() as u64 > MAX_ENTRY_BYTES {
+        return Err(EpubError::Parse(format!(
+            "{name}: decompressed entry exceeds {MAX_ENTRY_BYTES} byte cap"
+        )));
+    }
     decode_xml_bytes(&bytes, name)
 }
 
@@ -449,6 +483,9 @@ fn parent_dir(p: &str) -> &str {
     }
 }
 
+/// Resolve an href against `base`, normalizing `.` / `..` segments — zip
+/// lookups are byte-literal, so `OEBPS/./ch1.xhtml` would miss the entry.
+/// `..` that climbs above the zip root is rejected.
 fn join_zip_path(base: &str, rel: &str) -> Result<String, EpubError> {
     if rel.is_empty() {
         return Err(EpubError::Parse("empty href".into()));
@@ -459,14 +496,26 @@ fn join_zip_path(base: &str, rel: &str) -> Result<String, EpubError> {
     let path_part = rel.split('#').next().unwrap_or(rel);
     let decoded = percent_decode_utf8(path_part)
         .ok_or_else(|| EpubError::Parse(format!("href not utf-8: {rel}")))?;
-    if decoded.split('/').any(|seg| seg == "..") {
-        return Err(EpubError::Parse(format!("traversal rejected: {rel}")));
-    }
-    if base.is_empty() {
-        Ok(decoded)
+    let mut segs: Vec<&str> = if base.is_empty() {
+        Vec::new()
     } else {
-        Ok(format!("{base}/{decoded}"))
+        base.split('/').collect()
+    };
+    for seg in decoded.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                if segs.pop().is_none() {
+                    return Err(EpubError::Parse(format!("traversal rejected: {rel}")));
+                }
+            }
+            s => segs.push(s),
+        }
     }
+    if segs.is_empty() {
+        return Err(EpubError::Parse(format!("href resolves to nothing: {rel}")));
+    }
+    Ok(segs.join("/"))
 }
 
 fn percent_decode_utf8(s: &str) -> Option<String> {
@@ -508,6 +557,11 @@ fn strip_html_tags(html: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'<' {
+            // <style>/<script> payloads are not prose — drop them whole.
+            if let Some(end) = raw_element_end(html, i) {
+                i = end;
+                continue;
+            }
             match bytes[i + 1..].iter().position(|&b| b == b'>') {
                 Some(p) => {
                     i = i + 1 + p + 1;
@@ -529,13 +583,42 @@ fn strip_html_tags(html: &str) -> String {
     decode_basic_entities(&out)
 }
 
+/// If `html[start..]` opens a `<style>` or `<script>` element, return the byte
+/// offset just past its closing tag (or EOF when unterminated) so the caller
+/// skips content and tags in one hop.
+fn raw_element_end(html: &str, start: usize) -> Option<usize> {
+    let rest = &html[start + 1..];
+    let name = ["style", "script"].into_iter().find(|n| {
+        rest.len() > n.len()
+            && rest.as_bytes()[..n.len()].eq_ignore_ascii_case(n.as_bytes())
+            && matches!(rest.as_bytes()[n.len()], b'>' | b'/' | b' ' | b'\t' | b'\r' | b'\n')
+    })?;
+    // Self-closing form has no payload; skip just the tag.
+    if let Some(gt) = rest.find('>') {
+        if rest.as_bytes()[..gt].ends_with(b"/") {
+            return Some(start + 1 + gt + 1);
+        }
+    }
+    let close = format!("</{name}");
+    let close_rel = match find_case_insensitive(rest, &close) {
+        Some(p) => p,
+        None => return Some(html.len()),
+    };
+    let after_close = start + 1 + close_rel;
+    match html[after_close..].find('>') {
+        Some(p) => Some(after_close + p + 1),
+        None => Some(html.len()),
+    }
+}
+
+// `&amp;` must decode last or `&amp;lt;` double-decodes to `<`.
 fn decode_basic_entities(s: &str) -> String {
-    s.replace("&amp;", "&")
-        .replace("&lt;", "<")
+    s.replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
         .replace("&#x3000;", "\u{3000}")
+        .replace("&amp;", "&")
 }
 
 fn collapse_whitespace(s: &str) -> String {
@@ -703,5 +786,63 @@ mod tests {
         assert!(extract_html_title("<html><head><title>page</title></head></html>").is_none());
         assert!(extract_html_title("<html><head><title>Untitled</title></head></html>").is_none());
         assert!(extract_html_title("<html><head><title>  </title></head></html>").is_none());
+    }
+
+    #[test]
+    fn decode_basic_entities_amp_decodes_last() {
+        assert_eq!(decode_basic_entities("&amp;lt;"), "&lt;");
+        assert_eq!(decode_basic_entities("&amp;amp;"), "&amp;");
+        assert_eq!(decode_basic_entities("&lt;b&gt; &amp; &quot;q&quot;"), "<b> & \"q\"");
+    }
+
+    #[test]
+    fn classify_kind_japanese_front_matter() {
+        assert_eq!(classify_kind("目次"), ChapterKind::FrontMatter);
+        assert_eq!(classify_kind("まえがき"), ChapterKind::FrontMatter);
+        assert_eq!(classify_kind("はじめに"), ChapterKind::FrontMatter);
+    }
+
+    #[test]
+    fn classify_kind_japanese_back_matter() {
+        assert_eq!(classify_kind("奥付"), ChapterKind::BackMatter);
+        assert_eq!(classify_kind("あとがき"), ChapterKind::BackMatter);
+        assert_eq!(classify_kind("解説"), ChapterKind::BackMatter);
+    }
+
+    #[test]
+    fn join_zip_path_normalizes_dot_segments() {
+        assert_eq!(join_zip_path("OEBPS", "./ch1.xhtml").unwrap(), "OEBPS/ch1.xhtml");
+        assert_eq!(join_zip_path("OEBPS", "a/./b.xhtml").unwrap(), "OEBPS/a/b.xhtml");
+        assert_eq!(join_zip_path("", "./ch1.xhtml").unwrap(), "ch1.xhtml");
+    }
+
+    #[test]
+    fn join_zip_path_resolves_parent_within_zip() {
+        assert_eq!(
+            join_zip_path("OEBPS/text", "../images/x.xhtml").unwrap(),
+            "OEBPS/images/x.xhtml"
+        );
+    }
+
+    #[test]
+    fn join_zip_path_rejects_escape_above_zip_root() {
+        assert!(join_zip_path("OEBPS", "../../etc/passwd").is_err());
+        assert!(join_zip_path("", "../x.xhtml").is_err());
+    }
+
+    #[test]
+    fn strip_html_tags_drops_style_and_script_content() {
+        let html = "<head><style>.a { color: red }</style></head>\
+<body><p>Keep</p><script>var x = 1;</script><p>Also keep</p></body>";
+        let out = strip_html_tags(html);
+        assert!(!out.contains("color"), "css leaked: {out}");
+        assert!(!out.contains("var x"), "js leaked: {out}");
+        assert!(out.contains("Keep") && out.contains("Also keep"));
+    }
+
+    #[test]
+    fn strip_html_tags_self_closing_style_keeps_following_text() {
+        let out = strip_html_tags("<style type=\"text/css\"/><p>Body text</p>");
+        assert_eq!(out.trim(), "Body text");
     }
 }
