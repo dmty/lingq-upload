@@ -29,7 +29,17 @@
     dragOver = true;
   }
 
-  function handleDragLeave() {
+  function handleDragLeave(ev: DragEvent) {
+    // dragleave fires when entering a child; only clear when the pointer
+    // actually leaves the lot.
+    const next = ev.relatedTarget;
+    if (
+      next instanceof Node &&
+      ev.currentTarget instanceof Node &&
+      ev.currentTarget.contains(next)
+    ) {
+      return;
+    }
     dragOver = false;
   }
 

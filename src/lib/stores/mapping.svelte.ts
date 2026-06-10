@@ -1,5 +1,6 @@
 import {
   commands,
+  type AbsorbPolicy,
   type ChapterId,
   type ChapterMeta,
   type MappingOp,
@@ -12,6 +13,7 @@ type State = {
   chapters: ChapterMeta[];
   skippedIds: ChapterId[];
   mappingState: MappingState | null;
+  absorbPolicy: AbsorbPolicy;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
   // Ticks whenever an optimistic update is reverted by a backend error.
@@ -21,6 +23,8 @@ type State = {
   // Wall-clock ms of the last successful save (selection or mapping op).
   // Footer renders "All changes saved · {relative time}" off this.
   lastSavedAt: number | null;
+  // Writes queued or in flight. Footer renders "Saving…" while > 0.
+  pendingWrites: number;
 };
 
 const state = $state<State>({
@@ -28,10 +32,12 @@ const state = $state<State>({
   chapters: [],
   skippedIds: [],
   mappingState: null,
+  absorbPolicy: "forward",
   status: "idle",
   error: null,
   revertEpoch: 0,
   lastSavedAt: null,
+  pendingWrites: 0,
 });
 
 // Serialise concurrent setSkipped/submitOp calls so the backend always sees
@@ -42,51 +48,84 @@ let pendingFlush: Promise<void> = Promise.resolve();
 let opDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 type QueuedOp = {
   op: MappingOp;
+  // mappingState captured at enqueue time, before any optimistic mutation
+  // for this op landed. Revert target on backend rejection.
+  snapshot: MappingState | null;
   resolve: () => void;
   reject: (err: unknown) => void;
 };
 let pendingOps: QueuedOp[] = [];
 
+function settle(q: QueuedOp, err?: unknown) {
+  state.pendingWrites = Math.max(0, state.pendingWrites - 1);
+  if (err === undefined) q.resolve();
+  else q.reject(err);
+}
+
+function drainQueue() {
+  if (opDebounceTimer != null) {
+    clearTimeout(opDebounceTimer);
+    opDebounceTimer = null;
+  }
+  for (const q of pendingOps.splice(0)) settle(q);
+}
+
 function scoreGate(s: MappingState | null): boolean {
   if (!s) return true;
-  return s.pairs.every((p) => (p.touched ?? false) || p.confidence >= 0.6);
+  // Track-less pairs are excluded: there is no persistable op to confirm
+  // them, so they must not gate Continue. The gate blocks on the ORIGINAL
+  // score — an untouched pair stays red even if `confidence` was bumped by
+  // a displacing op.
+  return s.pairs.every(
+    (p) =>
+      !p.track_id ||
+      (p.touched ?? false) ||
+      (p.original_confidence ?? p.confidence) >= 0.6,
+  );
 }
 
 async function flushPendingOps(): Promise<void> {
   if (pendingOps.length === 0) return;
   if (!state.projectId) {
-    const queued = pendingOps;
-    pendingOps = [];
-    for (const q of queued) q.resolve();
+    for (const q of pendingOps.splice(0)) settle(q);
     return;
   }
   const projectId = state.projectId;
   const ops = pendingOps;
   pendingOps = [];
+  // Backend-confirmed state from earlier ops in this batch. A later failure
+  // reverts here rather than to its own snapshot, which would resurrect the
+  // optimism of already-rejected siblings.
+  let lastConfirmed: MappingState | null = null;
   for (let i = 0; i < ops.length; i++) {
     const queued = ops[i];
     const current = state.mappingState;
-    if (!current) {
-      for (let j = i; j < ops.length; j++) ops[j].resolve();
-      break;
+    if (!current || state.projectId !== projectId) {
+      for (let j = i; j < ops.length; j++) settle(ops[j]);
+      return;
     }
-    const prevSnapshot = current;
     const expected = (current.op_id ?? 0) + 1;
     const result = await commands.cmdApplyMappingOp(projectId, queued.op, expected);
+    const stillCurrent = state.projectId === projectId;
     if (result.status === "error") {
-      // AD-025: silent revert.
-      state.mappingState = prevSnapshot;
-      state.revertEpoch += 1;
+      if (stillCurrent) {
+        // AD-025: silent revert.
+        state.mappingState = lastConfirmed ?? queued.snapshot;
+        state.revertEpoch += 1;
+      }
       // eslint-disable-next-line no-console
       console.warn("cmd_apply_mapping_op failed; reverted optimistic update");
       const err = result.error;
-      queued.reject(err);
-      for (let j = i + 1; j < ops.length; j++) ops[j].reject(err);
+      settle(queued, err);
+      for (let j = i + 1; j < ops.length; j++) settle(ops[j], err);
       return;
     }
-    state.mappingState = result.data;
-    state.lastSavedAt = Date.now();
-    queued.resolve();
+    if (stillCurrent) {
+      state.mappingState = result.data;
+      state.lastSavedAt = Date.now();
+    }
+    lastConfirmed = result.data;
+    settle(queued);
   }
 }
 
@@ -103,6 +142,9 @@ export const mapping = {
   get mappingState() {
     return state.mappingState;
   },
+  get absorbPolicy() {
+    return state.absorbPolicy;
+  },
   get status() {
     return state.status;
   },
@@ -115,8 +157,13 @@ export const mapping = {
   get lastSavedAt() {
     return state.lastSavedAt;
   },
+  get saving() {
+    return state.pendingWrites > 0;
+  },
 
   async load(key: string) {
+    drainQueue();
+    state.pendingWrites = 0;
     state.status = "loading";
     state.error = null;
     const loaded = await commands.cmdProjectLoad(key);
@@ -128,6 +175,7 @@ export const mapping = {
     state.projectId = loaded.data.id;
     state.skippedIds = loaded.data.skipped_chapters ?? [];
     state.mappingState = loaded.data.mapping ?? null;
+    state.absorbPolicy = loaded.data.absorb_policy ?? "forward";
 
     const chaptersResult = await commands.cmdProjectChapters(loaded.data.id);
     if (chaptersResult.status === "error") {
@@ -149,18 +197,24 @@ export const mapping = {
     const projectId = state.projectId;
     const previous = [...state.skippedIds];
     state.skippedIds = skippedIds;
+    state.pendingWrites += 1;
     const run = async () => {
-      const result = await commands.cmdSetSelection(projectId, skippedIds);
-      if (result.status === "error") {
-        // AD-025: silent revert. Roll back optimistic state and bump
-        // revertEpoch so consumers can re-align row state.
-        state.skippedIds = previous;
-        state.revertEpoch += 1;
-        // eslint-disable-next-line no-console
-        console.warn("cmd_set_selection failed; reverted optimistic update");
-        return;
+      try {
+        const result = await commands.cmdSetSelection(projectId, skippedIds);
+        if (state.projectId !== projectId) return;
+        if (result.status === "error") {
+          // AD-025: silent revert. Roll back optimistic state and bump
+          // revertEpoch so consumers can re-align row state.
+          state.skippedIds = previous;
+          state.revertEpoch += 1;
+          // eslint-disable-next-line no-console
+          console.warn("cmd_set_selection failed; reverted optimistic update");
+          return;
+        }
+        state.lastSavedAt = Date.now();
+      } finally {
+        state.pendingWrites = Math.max(0, state.pendingWrites - 1);
       }
-      state.lastSavedAt = Date.now();
     };
     pendingFlush = pendingFlush.then(run, run);
     return pendingFlush;
@@ -171,10 +225,19 @@ export const mapping = {
    * coalesce into a single flush invocation that drains them in order. The
    * returned promise resolves only after the IPC for this specific op
    * settles successfully, or rejects when its flush turn fails.
+   *
+   * `snapshot` is the pre-optimism mappingState; callers that mutate state
+   * optimistically before enqueueing must pass the state they started from.
    */
-  submitOp(op: MappingOp): Promise<void> {
+  submitOp(op: MappingOp, snapshot?: MappingState | null): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      pendingOps.push({ op, resolve, reject });
+      pendingOps.push({
+        op,
+        snapshot: snapshot !== undefined ? snapshot : state.mappingState,
+        resolve,
+        reject,
+      });
+      state.pendingWrites += 1;
       if (opDebounceTimer != null) clearTimeout(opDebounceTimer);
       opDebounceTimer = setTimeout(() => {
         opDebounceTimer = null;
@@ -189,20 +252,19 @@ export const mapping = {
     if (!cur) return Promise.resolve();
     const idx = cur.pairs.findIndex((p) => p.chapter_id === chapterId);
     if (idx < 0) return Promise.resolve();
+    const trackId = cur.pairs[idx].track_id;
+    // Track-less pairs have no persistable touch op and are excluded from
+    // the score gate, so confirming them is a no-op.
+    if (!trackId) return Promise.resolve();
     // Optimistically mark touched so the score gate clears immediately —
     // the debounced submitOp catches the server up within 500ms.
     const nextPairs = [...cur.pairs];
     nextPairs[idx] = { ...nextPairs[idx], touched: true };
     state.mappingState = { ...cur, pairs: nextPairs };
-    const trackId = cur.pairs[idx].track_id;
-    if (trackId) {
-      return this.submitOp({
-        kind: "swap",
-        chapter_id: chapterId,
-        track_id: trackId,
-      });
-    }
-    return Promise.resolve();
+    return this.submitOp(
+      { kind: "swap", chapter_id: chapterId, track_id: trackId },
+      cur,
+    );
   },
 
   gateContinue(): boolean {
@@ -224,16 +286,12 @@ export const mapping = {
     state.chapters = [];
     state.skippedIds = [];
     state.mappingState = null;
+    state.absorbPolicy = "forward";
     state.status = "idle";
     state.error = null;
     state.revertEpoch = 0;
     state.lastSavedAt = null;
-    const drained = pendingOps;
-    pendingOps = [];
-    for (const q of drained) q.resolve();
-    if (opDebounceTimer != null) {
-      clearTimeout(opDebounceTimer);
-      opDebounceTimer = null;
-    }
+    drainQueue();
+    state.pendingWrites = 0;
   },
 };

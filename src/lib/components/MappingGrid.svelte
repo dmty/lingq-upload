@@ -27,6 +27,7 @@
     tracks: TrackRow[];
     mappingState: MappingState | null;
     lastSavedAt: number | null;
+    saving: boolean;
     canContinue: boolean;
     onOp: (op: MappingOp) => void;
     onConfirmPair: (chapterId: string) => void;
@@ -38,6 +39,7 @@
     tracks,
     mappingState,
     lastSavedAt,
+    saving,
     canContinue,
     onOp,
     onConfirmPair,
@@ -48,32 +50,39 @@
   let chapterRowRefs: Record<string, HTMLElement | null> = $state({});
   let trackRowRefs: Record<string, HTMLElement | null> = $state({});
   // Bump to force recompute of connector geometry on layout changes.
+  // rAF-coalesced: capture-phase scroll and MutationObserver bursts collapse
+  // into one recompute per frame.
   let layoutTick = $state(0);
+  let layoutRaf: number | null = null;
+  function bumpLayout() {
+    if (layoutRaf != null) return;
+    layoutRaf = requestAnimationFrame(() => {
+      layoutRaf = null;
+      layoutTick++;
+    });
+  }
 
   $effect(() => {
     if (!gridRef) return;
-    const mo = new MutationObserver(() => {
-      layoutTick++;
-    });
+    const mo = new MutationObserver(bumpLayout);
     mo.observe(gridRef, {
       childList: true,
       subtree: true,
       attributes: true,
       characterData: true,
     });
-    const onLayout = () => layoutTick++;
-    window.addEventListener("scroll", onLayout, true);
-    window.addEventListener("resize", onLayout);
+    window.addEventListener("scroll", bumpLayout, true);
+    window.addEventListener("resize", bumpLayout);
     return () => {
       mo.disconnect();
-      window.removeEventListener("scroll", onLayout, true);
-      window.removeEventListener("resize", onLayout);
+      window.removeEventListener("scroll", bumpLayout, true);
+      window.removeEventListener("resize", bumpLayout);
+      if (layoutRaf != null) {
+        cancelAnimationFrame(layoutRaf);
+        layoutRaf = null;
+      }
     };
   });
-
-  function chapterTitle(id: string): string {
-    return chapters.find((c) => c.id === id)?.title ?? id;
-  }
 
   type Connector = {
     chapterId: string;
@@ -143,6 +152,42 @@
     ev.dataTransfer.effectAllowed = "move";
   }
 
+  // Keyboard path mirroring drag-and-drop: Enter/Space on a track selects
+  // it, Enter/Space on a chapter assigns it (Swap), P parks the selected
+  // track, Escape cancels.
+  let selectedTrackId = $state<string | null>(null);
+
+  function onTrackKeydown(ev: KeyboardEvent, trackId: string) {
+    if (ev.key === "Escape") {
+      selectedTrackId = null;
+      return;
+    }
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      selectedTrackId = selectedTrackId === trackId ? null : trackId;
+      return;
+    }
+    if ((ev.key === "p" || ev.key === "P") && selectedTrackId === trackId) {
+      ev.preventDefault();
+      selectedTrackId = null;
+      onOp({ kind: "park", track_id: trackId });
+    }
+  }
+
+  function onChapterKeydown(ev: KeyboardEvent, chapterId: string) {
+    if (ev.key === "Escape") {
+      selectedTrackId = null;
+      return;
+    }
+    if (selectedTrackId == null) return;
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      const tid = selectedTrackId;
+      selectedTrackId = null;
+      onOp({ kind: "swap", chapter_id: chapterId, track_id: tid });
+    }
+  }
+
   function formatDuration(sec: number | null): string {
     if (sec == null) return "";
     const total = Math.max(0, Math.round(sec));
@@ -151,8 +196,7 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  function relativeFromMs(ms: number | null): string {
-    if (!ms) return "never";
+  function relativeFromMs(ms: number): string {
     const delta = Math.max(0, Date.now() - ms);
     if (delta < 5_000) return "just now";
     if (delta < 60_000) return `${Math.round(delta / 1000)}s ago`;
@@ -170,7 +214,7 @@
   });
   const savedLabel = $derived.by(() => {
     void footerTick;
-    return relativeFromMs(lastSavedAt);
+    return lastSavedAt != null ? relativeFromMs(lastSavedAt) : "";
   });
 
   const unpairedChapterIds = $derived(
@@ -188,9 +232,21 @@
   class="relative flex w-full flex-col gap-3"
   data-testid="mapping-grid"
 >
+  <p class="sr-only" id="mapping-kbd-help">
+    Keyboard: focus a track and press Enter or Space to select it, then focus
+    a chapter and press Enter to assign the track there. Press P on a
+    selected track to park it. Press Escape to cancel the selection.
+  </p>
+
   <div class="relative grid grid-cols-[1fr_120px_1fr] gap-0">
     <!-- Left column: chapters -->
-    <ul class="space-y-1" data-testid="mapping-chapter-col">
+    <ul
+      class="space-y-1"
+      data-testid="mapping-chapter-col"
+      role="listbox"
+      aria-label="Chapters"
+      aria-describedby="mapping-kbd-help"
+    >
       {#each chapters as chapter (chapter.id)}
         {@const pair = pairFor(chapter.id)}
         {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
@@ -202,8 +258,13 @@
             : 'border-l-4 border-l-transparent'}"
           data-testid="mapping-chapter-row"
           data-chapter-id={chapter.id}
+          role="option"
+          aria-selected={false}
+          aria-label="Chapter {chapter.title}. With a track selected, press Enter to assign it here."
+          tabindex={0}
           ondragover={onChapterDragOver}
           ondrop={(ev) => onChapterDrop(ev, chapter.id)}
+          onkeydown={(ev) => onChapterKeydown(ev, chapter.id)}
         >
           <span class="flex-1 truncate text-fg">{chapter.title}</span>
           {#if pair}
@@ -231,9 +292,10 @@
           {/if}
           <button
             type="button"
-            class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken"
+            class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken disabled:opacity-50"
             data-testid="confirm-pair"
             data-chapter-id={chapter.id}
+            disabled={!pair?.track_id}
             onclick={() => onConfirmPair(chapter.id)}
           >
             Confirm
@@ -262,15 +324,29 @@
     <div class="col-start-2"></div>
 
     <!-- Right column: tracks -->
-    <ul class="space-y-1" data-testid="mapping-track-col">
+    <ul
+      class="space-y-1"
+      data-testid="mapping-track-col"
+      role="listbox"
+      aria-label="Audio tracks"
+      aria-describedby="mapping-kbd-help"
+    >
       {#each tracks as track (track.id)}
         <li
           bind:this={trackRowRefs[track.id]}
-          class="flex cursor-grab items-center gap-2 rounded-sm bg-surface px-2 py-1.5 text-sm active:cursor-grabbing"
+          class="flex cursor-grab items-center gap-2 rounded-sm bg-surface px-2 py-1.5 text-sm active:cursor-grabbing {selectedTrackId ===
+          track.id
+            ? 'ring-2 ring-accent'
+            : ''}"
           data-testid="mapping-track-row"
           data-track-id={track.id}
+          role="option"
+          aria-selected={selectedTrackId === track.id}
+          aria-label="Track {track.filename}. Press Enter to select, P to park."
+          tabindex={0}
           draggable="true"
           ondragstart={(ev) => onTrackDragStart(ev, track.id)}
+          onkeydown={(ev) => onTrackKeydown(ev, track.id)}
         >
           <span class="flex-1 truncate text-fg">{track.filename}</span>
           {#if track.durationSec != null}
@@ -297,9 +373,18 @@
     data-testid="mapping-footer"
   >
     <span data-testid="mapping-saved-label">
-      All changes saved · {savedLabel}
+      {#if saving}
+        Saving…
+      {:else if lastSavedAt != null}
+        All changes saved · {savedLabel}
+      {/if}
     </span>
-    <span class="group relative">
+    <span
+      class="group relative"
+      title={canContinue
+        ? undefined
+        : "Confirm or swap the rows with low confidence to continue."}
+    >
       <button
         type="button"
         onclick={onContinue}
@@ -307,9 +392,6 @@
         class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
         data-testid="mapping-continue"
         aria-disabled={!canContinue}
-        title={canContinue
-          ? ""
-          : "Confirm or swap the rows with low confidence to continue."}
       >
         Continue
       </button>

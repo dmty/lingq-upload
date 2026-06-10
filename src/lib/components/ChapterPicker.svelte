@@ -5,7 +5,8 @@
    * Selective chapter picker.
    *
    * Maintains per-row `checked` state, debounces flushes to the parent
-   * (300 ms), and supports shift-click range toggle plus a non-destructive
+   * (500 ms, matching the mapping auto-save contract), and supports
+   * shift-click range toggle plus a non-destructive
    * "skip front-matter" chip. Virtualisation kicks in above 100 rows —
    * currently a no-op fallback to a plain scroll list; the 500-row fixture
    * is expected to render without lag on modern hardware.
@@ -51,11 +52,16 @@
   // Seed once per chapter-set identity. We deliberately do not re-seed when
   // `skippedIds` changes downstream so user edits aren't overwritten by the
   // round-trip echo from our own onChange flush.
+  // Toggles made since the last flush. Replayed on top of a revert re-align
+  // so a pending (not-yet-flushed) edit isn't lost when an older write fails.
+  let pendingEdits: Record<string, boolean> = {};
+
   let lastChaptersRef: Row[] | null = null;
   $effect(() => {
     if (chapters === lastChaptersRef) return;
     lastChaptersRef = chapters;
     untrack(() => {
+      pendingEdits = {};
       const seed: Record<string, boolean> = {};
       const skipSet = new Set(skippedIds);
       for (const c of chapters) {
@@ -83,6 +89,11 @@
       for (const c of chapters) {
         next[c.id] = !skipSet.has(c.id);
       }
+      // Replay edits still waiting on the debounce timer — only the failed
+      // (already-flushed) write reverts, not the user's newest toggles.
+      for (const [id, v] of Object.entries(pendingEdits)) {
+        next[id] = v;
+      }
       checked = next;
     });
   });
@@ -99,15 +110,17 @@
   function scheduleFlush() {
     if (flushTimer != null) clearTimeout(flushTimer);
     flushTimer = setTimeout(() => {
-      onChange(currentSkipped());
       flushTimer = null;
-    }, 300);
+      pendingEdits = {};
+      onChange(currentSkipped());
+    }, 500);
   }
 
   function flushNow() {
     if (flushTimer != null) {
       clearTimeout(flushTimer);
       flushTimer = null;
+      pendingEdits = {};
       onChange(currentSkipped());
     }
   }
@@ -137,6 +150,7 @@
         const next = { ...checked };
         for (let i = lo; i <= hi; i++) {
           next[sorted[i].id] = newState;
+          pendingEdits[sorted[i].id] = newState;
         }
         checked = next;
         lastClicked = id;
@@ -146,6 +160,7 @@
     }
 
     checked = { ...checked, [id]: newState };
+    pendingEdits[id] = newState;
     lastClicked = id;
     scheduleFlush();
   }
@@ -160,6 +175,7 @@
         if (c.kind === "front_matter") {
           snap[c.id] = checked[c.id] !== false;
           next[c.id] = false;
+          pendingEdits[c.id] = false;
         }
       }
       preChipFront = snap;
@@ -170,6 +186,7 @@
         const next = { ...checked };
         for (const [id, was] of Object.entries(preChipFront)) {
           next[id] = was;
+          pendingEdits[id] = was;
         }
         checked = next;
       }

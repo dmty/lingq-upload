@@ -9,7 +9,10 @@ import { tauriStubInitScriptFor } from "./setup/tauri-stub";
 
 const PROJECT_KEY = "mapping-fixture";
 
-function fixtureScript(opts: { withRed: boolean }): string {
+function fixtureScript(opts: {
+  withRed: boolean;
+  displacedRed?: boolean;
+}): string {
   const chapters = [
     { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
     { id: "idx:1", order: 1, title: "Chapter Two", body: "", kind: "body" },
@@ -26,12 +29,22 @@ function fixtureScript(opts: { withRed: boolean }): string {
   const mapping = {
     pairs: [
       { chapter_id: "idx:0", track_id: "t0", confidence: 0.9, touched: false },
-      {
-        chapter_id: "idx:1",
-        track_id: "t1",
-        confidence: opts.withRed ? 0.4 : 0.85,
-        touched: false,
-      },
+      opts.displacedRed
+        ? {
+            // A displacing op bumped `confidence` to green, but the pair is
+            // untouched and its original score is red — the gate must block.
+            chapter_id: "idx:1",
+            track_id: "t1",
+            confidence: 0.95,
+            original_confidence: 0.4,
+            touched: false,
+          }
+        : {
+            chapter_id: "idx:1",
+            track_id: "t1",
+            confidence: opts.withRed ? 0.4 : 0.85,
+            touched: false,
+          },
     ],
     parking_lot: [],
     op_id: 0,
@@ -64,12 +77,80 @@ test.describe("mapping editor", () => {
     const cont = page.getByTestId("mapping-continue");
     await expect(cont).toBeDisabled();
 
+    // Footer never claims a save that hasn't happened.
+    const savedLabel = page.getByTestId("mapping-saved-label");
+    await expect(savedLabel).not.toContainText("never");
+    await expect(savedLabel).not.toContainText("All changes saved");
+
     // Confirm the red row — idx:1. The store sends a Swap(self) to mark the
     // pair touched server-side; the gate re-evaluates from mappingState.
     const confirmBtns = page.getByTestId("confirm-pair");
     await confirmBtns.nth(1).click();
 
     await expect(cont).toBeEnabled({ timeout: 2_000 });
+
+    // Once the debounced save lands, the footer reports it.
+    await expect(savedLabel).toContainText("All changes saved", {
+      timeout: 3_000,
+    });
+  });
+
+  test("untouched displaced pair gates on its original confidence", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      fixtureScript({ withRed: false, displacedRed: true }),
+    );
+    await page.goto(`/match/${PROJECT_KEY}`);
+
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+
+    // Current confidence is green (0.95) but original_confidence is red and
+    // the pair is untouched — Continue must stay blocked.
+    const cont = page.getByTestId("mapping-continue");
+    await expect(cont).toBeDisabled();
+
+    await page.getByTestId("confirm-pair").nth(1).click();
+    await expect(cont).toBeEnabled({ timeout: 2_000 });
+  });
+
+  test("keyboard: select a track and assign it to a chapter", async ({
+    page,
+  }) => {
+    await page.addInitScript(fixtureScript({ withRed: false }));
+    await page.goto(`/match/${PROJECT_KEY}`);
+
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+
+    const trackRows = page.getByTestId("mapping-track-row");
+    await trackRows.nth(1).focus();
+    await page.keyboard.press("Enter");
+    await expect(trackRows.nth(1)).toHaveAttribute("aria-selected", "true");
+
+    // Enter on a chapter row assigns the selected track (Swap); the
+    // displaced track lands in the parking lot.
+    await page.getByTestId("mapping-chapter-row").nth(0).focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId("parking-lot-count")).toHaveText("1", {
+      timeout: 3_000,
+    });
+  });
+
+  test("keyboard: park a selected track", async ({ page }) => {
+    await page.addInitScript(fixtureScript({ withRed: false }));
+    await page.goto(`/match/${PROJECT_KEY}`);
+
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+
+    const trackRows = page.getByTestId("mapping-track-row");
+    await trackRows.nth(1).focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("p");
+
+    await expect(page.getByTestId("parking-lot-count")).toHaveText("1", {
+      timeout: 3_000,
+    });
   });
 
   test("state rehydrates from project.json after reload", async ({ page }) => {
