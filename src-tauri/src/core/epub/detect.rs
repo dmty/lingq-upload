@@ -41,10 +41,10 @@ pub struct VendorDetection {
     pub signals: Vec<String>,
 }
 
-/// Cluster floor: a single body file must hit this many marker occurrences,
-/// OR this many distinct body files must each carry at least one hit, before
-/// Kobo classification fires. Anything less risks a stray CSS rule flipping
-/// a Kindle book.
+/// Cluster floor: a single body file must hit this many combined Kobo marker
+/// occurrences (koboSpan + font-per accumulate), OR this many distinct body
+/// files must each carry at least one hit, before Kobo classification fires.
+/// Anything less risks a stray CSS rule flipping a Kindle book.
 const KOBO_CLUSTER_FLOOR: usize = 3;
 
 /// Cap on body files scanned. Real Kobo books spread markers across many
@@ -70,12 +70,19 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
 
     let mut max_kobo_span_in_body = 0usize;
     let mut max_font_per_in_body = 0usize;
+    let mut max_kobo_total_in_body = 0usize;
     let mut total_kobo_in_bodies = 0usize;
     let mut bodies_with_kobo_hit = 0usize;
     let mut kindle_marker_hits = 0usize;
     let mut has_ncx = false;
 
     for (name, kind) in &candidates {
+        // NCX existence is the signal; the content is never inspected, so it
+        // is the one kind that skips the read.
+        if let FileKind::Ncx = kind {
+            has_ncx = true;
+            continue;
+        }
         let body = match read_capped(zip, name) {
             Ok(b) => b,
             Err(_) => continue,
@@ -88,6 +95,7 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
                 let kobo_total = kobo_span + font_per;
                 max_kobo_span_in_body = max_kobo_span_in_body.max(kobo_span);
                 max_font_per_in_body = max_font_per_in_body.max(font_per);
+                max_kobo_total_in_body = max_kobo_total_in_body.max(kobo_total);
                 total_kobo_in_bodies = total_kobo_in_bodies.saturating_add(kobo_total);
                 if kobo_total > 0 {
                     bodies_with_kobo_hit += 1;
@@ -95,15 +103,12 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
                 kindle_marker_hits =
                     kindle_marker_hits.saturating_add(count_kindle_markers(&stripped));
             }
-            FileKind::Css => {
+            FileKind::Css | FileKind::Ncx => {
                 // CSS contributes Kindle markers only after comment stripping;
-                // it never feeds the Kobo body cluster.
+                // it never feeds the Kobo body cluster. (Ncx unreachable here.)
                 let stripped = strip_css_comments(&body);
                 kindle_marker_hits =
                     kindle_marker_hits.saturating_add(count_kindle_markers(&stripped));
-            }
-            FileKind::Ncx => {
-                has_ncx = true;
             }
         }
     }
@@ -122,9 +127,8 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
         signals.push("toc_ncx".to_string());
     }
 
-    let max_kobo_in_body = max_kobo_span_in_body.max(max_font_per_in_body);
-    let is_kobo_cluster =
-        max_kobo_in_body >= KOBO_CLUSTER_FLOOR || bodies_with_kobo_hit >= KOBO_CLUSTER_FLOOR;
+    let is_kobo_cluster = max_kobo_total_in_body >= KOBO_CLUSTER_FLOOR
+        || bodies_with_kobo_hit >= KOBO_CLUSTER_FLOOR;
 
     let (vendor, confidence) = if is_kobo_cluster {
         let conf = 0.6 + (total_kobo_in_bodies.min(12) as f32) / 30.0;
@@ -173,6 +177,9 @@ fn collect_candidate_files<R: std::io::Read + std::io::Seek>(
             continue;
         };
         if matches!(kind, FileKind::Body) {
+            // Cap applies in zip-entry order, not spine order: >12 marker-free
+            // front files degrade Kobo→Kindle, which still parses acceptably —
+            // bounded scan cost wins over that edge case.
             if body_count >= MAX_BODY_FILES_SCANNED {
                 continue;
             }
@@ -385,7 +392,7 @@ mod tests {
     fn as_str_matches_serde_rename() {
         for v in [EpubVendor::Kindle, EpubVendor::Kobo, EpubVendor::Generic] {
             let json = serde_json::to_value(v).unwrap();
-            debug_assert_eq!(
+            assert_eq!(
                 json.as_str().expect("serialized as string"),
                 v.as_str(),
                 "as_str diverged from serde for {v:?}",

@@ -271,6 +271,31 @@ fn adversarial_mixed_kobo_book_classified_kobo() {
     assert!(d.signals.iter().any(|s| s.starts_with("kobo_span")));
 }
 
+/// Marker types accumulate per file: 2 koboSpan + 2 font-per in ONE file is a
+/// combined total of 4 ≥ floor, even though neither type alone reaches 3.
+#[test]
+fn combined_marker_types_in_single_file_classified_kobo() {
+    let ch1 = r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+  <div class="font-120per">
+    <p><span class="koboSpan" id="kobo.1.1">A.</span></p>
+  </div>
+  <div class="font-160per">
+    <p><span class="koboSpan" id="kobo.1.2">B.</span></p>
+  </div>
+</body>
+</html>"#;
+    let entries: Vec<(&'static str, &[u8])> = vec![
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
+        ("OEBPS/content.opf", MINIMAL_OPF.as_bytes()),
+        ("OEBPS/ch1.xhtml", ch1.as_bytes()),
+    ];
+    let d = detect(&build_epub(&entries));
+    assert_eq!(d.vendor, EpubVendor::Kobo, "signals={:?}", d.signals);
+}
+
 #[test]
 fn kindle_book_classified_kindle() {
     let d = detect(&build_kindle_fixture());
