@@ -126,7 +126,7 @@ lingq-upload/                  # repo root
 │       ├── core/              # pure-Rust domain modules
 │       ├── codecs/            # AudioCodec strategy registry (AD-014)
 │       ├── languages/         # LanguageProfile registry (AD-015)
-│       ├── epub/strategies/   # HeadingStrategy registry (AD-016)
+│       ├── core/epub/         # EpubVendor enum dispatch + strategies (AD-016, AD-026)
 │       ├── ingest/            # IngestSource registry (AD-019)
 │       ├── events.rs
 │       └── error.rs
@@ -217,26 +217,15 @@ pub struct LanguageRegistry { /* HashMap<&'static str, Box<dyn LanguageProfile>>
 
 **Decision boundary:** Heading-detection strategies are EPUB-publisher-specific (Kindle / Kobo), not language-specific — they stay in AD-016. A Japanese Kindle book and a Russian Kindle book share the heading strategy but differ on the language profile.
 
-## AD-016 — EPUB heading strategy registry
+## AD-016 — EPUB heading strategy dispatch
 
-**Decision:** Heading detection is a publisher-specific `HeadingStrategy`. Detection is by autodetect probe, not hard-coded branches.
+**Decision:** Heading detection is publisher-specific. Strategy selection is a closed `EpubVendor` enum (`Kindle`, `Kobo`, `Generic`) dispatched by exhaustive match in `core::epub`, chosen by the autodetect probe (AD-026) — not call-site branches, and not a dyn-trait registry.
 
-```rust
-// src-tauri/src/epub/strategies/mod.rs
-pub trait HeadingStrategy: Send + Sync {
-    fn id(&self) -> &'static str;                  // "kindle", "kobo", "generic-h1"
-    fn confidence(&self, sample: &EpubProbe) -> f32; // 0..1 against a sampled XHTML excerpt
-    fn detect(&self, html: &Html, node: ElementRef) -> Option<HeadingLevel>;
-}
+**Why enum, not trait + registry:** the vendor set is closed and small, and the autodetect heuristic must enumerate every vendor anyway, so a registry would have no second consumer. The enum gives exhaustive-match safety and serialises directly over IPC (`specta`-exported). Revisit a trait + registry only when a third real vendor strategy lands (rule of three).
 
-pub fn autodetect(probe: &EpubProbe, registry: &StrategyRegistry) -> Box<dyn HeadingStrategy> {
-    registry.iter().max_by(|a, b| a.confidence(probe).total_cmp(&b.confidence(probe))).unwrap()
-}
-```
+**Built-in:** Kindle parser (`parse.rs`), `KoboStrategy` (`kobo.rs`). `Generic` dispatches to the Kindle path — lowest-regression default for unknown books.
 
-**Built-in:** `KindleStrategy`, `KoboStrategy`. Fallback `GenericH1Strategy` for anything where confidence < 0.4 on the named strategies — strips `<h1>` / `<h2>` only.
-
-**UI escape hatch:** If autodetect picks wrong, the wizard exposes a "Heading style" dropdown listing every registered strategy. User can force.
+**UI escape hatch:** deferred — the chosen strategy is logged and surfaced on `JobEvent::Started` so field reports can identify false positives before a UI override knob is added (see AD-026 consequences).
 
 ## AD-017 — LingQ API language threading
 
@@ -325,11 +314,11 @@ pub struct IngestRegistry { /* Vec<Box<dyn IngestSource>> */ }
 
 ## AD-018 — Public extension points are stable, internal impls are not
 
-**Decision:** The four strategy traits (`AudioCodec`, `LanguageProfile`, `HeadingStrategy`, `IngestSource`) plus the `JobEvent` enum, the `project.json` schema, and the `library.index.json` schema are the **public extension surface**. Breaking changes to these require a `schemaVersion` bump and a migrator. Everything else (concrete codec impls, internal carver helpers, frontend stores) is free to churn.
+**Decision:** The three strategy traits (`AudioCodec`, `LanguageProfile`, `IngestSource`), the `EpubVendor` enum dispatch (AD-016 / AD-026), the `JobEvent` enum, the `project.json` schema, and the `library.index.json` schema are the **public extension surface**. Breaking changes to these require a `schemaVersion` bump and a migrator. Everything else (concrete codec impls, internal carver helpers, frontend stores) is free to churn.
 
 **Why:** Without naming the contract, every refactor risks invalidating a downstream extension. Naming it lets internal cleanup happen without ceremony.
 
-**Convention:** Public extension traits live under `src-tauri/src/{codecs,languages,epub/strategies,ingest}/mod.rs` and re-export via `lib.rs` so out-of-tree builds (a future plugin host) can depend on them.
+**Convention:** Public extension traits live under `src-tauri/src/{codecs,languages,ingest}/mod.rs` and re-export via `lib.rs` so out-of-tree builds (a future plugin host) can depend on them. Heading strategies are not a trait — adding an EPUB vendor is an additive `EpubVendor` variant plus a strategy module (AD-016).
 
 ## AD-021 — Project identity is a multi-key tuple, not a scalar
 
@@ -492,7 +481,7 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Decision:** Strategy selection runs through a single discriminator function `core::epub::detect::detect_vendor`. The result drives `parse_epub_bytes`'s dispatch into `KindleStrategy` or `KoboStrategy`. `EpubVendor::Generic` falls back to `Kindle` (lowest-regression default for unknown books). The chosen vendor is surfaced on `JobEvent::Started.strategy: Option<EpubVendor>` so the UI and logs can show which path ran.
 
-**Kobo classification rule:** a body file (XHTML, not CSS / OPF / NCX) must carry either ≥3 `koboSpan` substrings, or be one of ≥3 distinct body files each carrying a `koboSpan` or `font-1[246]0per` marker. XML and CSS comments are stripped before counting. One stray marker in an otherwise-Kindle book does not flip the verdict.
+**Kobo classification rule:** a body file (XHTML, not CSS / OPF / NCX) must carry ≥3 combined Kobo marker hits — `koboSpan` and `font-1[246]0per` occurrences accumulate, since both marker families are Kobo-exclusive — or be one of ≥3 distinct body files each carrying a marker. XML and CSS comments are stripped before counting. One stray marker in an otherwise-Kindle book does not flip the verdict.
 
 **Confidence:** `VendorDetection.confidence: f32` is logical [0, 1]. Positive matches land ≥ 0.8; unknown / empty EPUBs land ≤ 0.4. The orchestrator does not gate on confidence today — it only logs — but Generic falls back to Kindle so a misclassification degrades to the prior behaviour.
 
@@ -525,9 +514,11 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Defaults:** `CarveOpts::silence_db = -45.0`, `min_silence_ms = 500`, `absorb = Forward`. -45 dB sits between hard-zero and the -50…-60 dB noise floors typical in audiobook narration; tighter than -30 dB which mis-detects on real material.
 
-**Persistence:** `Project::absorb_policy` (`#[serde(default)]` → `Forward`) is mutated by `cmd_set_absorb_policy`. The Tauri command is debounced from the Svelte radio (~300ms) and silently reverts on error (AD-025).
+**Persistence:** `Project::absorb_policy` (`#[serde(default)]` → `Forward`) is mutated by `cmd_set_absorb_policy`. The Tauri command is debounced from the Svelte radio and silently reverts on error (AD-025). Until the carver is wired into the job runner (open question 5), the radio renders disabled with an inline hint — persisted intent must not masquerade as runtime behaviour.
 
 **Fixtures:** `src-tauri/tests/fixtures/audio/silence_corpus/clip_{a,b}.wav` are immutable test inputs pinned by sha256. Regenerate via `scripts/fixtures/gen_silence_corpus.sh`. The ffmpeg-backed integration tests are `#[ignore]`-flagged and opt-in via `cargo test -- --include-ignored`; setting `LINGQ_E2E_AUDIO=0` skips them when run that way.
+
+**Golden contract:** the offsets JSONs pin **detected silence edges** as reported by ffmpeg `silencedetect`, not authored midpoints — detection skew makes authored-timing assertions brittle across ffmpeg versions. Each golden records the generating ffmpeg version as an informational field; a version-bump-induced diff is a tripwire to re-inspect, not an automatic regeneration.
 
 ## Open architecture questions
 
