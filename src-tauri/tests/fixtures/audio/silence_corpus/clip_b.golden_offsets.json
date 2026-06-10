@@ -1,6 +1,5 @@
 {
-  "silence_runs_ms": [[4032, 5504], [7040, 8512]],
-  "silence_midpoints_ms": [4768, 7776],
+  "ffmpeg_version": "ffmpeg version 8.1.1 Copyright (c) 2000-2026 the FFmpeg developers",
   "forward_offsets_ms":  [5504, 8512],
   "backward_offsets_ms": [4032, 7040],
   "drop_offsets_ms":     [4032, 5504, 7040, 8512]

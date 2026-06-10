@@ -7,7 +7,7 @@ use thiserror::Error;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
-use super::{resolve_ffmpeg_bin, AudioError, STDERR_CAPTURE_BYTES};
+use super::{probe_duration, resolve_ffmpeg_bin, AudioError, STDERR_CAPTURE_BYTES};
 
 /// How a silent chapter-divider is folded into its neighbour tracks.
 ///
@@ -61,7 +61,7 @@ pub enum BoundaryKind {
 /// A single cut point in the source audio. `track_index` is the 0-based index
 /// of the chapter that BEGINS at this offset (so the first boundary's offset
 /// is the start of track 1, not 0). `cut_offset_ms` is sample-accurate to
-/// within ±50ms tolerance — see `golden_offsets.json` for the contract.
+/// within ±50ms tolerance — see `clip_*.golden_offsets.json` for the contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Boundary {
     pub track_index: usize,
@@ -180,10 +180,21 @@ async fn detect_silences(
         }));
     }
     let log = String::from_utf8_lossy(&buf);
-    parse_silencedetect(&log)
+    let (mut runs, pending_start) = parse_silencedetect(&log)?;
+    // Older ffmpeg emits no silence_end when the stream ends mid-silence;
+    // synthesize one at stream duration so the final boundary survives.
+    if let Some(start_ms) = pending_start {
+        let dur = probe_duration(path).await.map_err(CarveError::Audio)?;
+        let end_ms = seconds_to_ms(dur)?;
+        if end_ms > start_ms {
+            runs.push(SilenceRun { start_ms, end_ms });
+        }
+    }
+    Ok(runs)
 }
 
-fn parse_silencedetect(log: &str) -> Result<Vec<SilenceRun>, CarveError> {
+/// Returns parsed runs plus any silence_start left unmatched at EOF.
+fn parse_silencedetect(log: &str) -> Result<(Vec<SilenceRun>, Option<u32>), CarveError> {
     let mut runs: Vec<SilenceRun> = Vec::new();
     let mut pending_start: Option<u32> = None;
     for line in log.lines() {
@@ -206,7 +217,7 @@ fn parse_silencedetect(log: &str) -> Result<Vec<SilenceRun>, CarveError> {
             }
         }
     }
-    Ok(runs)
+    Ok((runs, pending_start))
 }
 
 fn seconds_to_ms(secs: f64) -> Result<u32, CarveError> {
@@ -353,22 +364,36 @@ mod tests {
 [silencedetect @ 0xdead] silence_start: 9.0
 [silencedetect @ 0xdead] silence_end: 10.0 | silence_duration: 1.0
 ";
-        let runs = parse_silencedetect(log).expect("parse");
+        let (runs, pending) = parse_silencedetect(log).expect("parse");
         assert_eq!(runs.len(), 2);
         assert_eq!(runs[0].start_ms, 5_001);
         assert_eq!(runs[0].end_ms, 6_000);
+        assert_eq!(pending, None);
     }
 
     #[test]
-    fn unmatched_start_is_dropped() {
+    fn superseded_start_is_dropped() {
         let log = "\
 [silencedetect] silence_start: 1.0
 [silencedetect] silence_start: 5.0
 [silencedetect] silence_end: 6.0
 ";
-        let runs = parse_silencedetect(log).expect("parse");
+        let (runs, pending) = parse_silencedetect(log).expect("parse");
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].start_ms, 5_000);
+        assert_eq!(pending, None);
+    }
+
+    #[test]
+    fn trailing_start_surfaces_as_pending() {
+        let log = "\
+[silencedetect] silence_start: 1.0
+[silencedetect] silence_end: 2.0
+[silencedetect] silence_start: 7.04
+";
+        let (runs, pending) = parse_silencedetect(log).expect("parse");
+        assert_eq!(runs.len(), 1);
+        assert_eq!(pending, Some(7_040));
     }
 
     #[test]
