@@ -203,6 +203,19 @@ fn ffmpeg_available() -> bool {
     which("ffmpeg").is_some() && which("ffprobe").is_some()
 }
 
+/// Carver-style gate for ffmpeg-backed tests: explicit opt-out via env var,
+/// hard failure when ffmpeg is missing without it.
+fn require_ffmpeg_or_opt_out() -> bool {
+    if std::env::var("LINGQ_E2E_AUDIO").as_deref() == Ok("0") {
+        return false;
+    }
+    assert!(
+        ffmpeg_available(),
+        "ffmpeg/ffprobe required; set LINGQ_E2E_AUDIO=0 to skip"
+    );
+    true
+}
+
 #[derive(Default, Clone)]
 struct RecordingSink {
     chapter_dones: Arc<Mutex<Vec<usize>>>,
@@ -320,9 +333,9 @@ fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
 }
 
 #[tokio::test]
+#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn run_skips_marked_chapters_and_imports_only_remainder() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping selection upload gate");
+    if !require_ffmpeg_or_opt_out() {
         return;
     }
     let total = 4usize;
@@ -396,10 +409,166 @@ async fn run_skips_marked_chapters_and_imports_only_remainder() {
     }
 }
 
+/// Mapping-editor state drives the upload: pairs decide which track each
+/// chapter ships with, an unpaired chapter ships nothing, and a parked track
+/// never uploads. Also pins production seeding: a clean auto-match run
+/// persists an initial MappingState.
 #[tokio::test]
+#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
+async fn mapping_pairs_drive_upload_and_parked_tracks_are_excluded() {
+    use lingq_upload_lib::core::matcher::{MappingPair, MappingState};
+
+    if !require_ffmpeg_or_opt_out() {
+        return;
+    }
+    let total = 3usize;
+    let mut fixture = make_fixture(total).await;
+    mock_collection(&mut fixture.server, 4242);
+
+    // Park track 1 (chapter 1 unpaired) by hand; tracks resolve from the
+    // sorted folder listing so ids are the plain file paths.
+    let track_id = |i: usize| {
+        fixture
+            ._audio_dir
+            .path()
+            .join(format!("track_{:02}.mp3", i + 1))
+            .display()
+            .to_string()
+    };
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.mapping = Some(MappingState {
+        pairs: vec![
+            MappingPair {
+                chapter_id: cid(0),
+                track_id: Some(track_id(0)),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: cid(1),
+                track_id: None,
+                confidence: 1.0,
+                touched: true,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: cid(2),
+                track_id: Some(track_id(2)),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+        ],
+        parking_lot: vec![track_id(1)],
+        op_id: 1,
+    });
+    fixture.store.put(&project).unwrap();
+
+    let mocks: Vec<_> = (0..2)
+        .map(|i| {
+            fixture
+                .server
+                .mock("POST", "/api/v3/ja/lessons/import/")
+                .with_status(201)
+                .with_header("content-type", "application/json")
+                .with_body(format!(r#"{{"pk":{}}}"#, 6000 + i))
+                .expect(1)
+                .create()
+        })
+        .collect();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").unwrap(),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    for m in &mocks {
+        m.assert();
+    }
+    let dones = sink.chapter_dones.lock().unwrap().clone();
+    assert_eq!(dones, vec![0, 2], "only mapped chapters upload");
+
+    let after = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert!(
+        !after
+            .receipts
+            .iter()
+            .any(|r| r.chapter_index == 1 && r.lesson_id.is_some()),
+        "unpaired chapter must not upload: {:?}",
+        after.receipts,
+    );
+    // The user-edited mapping survives the run verbatim — no re-seed.
+    assert_eq!(after.mapping, project.mapping);
+}
+
+/// A clean auto-match run seeds MappingState in production: one untouched
+/// pair per chapter, empty parking lot, op_id 0.
+#[tokio::test]
+#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
+async fn clean_run_seeds_initial_mapping_state() {
+    if !require_ffmpeg_or_opt_out() {
+        return;
+    }
+    let total = 2usize;
+    let mut fixture = make_fixture(total).await;
+    mock_collection(&mut fixture.server, 4242);
+    let _mocks: Vec<_> = (0..total)
+        .map(|i| {
+            fixture
+                .server
+                .mock("POST", "/api/v3/ja/lessons/import/")
+                .with_status(201)
+                .with_header("content-type", "application/json")
+                .with_body(format!(r#"{{"pk":{}}}"#, 6100 + i))
+                .expect(1)
+                .create()
+        })
+        .collect();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").unwrap(),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let after = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    let mapping = after.mapping.expect("run must seed MappingState");
+    assert_eq!(mapping.op_id, 0);
+    assert!(mapping.parking_lot.is_empty());
+    assert_eq!(mapping.pairs.len(), total);
+    for (i, p) in mapping.pairs.iter().enumerate() {
+        assert_eq!(p.chapter_id, cid(i));
+        assert!(p.track_id.is_some(), "pair {i} must carry a track");
+        assert!(!p.touched);
+    }
+}
+
+#[tokio::test]
+#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn skipping_after_upload_does_not_delete_existing_lesson() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping post-upload-skip test");
+    if !require_ffmpeg_or_opt_out() {
         return;
     }
     let total = 3usize;

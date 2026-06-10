@@ -35,6 +35,22 @@ pub enum StoreError {
 pub trait ProjectStore: Send + Sync {
     fn put(&self, p: &Project) -> Result<(), StoreError>;
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError>;
+    /// Read-modify-write: load the project, apply `f`, persist, return the
+    /// updated value. The JSON and in-memory stores run the whole window
+    /// under the per-project lock so `f`'s delta cannot clobber a concurrent
+    /// edit (selection, mapping op) landing between load and put.
+    fn update(
+        &self,
+        id: &ProjectId,
+        f: &mut dyn FnMut(&mut Project),
+    ) -> Result<Project, StoreError> {
+        let mut p = self
+            .get(id)?
+            .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+        f(&mut p);
+        self.put(&p)?;
+        Ok(p)
+    }
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError>;
     fn patch_chapter(
         &self,

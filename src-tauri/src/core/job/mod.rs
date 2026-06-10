@@ -17,7 +17,8 @@ use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
-    auto_match, BucketPreview, MatchOutcome, MismatchCondition, MismatchResponse,
+    auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingState, MatchOutcome,
+    MismatchCondition, MismatchResponse,
 };
 use crate::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectStage};
 use crate::core::store::ProjectStore;
@@ -85,40 +86,10 @@ pub async fn run_project_job(
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?;
 
-    // Read the EPUB once: vendor detection and the later parse both share the
-    // same byte buffer.
-    let epub_bytes: Option<Vec<u8>> = project_opt
-        .as_ref()
-        .and_then(|p| match &p.sources.text {
-            TextSource::Epub(path) => Some(path.clone()),
-            _ => None,
-        })
-        .and_then(|path| match std::fs::read(&path) {
-            Ok(b) => Some(b),
-            Err(e) => {
-                tracing::warn!(error = %e, "epub read failed; falling back to generic vendor");
-                None
-            }
-        });
-
-    let strategy: Option<EpubVendor> = epub_bytes
-        .as_deref()
-        .map(|bytes| match crate::core::epub::autodetect_vendor_bytes(bytes) {
-            Ok(d) => {
-                tracing::info!(
-                    project = %project_id.join_key(),
-                    vendor = d.vendor.as_str(),
-                    confidence = d.confidence,
-                    signals = ?d.signals,
-                    "epub vendor autodetect",
-                );
-                d.vendor
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "epub vendor autodetect failed; falling back to generic");
-                EpubVendor::Generic
-            }
-        });
+    let (epub_bytes, strategy) = match project_opt.as_ref() {
+        Some(p) => epub_inputs(p),
+        None => (None, None),
+    };
 
     sink.started(strategy);
 
@@ -170,22 +141,44 @@ pub async fn run_project_job(
         );
     }
 
+    project = persist_with(store.as_ref(), &project_id, &mut |p| {
+        advance_if_behind(p, ProjectStage::Parsed);
+    })?;
+
+    // Seed the mapping editor's state the first time the matcher pairs the
+    // full chapter set cleanly. Idempotent: a user-edited MappingState is
+    // never clobbered by a re-run.
+    if project.matcher_decision.is_none() && project.mapping.is_none() {
+        if let MatchOutcome::Paired { pairs } = auto_match(&chapters, &tracks) {
+            let seeded = seed_mapping_state(&pairs, &chapters, &tracks);
+            project = persist_with(store.as_ref(), &project_id, &mut |p| {
+                if p.mapping.is_none() {
+                    p.mapping = Some(seeded.clone());
+                }
+            })?;
+        }
+    }
+
+    // Skips resolve at plan time: a skipped, not-yet-uploaded chapter never
+    // enters the chapter set, so merged-text plans exclude its body and
+    // per-chapter steps for it are never created.
+    let full_chapter_count = chapters.len();
+    let chapters = eligible_chapters(&chapters, &skipped_set, &project.receipts);
+
     tracing::info!(
         project = %project.id.join_key(),
-        chapters = chapters.len(),
+        chapters = full_chapter_count,
+        eligible = chapters.len(),
         tracks = tracks.len(),
         skipped = skipped_set.len(),
         "job: resolved inputs",
     );
 
-    advance_if_behind(&mut project, ProjectStage::Parsed)?;
-    persist_project(store.as_ref(), &project)?;
-
     // Decide pairing. If decision is missing AND counts mismatch, ask the UI
     // via the dedicated `NeedsMatch` terminal event. Don't reuse
     // `Result { ok: false }` — that's reserved for "job finished" and
     // breaks downstream consumers that key off the terminal kind.
-    let plan = match build_plan(&project, &chapters, &tracks) {
+    let plan = match build_plan(&project, &chapters, &tracks, full_chapter_count) {
         PlanOrPause::Plan(p) => p,
         PlanOrPause::NeedsMatch {
             condition,
@@ -216,9 +209,10 @@ pub async fn run_project_job(
         }
     };
 
-    advance_if_behind(&mut project, ProjectStage::Mapped)?;
-    prepopulate_receipts(&mut project, &plan);
-    persist_project(store.as_ref(), &project)?;
+    project = persist_with(store.as_ref(), &project_id, &mut |p| {
+        advance_if_behind(p, ProjectStage::Mapped);
+        prepopulate_receipts(p, &plan);
+    })?;
 
     // Resolve the collection up front. Idempotent on the server side.
     let collection = match client
@@ -237,9 +231,10 @@ pub async fn run_project_job(
     // Pin the resolved collection on the project so library list & external
     // links can deep-link without re-querying the LingQ API.
     if project.lingq_collection_id != Some(collection.0) {
-        project.lingq_collection_id = Some(collection.0);
-        project.last_activity_at = Some(Utc::now());
-        persist_project(store.as_ref(), &project)?;
+        project = persist_with(store.as_ref(), &project_id, &mut |p| {
+            p.lingq_collection_id = Some(collection.0);
+            p.last_activity_at = Some(Utc::now());
+        })?;
     }
 
     let staging = tempfile::tempdir()?;
@@ -249,12 +244,13 @@ pub async fn run_project_job(
     for (step_pos, step) in plan.steps.iter().enumerate() {
         if cancel.is_cancelled() {
             tracing::info!(at = step_pos, "job: cancelled before chapter");
-            persist_project(store.as_ref(), &project)?;
+            persist_cursor(store.as_ref(), &project)?;
             sink.cancelled();
             return Ok(());
         }
 
-        // Resume: skip chapters that already carry a lesson_id.
+        // Resume: skip chapters that already carry a lesson_id. Still emits
+        // progress so a run whose tail is all resume-skips reaches 1.0.
         if project
             .receipts
             .iter()
@@ -264,23 +260,7 @@ pub async fn run_project_job(
                 chapter = step.chapter_index,
                 "job: skipping previously uploaded chapter",
             );
-            continue;
-        }
-
-        // User opted this chapter out of the upload — no parse, no
-        // transcode, no LingQ import. The receipt slot stays empty
-        // (lesson_id = None). Already-uploaded chapters are caught
-        // by the resume skip above, so this never deletes anything
-        // from LingQ.
-        if chapters
-            .iter()
-            .find(|c| c.order == step.chapter_index)
-            .is_some_and(|c| skipped_set.contains(&c.id))
-        {
-            tracing::info!(
-                chapter = step.chapter_index,
-                "job: skipping user-deselected chapter",
-            );
+            sink.progress((step_pos as f32 + 1.0) / total.max(1) as f32, None);
             continue;
         }
 
@@ -302,7 +282,7 @@ pub async fn run_project_job(
                         tracing::warn!(error = %e, dst = %dst.display(), "job: failed to unlink partial transcode output");
                     }
                 }
-                persist_project(store.as_ref(), &project)?;
+                persist_cursor(store.as_ref(), &project)?;
                 sink.cancelled();
                 return Ok(());
             }
@@ -321,22 +301,10 @@ pub async fn run_project_job(
             "job: transcoded chapter",
         );
 
-        let title = step
-            .title_override
-            .clone()
-            .unwrap_or_else(|| chapter_title(&chapters, step.chapter_index));
-        let text = step.text_override.clone().unwrap_or_else(|| {
-            chapters
-                .iter()
-                .find(|c| c.order == step.chapter_index)
-                .map(|c| c.body.clone())
-                .unwrap_or_default()
-        });
-
         let req = ImportLessonRequest {
             collection,
-            title: &title,
-            text: &text,
+            title: &step.title,
+            text: &step.text,
             audio: Some(&dst),
             level: project.settings.level,
             status: LessonStatus::Private,
@@ -400,35 +368,61 @@ pub async fn run_project_job(
         );
     }
 
-    project.completed_lesson_ids = project
-        .receipts
-        .iter()
-        .filter_map(|r| r.lesson_id)
-        .collect();
-    advance_if_behind(&mut project, ProjectStage::Done)?;
-    persist_project(store.as_ref(), &project)?;
+    let queue_cursor = project.queue_cursor;
+    let last_activity_at = project.last_activity_at;
+    let final_project = persist_with(store.as_ref(), &project_id, &mut |p| {
+        // Receipts in the store are the truth (patched per chapter above);
+        // rebuild completed_lesson_ids from them so the two never drift.
+        p.completed_lesson_ids = p.receipts.iter().filter_map(|r| r.lesson_id).collect();
+        advance_if_behind(p, ProjectStage::Done);
+        p.queue_cursor = queue_cursor.max(p.queue_cursor);
+        if last_activity_at.is_some() {
+            p.last_activity_at = last_activity_at;
+        }
+    })?;
 
     sink.result(
         true,
-        serde_json::json!({"lesson_ids": project.completed_lesson_ids.clone()}),
+        serde_json::json!({"lesson_ids": final_project.completed_lesson_ids}),
     );
     Ok(())
 }
 
-fn persist_project(store: &dyn ProjectStore, project: &Project) -> Result<(), AppError> {
+/// Read-modify-write persist: re-load the project under the store's
+/// per-project lock and apply only the job's delta, so selection/mapping
+/// edits made mid-run are never reverted by a stale snapshot.
+fn persist_with(
+    store: &dyn ProjectStore,
+    id: &ProjectId,
+    f: &mut dyn FnMut(&mut Project),
+) -> Result<Project, AppError> {
     store
-        .put(project)
-        .map_err(|e| AppError::Other(format!("store.put: {e}")))
+        .update(id, f)
+        .map_err(|e| AppError::Other(format!("store.update: {e}")))
+}
+
+/// Persist the in-memory queue cursor / activity hints on a cancel exit.
+fn persist_cursor(store: &dyn ProjectStore, project: &Project) -> Result<(), AppError> {
+    let queue_cursor = project.queue_cursor;
+    let last_activity_at = project.last_activity_at;
+    persist_with(store, &project.id, &mut |p| {
+        p.queue_cursor = queue_cursor.max(p.queue_cursor);
+        if last_activity_at.is_some() {
+            p.last_activity_at = last_activity_at;
+        }
+    })?;
+    Ok(())
 }
 
 /// Advance the project to `to` only if it isn't already at or past it. Lets the
 /// orchestrator re-enter mid-pipeline (after a resume) without tripping
 /// `advance`'s backward-transition guard.
-fn advance_if_behind(project: &mut Project, to: ProjectStage) -> Result<(), AppError> {
+fn advance_if_behind(project: &mut Project, to: ProjectStage) {
     if project.stage() < to {
-        project.advance(to)?;
+        project
+            .advance(to)
+            .expect("advance_if_behind only moves forward");
     }
-    Ok(())
 }
 
 /// Idempotently append a placeholder receipt for every plan step that doesn't
@@ -453,12 +447,60 @@ fn prepopulate_receipts(project: &mut Project, plan: &Plan) {
     }
 }
 
-fn chapter_title(chapters: &[Chapter], idx: usize) -> String {
+/// Read the EPUB once: vendor detection and the later parse share the byte
+/// buffer. Non-EPUB sources and read failures fall back to `(None, None)`.
+fn epub_inputs(project: &Project) -> (Option<Vec<u8>>, Option<EpubVendor>) {
+    let epub_bytes: Option<Vec<u8>> = match &project.sources.text {
+        TextSource::Epub(path) => match std::fs::read(path) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                tracing::warn!(error = %e, "epub read failed; falling back to generic vendor");
+                None
+            }
+        },
+        _ => None,
+    };
+    let vendor: Option<EpubVendor> = epub_bytes
+        .as_deref()
+        .map(|bytes| match crate::core::epub::autodetect_vendor_bytes(bytes) {
+            Ok(d) => {
+                tracing::info!(
+                    project = %project.id.join_key(),
+                    vendor = d.vendor.as_str(),
+                    confidence = d.confidence,
+                    signals = ?d.signals,
+                    "epub vendor autodetect",
+                );
+                d.vendor
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "epub vendor autodetect failed; falling back to generic");
+                EpubVendor::Generic
+            }
+        });
+    (epub_bytes, vendor)
+}
+
+/// Chapters that participate in plan building: everything except chapters
+/// the user skipped. A skipped chapter that already carries a lesson_id
+/// stays in — selection only gates not-yet-uploaded chapters, and dropping
+/// an uploaded chapter would shift merged-plan buckets away from what was
+/// actually shipped.
+fn eligible_chapters(
+    chapters: &[Chapter],
+    skipped: &HashSet<ChapterId>,
+    receipts: &[ChapterReceipt],
+) -> Vec<Chapter> {
+    let uploaded: HashSet<usize> = receipts
+        .iter()
+        .filter(|r| r.lesson_id.is_some())
+        .map(|r| r.chapter_index)
+        .collect();
     chapters
         .iter()
-        .find(|c| c.order == idx)
-        .map(|c| c.title.clone())
-        .unwrap_or_else(|| format!("Chapter {}", idx + 1))
+        .filter(|c| !skipped.contains(&c.id) || uploaded.contains(&c.order))
+        .cloned()
+        .collect()
 }
 
 /// Title for an audio-only lesson minted from a leftover track. Prefers the
@@ -475,13 +517,24 @@ fn audio_only_title(track: &AudioTrack, track_index: usize) -> String {
 
 #[derive(Debug, Clone)]
 struct Step {
+    /// Receipt key. The chapter's `order` for per-chapter plans, the bucket
+    /// index for `SplitProportional`, 0 for `SingleLesson`, and a synthetic
+    /// index past every real order for `PairAccept` leftover tracks.
     chapter_index: usize,
     track_index: usize,
     degraded: bool,
-    /// When set, overrides the chapter body (used for `SingleLesson`).
-    text_override: Option<String>,
-    /// When set, overrides the chapter title (used for `SingleLesson`).
-    title_override: Option<String>,
+    title: String,
+    text: String,
+}
+
+fn step_for_chapter(chapter: &Chapter, track_index: usize) -> Step {
+    Step {
+        chapter_index: chapter.order,
+        track_index,
+        degraded: false,
+        title: chapter.title.clone(),
+        text: chapter.body.clone(),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -526,8 +579,13 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
         return Ok(None);
     }
     let tracks = resolve_audio_tracks(project).await?;
-    let chapters = resolve_chapters(&project.sources.text, None, None)?;
-    match build_plan(project, &chapters, &tracks) {
+    // Same vendor autodetect as the run, so chapter ids and counts can't
+    // disagree between inspection and the actual upload.
+    let (epub_bytes, strategy) = epub_inputs(project);
+    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+    match build_plan(project, &chapters, &tracks, all_chapters.len()) {
         PlanOrPause::NeedsMatch {
             condition,
             options,
@@ -546,21 +604,23 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
     }
 }
 
-fn build_plan(project: &Project, chapters: &[Chapter], tracks: &[AudioTrack]) -> PlanOrPause {
+fn build_plan(
+    project: &Project,
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+    leftover_base: usize,
+) -> PlanOrPause {
     if let Some(decision) = &project.matcher_decision {
-        return plan_from_decision(decision, chapters, tracks);
+        return plan_from_decision(decision, chapters, tracks, leftover_base);
+    }
+    if let Some(mapping) = &project.mapping {
+        return plan_from_mapping(mapping, chapters, tracks);
     }
     match auto_match(chapters, tracks) {
         MatchOutcome::Paired { pairs } => PlanOrPause::Plan(Plan {
             steps: pairs
                 .into_iter()
-                .map(|(c, t)| Step {
-                    chapter_index: c,
-                    track_index: t,
-                    degraded: false,
-                    text_override: None,
-                    title_override: None,
-                })
+                .map(|(c, t)| step_for_chapter(&chapters[c], t))
                 .collect(),
         }),
         MatchOutcome::Mismatch {
@@ -581,6 +641,36 @@ fn build_plan(project: &Project, chapters: &[Chapter], tracks: &[AudioTrack]) ->
             }
         }
     }
+}
+
+/// Plan from the user's (or seeded) mapping-editor state. Each eligible
+/// chapter uploads with the track its pair points at; chapters whose pair is
+/// unpaired and tracks sitting in the parking lot are excluded entirely.
+fn plan_from_mapping(
+    mapping: &MappingState,
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+) -> PlanOrPause {
+    let mut steps = Vec::with_capacity(chapters.len());
+    for chapter in chapters {
+        let Some(pair) = mapping.pairs.iter().find(|p| p.chapter_id == chapter.id) else {
+            // Sources changed on disk since the mapping was seeded.
+            return PlanOrPause::Failed(format!(
+                "mapping has no entry for chapter '{}'; text source changed since matching",
+                chapter.title
+            ));
+        };
+        let Some(track_id) = pair.track_id.as_ref() else {
+            continue;
+        };
+        let Some(track_index) = tracks.iter().position(|t| &track_id_for(t) == track_id) else {
+            return PlanOrPause::Failed(format!(
+                "mapping references unknown track '{track_id}'; audio source changed since matching"
+            ));
+        };
+        steps.push(step_for_chapter(chapter, track_index));
+    }
+    PlanOrPause::Plan(Plan { steps })
 }
 
 /// Eagerly run the proportional packer so the Mismatch UI can show the
@@ -610,6 +700,7 @@ fn plan_from_decision(
     decision: &MatcherDecision,
     chapters: &[Chapter],
     tracks: &[AudioTrack],
+    leftover_base: usize,
 ) -> PlanOrPause {
     use MismatchResponse::*;
     match decision.response {
@@ -634,44 +725,34 @@ fn plan_from_decision(
                     chapter_index: 0,
                     track_index: 0,
                     degraded: true,
-                    text_override: Some(text),
-                    title_override: Some(title),
+                    title,
+                    text,
                 }],
             })
         }
         PairAccept => {
             // Pair chapters[i] ↔ tracks[i] for i in 0..chapters.len().
             // Any extra tracks beyond chapters.len() ship as audio-only
-            // lessons (degraded). For leftover tracks the receipt's
-            // `chapter_index` is set to the track's own index `k` — this is
-            // a synthetic placeholder, not a real chapter index. The
-            // orchestrator's resume-skip logic only cares that the value
-            // is unique per receipt, which is satisfied because real
-            // chapters occupy indices 0..chapters.len() and leftovers
-            // start at chapters.len(). Future refactor: model leftover
-            // receipts with `chapter_index: Option<usize>`.
-            let mut steps: Vec<Step> = (0..chapters.len())
-                .map(|i| Step {
-                    chapter_index: i,
-                    track_index: i,
-                    degraded: false,
-                    text_override: None,
-                    title_override: None,
-                })
+            // lessons (degraded). Leftover receipts get a synthetic
+            // `chapter_index` starting at `leftover_base` (the full,
+            // unfiltered chapter count) — past every real chapter order, so
+            // resume-skip keys stay unique even when skips shrank the
+            // eligible set. Future refactor: model leftover receipts with
+            // `chapter_index: Option<usize>`.
+            let mut steps: Vec<Step> = chapters
+                .iter()
+                .enumerate()
+                .map(|(i, c)| step_for_chapter(c, i))
                 .collect();
             for (k, track) in tracks.iter().enumerate().skip(chapters.len()) {
-                let title = audio_only_title(track, k);
                 steps.push(Step {
-                    // k >= chapters.len() so this never collides with the
-                    // 0..chapters.len() block above. Equivalent to `k` but
-                    // written this way to flag the leftover semantics.
-                    chapter_index: k,
+                    chapter_index: leftover_base + (k - chapters.len()),
                     track_index: k,
                     degraded: true,
+                    title: audio_only_title(track, k),
                     // LingQ rejects empty `text`; a single space satisfies the
                     // required field for an audio-only lesson.
-                    text_override: Some(" ".to_string()),
-                    title_override: Some(title),
+                    text: " ".to_string(),
                 });
             }
             PlanOrPause::Plan(Plan { steps })
@@ -693,14 +774,10 @@ fn plan_from_decision(
                 );
             }
             PlanOrPause::Plan(Plan {
-                steps: (0..n)
-                    .map(|i| Step {
-                        chapter_index: i,
-                        track_index: i,
-                        degraded: false,
-                        text_override: None,
-                        title_override: None,
-                    })
+                steps: chapters[..n]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| step_for_chapter(c, i))
                     .collect(),
             })
         }
@@ -744,9 +821,9 @@ fn plan_from_decision(
                             chapter_index: bucket_index,
                             track_index: bucket_index,
                             degraded: true,
+                            title,
                             // LingQ rejects empty `text`; a single space satisfies the field.
-                            text_override: Some(" ".to_string()),
-                            title_override: Some(title),
+                            text: " ".to_string(),
                         }
                     } else {
                         let slice = &chapters[bucket.text_range.clone()];
@@ -754,8 +831,8 @@ fn plan_from_decision(
                             chapter_index: bucket_index,
                             track_index: bucket_index,
                             degraded: false,
-                            text_override: Some(single_lesson_concat(slice)),
-                            title_override: Some(slice[0].title.clone()),
+                            title: slice[0].title.clone(),
+                            text: single_lesson_concat(slice),
                         }
                     }
                 })
@@ -895,6 +972,200 @@ fn list_audio_in_dir(dir: &Path) -> Result<Vec<PathBuf>, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::matcher::MappingPair;
+
+    fn chapter(order: usize, title: &str, body: &str) -> Chapter {
+        Chapter {
+            order,
+            title: title.to_string(),
+            body: body.to_string(),
+            id: ChapterId::from_order(order),
+            ..Default::default()
+        }
+    }
+
+    fn track(order: usize, path: &str) -> AudioTrack {
+        AudioTrack {
+            order,
+            path: PathBuf::from(path),
+            duration_sec: Some(60.0),
+            title: None,
+            window: None,
+        }
+    }
+
+    fn uploaded_receipt(chapter_index: usize) -> ChapterReceipt {
+        ChapterReceipt {
+            chapter_index,
+            track_index: Some(chapter_index),
+            lesson_id: Some(1000 + chapter_index as i64),
+            degraded: false,
+            uploaded_at: Some(Utc::now()),
+        }
+    }
+
+    #[test]
+    fn eligible_chapters_drops_skipped_not_yet_uploaded() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
+
+        let eligible = eligible_chapters(&chapters, &skipped, &[]);
+        let orders: Vec<usize> = eligible.iter().map(|c| c.order).collect();
+        assert_eq!(orders, vec![0, 2]);
+    }
+
+    #[test]
+    fn eligible_chapters_keeps_skipped_chapter_that_already_uploaded() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
+        let receipts = vec![uploaded_receipt(1)];
+
+        let eligible = eligible_chapters(&chapters, &skipped, &receipts);
+        let orders: Vec<usize> = eligible.iter().map(|c| c.order).collect();
+        assert_eq!(orders, vec![0, 1, 2], "skip only gates not-yet-uploaded chapters");
+    }
+
+    #[test]
+    fn single_lesson_plan_over_eligible_set_excludes_skipped_body() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
+        let eligible = eligible_chapters(&chapters, &skipped, &[]);
+        let decision = MatcherDecision {
+            condition: MismatchCondition::ManyToFew,
+            response: MismatchResponse::SingleLesson,
+            chapter_count: eligible.len(),
+            track_count: 1,
+            user_overrode: false,
+            decided_at: Utc::now(),
+        };
+        let tracks = vec![track(0, "/x/a.mp3")];
+
+        let plan = match plan_from_decision(&decision, &eligible, &tracks, chapters.len()) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        assert_eq!(plan.steps.len(), 1);
+        let text = &plan.steps[0].text;
+        assert!(text.contains("b0") && text.contains("b2"), "merged text: {text}");
+        assert!(!text.contains("b1"), "skipped body leaked into merged text: {text}");
+    }
+
+    #[test]
+    fn plan_from_mapping_follows_pairs_and_excludes_parked_tracks() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let mapping = MappingState {
+            pairs: vec![
+                pair(0, Some(track_id_for(&tracks[1]))),
+                // Chapter 1's track was parked: no upload for the chapter,
+                // and the parked track must not appear in any step.
+                pair(1, None),
+                pair(2, Some(track_id_for(&tracks[0]))),
+            ],
+            parking_lot: vec![track_id_for(&tracks[2])],
+            op_id: 3,
+        };
+
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        let got: Vec<(usize, usize)> = plan
+            .steps
+            .iter()
+            .map(|s| (s.chapter_index, s.track_index))
+            .collect();
+        assert_eq!(got, vec![(0, 1), (2, 0)]);
+        assert_eq!(plan.steps[0].text, "b0");
+        assert_eq!(plan.steps[1].text, "b2");
+    }
+
+    #[test]
+    fn plan_from_mapping_fails_on_unknown_track() {
+        let chapters = vec![chapter(0, "c0", "b0")];
+        let tracks = vec![track(0, "/x/a.mp3")];
+        let mapping = MappingState {
+            pairs: vec![pair(0, Some("/gone/x.mp3".to_string()))],
+            parking_lot: vec![],
+            op_id: 1,
+        };
+        assert!(matches!(
+            plan_from_mapping(&mapping, &chapters, &tracks),
+            PlanOrPause::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn build_plan_prefers_mapping_over_auto_match_order() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1")];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
+        let mut project = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
+        project.mapping = Some(MappingState {
+            pairs: vec![
+                pair(0, Some(track_id_for(&tracks[1]))),
+                pair(1, Some(track_id_for(&tracks[0]))),
+            ],
+            parking_lot: vec![],
+            op_id: 2,
+        });
+
+        let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        let got: Vec<(usize, usize)> = plan
+            .steps
+            .iter()
+            .map(|s| (s.chapter_index, s.track_index))
+            .collect();
+        assert_eq!(got, vec![(0, 1), (1, 0)], "mapping pairing must win over index order");
+    }
+
+    #[test]
+    fn pair_accept_leftover_indices_start_past_full_chapter_count() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(2, "c2", "b2")];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let decision = MatcherDecision {
+            condition: MismatchCondition::CountOff,
+            response: MismatchResponse::PairAccept,
+            chapter_count: chapters.len(),
+            track_count: tracks.len(),
+            user_overrode: false,
+            decided_at: Utc::now(),
+        };
+
+        let plan = match plan_from_decision(&decision, &chapters, &tracks, 3) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        let got: Vec<usize> = plan.steps.iter().map(|s| s.chapter_index).collect();
+        // Real orders 0 and 2; the leftover track must not collide with the
+        // skipped chapter's order (2 here) — it starts at the full count.
+        assert_eq!(got, vec![0, 2, 3]);
+        assert!(plan.steps[2].degraded);
+    }
+
+    fn pair(order: usize, track_id: Option<String>) -> MappingPair {
+        MappingPair {
+            chapter_id: ChapterId::from_order(order),
+            track_id,
+            confidence: 1.0,
+            touched: false,
+            original_confidence: 1.0,
+        }
+    }
+
+    fn plan_kind(p: &PlanOrPause) -> &'static str {
+        match p {
+            PlanOrPause::Plan(_) => "Plan",
+            PlanOrPause::NeedsMatch { .. } => "NeedsMatch",
+            PlanOrPause::Cancelled => "Cancelled",
+            PlanOrPause::Failed(_) => "Failed",
+        }
+    }
 
     #[test]
     fn list_audio_filters_extensions() {
@@ -948,7 +1219,7 @@ mod tests {
             decided_at: Utc::now(),
         };
 
-        let plan = match plan_from_decision(&decision, &chapters, &tracks) {
+        let plan = match plan_from_decision(&decision, &chapters, &tracks, chapters.len()) {
             PlanOrPause::Plan(p) => p,
             _ => panic!("expected Plan"),
         };
@@ -957,14 +1228,13 @@ mod tests {
             assert!(!step.degraded, "step {i} should not be degraded");
             assert_eq!(step.chapter_index, i);
             assert_eq!(step.track_index, i);
-            let body = step.text_override.as_deref().expect("text_override set");
-            assert!(!body.is_empty(), "step {i} body must be non-empty");
+            assert!(!step.text.is_empty(), "step {i} body must be non-empty");
         }
         // First bucket starts at chapter 0, so its title is c0. The second
         // bucket starts wherever the packer split the run, so we only assert
         // it matches one of the remaining chapter titles.
-        assert_eq!(plan.steps[0].title_override.as_deref(), Some("c0"));
-        let second = plan.steps[1].title_override.as_deref().unwrap();
+        assert_eq!(plan.steps[0].title, "c0");
+        let second = plan.steps[1].title.as_str();
         assert!(
             ["c1", "c2", "c3"].contains(&second),
             "second bucket title was {second}"

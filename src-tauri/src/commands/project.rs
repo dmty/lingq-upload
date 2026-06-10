@@ -7,7 +7,7 @@ use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
 use crate::core::project::Project;
-use crate::core::store::ProjectStore;
+use crate::core::store::{ProjectStore, StoreError};
 use crate::error::AppError;
 use crate::ingest::TextSource;
 
@@ -66,9 +66,10 @@ pub async fn cmd_set_selection(
     project_id: ProjectId,
     skipped_ids: Vec<ChapterId>,
 ) -> Result<(), AppError> {
-    store
-        .set_selection(&project_id, &skipped_ids)
-        .map_err(|e| AppError::Other(format!("store.set_selection: {e}")))?;
+    store.set_selection(&project_id, &skipped_ids).map_err(|e| match e {
+        StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+        other => AppError::Other(format!("store.set_selection: {other}")),
+    })?;
     Ok(())
 }
 
@@ -116,13 +117,11 @@ pub async fn cmd_set_absorb_policy(
     project_id: ProjectId,
     policy: AbsorbPolicy,
 ) -> Result<(), AppError> {
-    let mut project = store
-        .get(&project_id)
-        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-        .ok_or_else(|| AppError::Other("project not found".into()))?;
-    project.absorb_policy = policy;
     store
-        .put(&project)
-        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
+        .update(&project_id, &mut |p| p.absorb_policy = policy)
+        .map_err(|e| match e {
+            StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+            other => AppError::Other(format!("store.update: {other}")),
+        })?;
     Ok(())
 }

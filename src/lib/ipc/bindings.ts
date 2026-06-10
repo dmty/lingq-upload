@@ -457,8 +457,10 @@ skipped_chapters?: ChapterId[];
 absorb_policy?: AbsorbPolicy; 
 /**
  * Persisted state of the two-column mapping editor: the chapter↔track
- * pairing, the parking lot of unpaired tracks, and a monotonic op_id
- * used by the UI for idempotent replay on reload.
+ * pairing, the parking lot of unpaired tracks, and a monotonic op_id.
+ * The store rejects an op whose `expected_op_id != op_id + 1`
+ * (`MappingStaleOp`), so a reloaded or duplicated submission re-syncs
+ * from this state instead of double-applying.
  */
 mapping?: MappingState | null }
 /**

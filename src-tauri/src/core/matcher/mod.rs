@@ -34,6 +34,40 @@ pub fn auto_match(chapters: &[Chapter], tracks: &[AudioTrack]) -> MatchOutcome {
     auto_match_counts(chapters.len(), tracks.len())
 }
 
+/// Stable identifier for an audio track in [`MappingState`]. Tracks resolve
+/// from sorted paths, so the path alone is stable; embedded-chapter fan-out
+/// reuses one path for many tracks, so the slice window disambiguates.
+pub fn track_id_for(track: &AudioTrack) -> TrackId {
+    match track.window {
+        Some((start, end)) => format!("{}#{start}-{end}", track.path.display()),
+        None => track.path.display().to_string(),
+    }
+}
+
+/// Initial [`MappingState`] for a cleanly auto-matched project: one untouched
+/// pair per chapter, empty parking lot, `op_id` 0. `pairs` carries the
+/// positional (chapter, track) indices from [`MatchOutcome::Paired`].
+pub fn seed_mapping_state(
+    pairs: &[(usize, usize)],
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+) -> MappingState {
+    MappingState {
+        pairs: pairs
+            .iter()
+            .map(|&(c, t)| MappingPair {
+                chapter_id: chapters[c].id.clone(),
+                track_id: Some(track_id_for(&tracks[t])),
+                confidence: ops::RECOMPUTED_CONFIDENCE,
+                touched: false,
+                original_confidence: ops::RECOMPUTED_CONFIDENCE,
+            })
+            .collect(),
+        parking_lot: Vec::new(),
+        op_id: 0,
+    }
+}
+
 pub fn auto_match_counts(chapters: usize, tracks: usize) -> MatchOutcome {
     match classify(chapters, tracks) {
         None => {

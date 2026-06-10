@@ -245,8 +245,8 @@ fn atomic_write_leaves_no_tmp_files_behind() {
     assert!(
         !entries
             .iter()
-            .any(|n| n.to_string_lossy().ends_with(".tmp")),
-        "no .tmp files: {entries:?}"
+            .any(|n| n.to_string_lossy().contains(".tmp")),
+        "no tmp files: {entries:?}"
     );
 }
 
@@ -292,7 +292,10 @@ fn powercut_simulation_preserves_prior_selection() {
     assert_eq!(got.skipped_chapters, vec![ChapterId::from_order(0)]);
     assert_eq!(got, p, "prior file untouched after partial tmp write");
 
-    // Real selection update must also leave no tmp turds.
+    // Real selection update must also leave no tmp turds. (The planted
+    // crash leftover above is removed first — tmp names are unique per
+    // write, so a foreign turd is never reclaimed by a later rename.)
+    std::fs::remove_file(&tmp_path).unwrap();
     store
         .set_selection(&p.id, &[ChapterId::from_order(1), ChapterId::from_order(2)])
         .unwrap();
@@ -307,8 +310,8 @@ fn powercut_simulation_preserves_prior_selection() {
     assert!(
         !entries
             .iter()
-            .any(|n| n.to_string_lossy().ends_with(".tmp")),
-        "no .tmp files after set_selection: {entries:?}"
+            .any(|n| n.to_string_lossy().contains(".tmp")),
+        "no tmp files after set_selection: {entries:?}"
     );
     let got = store.get(&p.id).unwrap().unwrap();
     assert_eq!(
@@ -459,8 +462,8 @@ fn json_store_patch_chapter_atomic() {
     assert!(
         !entries
             .iter()
-            .any(|n| n.to_string_lossy().ends_with(".tmp")),
-        "no .tmp files: {entries:?}"
+            .any(|n| n.to_string_lossy().contains(".tmp")),
+        "no tmp files: {entries:?}"
     );
 }
 

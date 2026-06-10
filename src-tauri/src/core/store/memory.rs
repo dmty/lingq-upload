@@ -41,6 +41,20 @@ impl ProjectStore for InMemoryProjectStore {
         Ok(self.lock().get(&id.join_key()).cloned())
     }
 
+    fn update(
+        &self,
+        id: &ProjectId,
+        f: &mut dyn FnMut(&mut Project),
+    ) -> Result<Project, StoreError> {
+        let key = id.join_key();
+        let mut guard = self.lock();
+        let project = guard
+            .get_mut(&key)
+            .ok_or_else(|| StoreError::NotFound { key: key.clone() })?;
+        f(project);
+        Ok(project.clone())
+    }
+
     fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
         let mut out: Vec<ProjectSummary> = self.lock().values().map(ProjectSummary::from).collect();
         out.sort_by(|a: &ProjectSummary, b| a.title.cmp(&b.title));
