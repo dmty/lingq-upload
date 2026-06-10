@@ -93,12 +93,13 @@ jobs:
       # The ffmpeg-backed silence-detection paths in `carver_absorb_test` are
       # `#[ignore]`-flagged so devs without ffmpeg on PATH can run the default
       # suite. CI has ffmpeg installed above, so opt in to the golden-offset
-      # gate explicitly. Windows ffmpeg is flaky in `silencedetect` parsing
-      # under choco — skip there.
+      # gate explicitly; `--ignored` runs only the ffmpeg-backed tests — the
+      # pure-function ones already ran in `cargo test --locked`. Windows ffmpeg
+      # is flaky in `silencedetect` parsing under choco — skip there.
       - name: carver golden-offset gate
         if: runner.os != 'Windows'
         working-directory: src-tauri
-        run: cargo test --locked --test carver_absorb_test -- --include-ignored
+        run: cargo test --locked --test carver_absorb_test -- --ignored
 
       - name: cargo clippy
         working-directory: src-tauri
@@ -235,9 +236,14 @@ jobs:
       - name: Disallow hardcoded /ja/ URL segment in src-tauri/src
         shell: bash
         run: |
-          if rg "/ja/" src-tauri/src/ -g '!lingq/lang.rs'; then
+          status=0
+          rg "/ja/" src-tauri/src/ -g '!**/lingq/lang.rs' || status=$?
+          if [ "$status" -eq 0 ]; then
             echo "::error::hardcoded /ja/ URL segment found in src-tauri/src/ — thread the language via LingqClient instead"
             exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "::error::rg failed with exit code $status"
+            exit "$status"
           fi
 
   unwrap-grep:

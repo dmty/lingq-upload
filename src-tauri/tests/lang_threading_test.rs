@@ -14,7 +14,7 @@ async fn assert_create_uses_lang_segment(code: &str) {
     let search_path = format!("/api/v3/{code}/collections/?search=Sample");
     let create_path = format!("/api/v3/{code}/collections/");
 
-    let _search = server
+    let search = server
         .mock("GET", search_path.as_str())
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -41,6 +41,7 @@ async fn assert_create_uses_lang_segment(code: &str) {
         .expect("create ok");
     assert_eq!(id, CollectionId(4242));
 
+    search.assert_async().await;
     create.assert_async().await;
 }
 
