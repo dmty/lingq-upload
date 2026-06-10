@@ -21,10 +21,6 @@
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
 
-  $effect(() => {
-    if (projectKey) void mapping.load(projectKey);
-  });
-
   const pickerRows = $derived(
     mapping.chapters.map((c) => ({
       id: c.id ?? `idx:${c.order}`,
@@ -55,14 +51,27 @@
   let absorbPolicy = $state<AbsorbPolicy>("forward");
   let settingsOpen = $state(false);
 
+  // Single load path: the store does the one cmd_project_load round trip and
+  // exposes everything the page needs (id, absorb policy, mapping, chapters).
   $effect(() => {
-    if (!projectKey) return;
+    if (!projectKey) {
+      hydrating = false;
+      return;
+    }
     void (async () => {
-      const loaded = await commands.cmdProjectLoad(projectKey);
-      if (loaded.status === "ok") {
-        projectIdValue = loaded.data.id;
-        absorbPolicy = loaded.data.absorb_policy ?? "forward";
+      await mapping.load(projectKey);
+      if (mapping.status === "error") {
+        error = mapping.error;
+        hydrating = false;
+        return;
       }
+      projectIdValue = mapping.projectId;
+      absorbPolicy = mapping.absorbPolicy;
+      if (applyParams()) {
+        hydrating = false;
+        return;
+      }
+      await hydrateFromBackend();
     })();
   });
 
@@ -93,17 +102,12 @@
   }
 
   async function hydrateFromBackend() {
-    if (!projectKey) {
+    const pid = mapping.projectId;
+    if (!pid) {
       hydrating = false;
       return;
     }
-    const loaded = await commands.cmdProjectLoad(projectKey);
-    if (loaded.status === "error") {
-      error = appErrorMessage(loaded.error);
-      hydrating = false;
-      return;
-    }
-    const inspected = await commands.cmdMatcherInspect(loaded.data.id);
+    const inspected = await commands.cmdMatcherInspect(pid);
     if (inspected.status === "error") {
       error = appErrorMessage(inspected.error);
       hydrating = false;
@@ -123,14 +127,6 @@
     bucketPreview = data.bucket_preview;
     hydrating = false;
   }
-
-  $effect(() => {
-    if (!applyParams()) {
-      void hydrateFromBackend();
-    } else {
-      hydrating = false;
-    }
-  });
 
   function formatDuration(sec: number): string {
     const total = Math.max(0, Math.round(sec));
@@ -178,25 +174,30 @@
     }));
   });
 
-  const mappingGateOk = $derived.by(() => {
-    void mapping.revertEpoch;
-    const ms = mapping.mappingState;
-    if (!ms) return true;
-    return ms.pairs.every(
-      (p) => (p.touched ?? false) || p.confidence >= 0.6,
-    );
-  });
+  const mappingGateOk = $derived(mapping.gateContinue());
 
+  // submitOp/confirmPair reject when their flush turn fails — that is the
+  // signal for awaiting callers; fire-and-forget call sites swallow it
+  // (AD-025: the reverted row colour is the only failure surface).
   function handleMappingOp(op: MappingOp) {
-    void mapping.submitOp(op);
+    mapping.submitOp(op).catch(() => {});
   }
 
   function handleConfirmPair(chapterId: string) {
-    void mapping.confirmPair(chapterId);
+    mapping.confirmPair(chapterId).catch(() => {});
   }
 
-  function handleMappingContinue() {
-    void mapping.flush().then(() => goto(`/run/${projectKey}`));
+  async function handleMappingContinue() {
+    const epoch = mapping.revertEpoch;
+    try {
+      await mapping.flush();
+    } catch {
+      return;
+    }
+    // A revert during the final flush means the save failed — stay on the
+    // page and let the reverted row colour speak (AD-025: no banner).
+    if (mapping.revertEpoch !== epoch || !mapping.gateContinue()) return;
+    goto(`/run/${projectKey}`);
   }
 
   async function confirm() {
@@ -206,14 +207,14 @@
       goto("/library");
       return;
     }
-    const loaded = await commands.cmdProjectLoad(projectKey);
-    if (loaded.status === "error") {
-      error = appErrorMessage(loaded.error);
+    const pid = mapping.projectId;
+    if (!pid) {
+      error = "Failed to load project";
       busy = false;
       return;
     }
     const resolved = await commands.cmdMatcherResolve(
-      loaded.data.id,
+      pid,
       condition,
       selected,
       chapters,
@@ -278,6 +279,7 @@
       tracks={trackRows}
       mappingState={mapping.mappingState}
       lastSavedAt={mapping.lastSavedAt}
+      saving={mapping.saving}
       canContinue={mappingGateOk}
       onOp={handleMappingOp}
       onConfirmPair={handleConfirmPair}

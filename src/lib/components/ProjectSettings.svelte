@@ -32,6 +32,17 @@
 
   let lastConfirmed: AbsorbPolicy = $state(absorbPolicy);
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let alive = true;
+
+  $effect(() => {
+    return () => {
+      alive = false;
+      if (timer != null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+  });
 
   function onSelect(next: AbsorbPolicy) {
     if (next === absorbPolicy) return;
@@ -39,7 +50,9 @@
     absorbPolicy = next;
     if (timer != null) clearTimeout(timer);
     timer = setTimeout(async () => {
+      timer = null;
       const res = await commands.cmdSetAbsorbPolicy(projectId, next);
+      if (!alive) return;
       if (res.status === "ok") {
         lastConfirmed = next;
       } else {
@@ -49,8 +62,12 @@
   }
 </script>
 
-<fieldset class="absorb-policy">
+<!-- Disabled until chapter carving consumes the policy at runtime; the
+     persistence path below stays wired so re-enabling is a one-attribute
+     change. -->
+<fieldset class="absorb-policy" disabled>
   <legend>Chapter-divider silence</legend>
+  <p class="pending-note">Takes effect when chapter carving ships.</p>
   {#each policies as p (p.value)}
     <label>
       <input
@@ -85,6 +102,16 @@
     align-items: baseline;
     gap: 0.5rem;
     cursor: pointer;
+  }
+  .absorb-policy:disabled label {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .pending-note {
+    margin: 0;
+    color: var(--muted, #666);
+    font-size: 0.85em;
+    font-style: italic;
   }
   .label {
     font-weight: 500;
