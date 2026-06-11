@@ -1,5 +1,6 @@
 <script lang="ts">
   import MappingConnector from "./MappingConnector.svelte";
+  import MismatchDiffInspector from "./MismatchDiffInspector.svelte";
   import ParkingLot from "./ParkingLot.svelte";
   import type {
     ChapterMeta,
@@ -191,15 +192,71 @@
   function onChapterKeydown(ev: KeyboardEvent, chapterId: string) {
     if (ev.key === "Escape") {
       selectedTrackId = null;
+      revealedPairId = null;
       return;
     }
-    if (selectedTrackId == null) return;
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
-      const tid = selectedTrackId;
-      selectedTrackId = null;
-      onOp({ kind: "swap", chapter_id: chapterId, track_id: tid });
+      if (selectedTrackId != null) {
+        const tid = selectedTrackId;
+        selectedTrackId = null;
+        onOp({ kind: "swap", chapter_id: chapterId, track_id: tid });
+        return;
+      }
+      // No track selected — Enter/Space toggles the per-row diff inspector
+      // for paired rows.
+      const pair = pairFor(chapterId);
+      if (!pair?.track_id) return;
+      revealedPairId = revealedPairId === chapterId ? null : chapterId;
     }
+  }
+
+  // Per-row diff inspector reveal. Only one row open at a time. Hover is
+  // gated on a 250ms debounce so transient pointer drift doesn't fire; focus
+  // (keyboard tab) reveals immediately. Enter/Space on a focused chapter row
+  // also toggles. Escape collapses.
+  let revealedPairId = $state<string | null>(null);
+  let hoverPairId: string | null = null;
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  const HOVER_DEBOUNCE_MS = 250;
+
+  function clearHoverTimer() {
+    if (hoverTimer != null) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+  }
+
+  function onChapterPointerEnter(chapterId: string) {
+    hoverPairId = chapterId;
+    clearHoverTimer();
+    hoverTimer = setTimeout(() => {
+      hoverTimer = null;
+      if (hoverPairId === chapterId) revealedPairId = chapterId;
+    }, HOVER_DEBOUNCE_MS);
+  }
+
+  function onChapterPointerLeave(chapterId: string) {
+    if (hoverPairId === chapterId) hoverPairId = null;
+    clearHoverTimer();
+    if (revealedPairId === chapterId) revealedPairId = null;
+  }
+
+  function onChapterFocus(chapterId: string) {
+    revealedPairId = chapterId;
+  }
+
+  function onChapterBlur(ev: FocusEvent, chapterId: string) {
+    if (revealedPairId !== chapterId) return;
+    const next = ev.relatedTarget;
+    const row = chapterRowRefs[chapterId];
+    if (row && next instanceof Node && row.contains(next)) return;
+    revealedPairId = null;
+  }
+
+  function trackLabelFor(trackId: string | null | undefined): string {
+    if (!trackId) return "";
+    return tracks.find((t) => t.id === trackId)?.filename ?? trackId;
   }
 
   function formatDuration(sec: number | null): string {
@@ -268,9 +325,10 @@
         {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
         {@const band = confidenceBand(displayConf)}
         {@const touched = pair?.touched ?? false}
+        {@const showInspector = revealedPairId === chapter.id && !!pair?.track_id}
         <li
           bind:this={chapterRowRefs[chapter.id]}
-          class="flex items-center gap-2 rounded-sm bg-surface px-2 py-1.5 text-sm {pair
+          class="flex flex-col gap-1 rounded-sm bg-surface px-2 py-1.5 text-sm {pair
             ? band.borderClass
             : 'border-l-4 border-l-transparent'}"
           data-testid="mapping-chapter-row"
@@ -282,36 +340,48 @@
           ondragover={onChapterDragOver}
           ondrop={(ev) => onChapterDrop(ev, chapter.id)}
           onkeydown={(ev) => onChapterKeydown(ev, chapter.id)}
+          onpointerenter={() => onChapterPointerEnter(chapter.id)}
+          onpointerleave={() => onChapterPointerLeave(chapter.id)}
+          onfocus={() => onChapterFocus(chapter.id)}
+          onblur={(ev) => onChapterBlur(ev, chapter.id)}
         >
-          <span class="flex-1 truncate text-fg">{chapter.title}</span>
-          {#if pair}
-            <span
-              class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {band.textClass}"
-              data-testid="confidence-chip"
-              data-confidence={displayConf}
-              data-confidence-band={band.label}
-            >
-              {band.label}
-            </span>
-            {#if touched}
+          <div class="flex items-center gap-2">
+            <span class="flex-1 truncate text-fg">{chapter.title}</span>
+            {#if pair}
               <span
-                class="rounded-sm border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
-                data-testid="manual-badge"
+                class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {band.textClass}"
+                data-testid="confidence-chip"
+                data-confidence={displayConf}
+                data-confidence-band={band.label}
               >
-                Manual
+                {band.label}
               </span>
+              {#if touched}
+                <span
+                  class="rounded-sm border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
+                  data-testid="manual-badge"
+                >
+                  Manual
+                </span>
+              {/if}
             {/if}
+            <button
+              type="button"
+              class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken disabled:opacity-50"
+              data-testid="confirm-pair"
+              data-chapter-id={chapter.id}
+              disabled={!pair?.track_id}
+              onclick={() => onConfirmPair(chapter.id)}
+            >
+              Confirm
+            </button>
+          </div>
+          {#if showInspector}
+            <MismatchDiffInspector
+              chapterTitle={chapter.title}
+              trackLabel={trackLabelFor(pair?.track_id)}
+            />
           {/if}
-          <button
-            type="button"
-            class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken disabled:opacity-50"
-            data-testid="confirm-pair"
-            data-chapter-id={chapter.id}
-            disabled={!pair?.track_id}
-            onclick={() => onConfirmPair(chapter.id)}
-          >
-            Confirm
-          </button>
         </li>
       {/each}
     </ul>
