@@ -32,8 +32,11 @@ async fn assert_create_uses_lang_segment(code: &str) {
         .await;
 
     let lang = LanguageCode::new(code).expect("valid lang");
-    let client =
-        LingqClient::with_base_url(SecretString::from("test-key".to_string()), lang, server.url());
+    let client = LingqClient::with_base_url(
+        SecretString::from("test-key".to_string()),
+        lang,
+        server.url(),
+    );
 
     let id = client
         .find_or_create_collection("Sample", "desc")
@@ -80,8 +83,11 @@ async fn import_lesson_v2_threads_ko_through_url_and_form_field() {
         .await;
 
     let lang = LanguageCode::new("ko").expect("valid lang");
-    let client =
-        LingqClient::with_base_url(SecretString::from("test-key".to_string()), lang, server.url());
+    let client = LingqClient::with_base_url(
+        SecretString::from("test-key".to_string()),
+        lang,
+        server.url(),
+    );
 
     let req = ImportLessonRequest {
         collection: CollectionId(11),

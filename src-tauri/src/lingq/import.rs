@@ -46,11 +46,7 @@ impl LingqClient {
     /// derive from `self.lang()`. Retries on 5xx with capped, jittered
     /// exponential backoff (max 3 attempts); 4xx fails fast.
     pub async fn import_lesson_v2(&self, req: ImportLessonRequest<'_>) -> Result<i64, LingqError> {
-        let url = format!(
-            "{}/api/v3/{}/lessons/import/",
-            self.base_url(),
-            self.lang()
-        );
+        let url = format!("{}/api/v3/{}/lessons/import/", self.base_url(), self.lang());
         // Read audio once; multipart Part::bytes accepts owned Vec, so we clone
         // per attempt instead of re-reading from disk.
         let audio_bytes = match req.audio {

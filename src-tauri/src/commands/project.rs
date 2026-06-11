@@ -24,7 +24,12 @@ pub struct ChapterMeta {
 
 impl From<Chapter> for ChapterMeta {
     fn from(c: Chapter) -> Self {
-        Self { id: c.id, order: c.order, title: c.title, kind: c.kind }
+        Self {
+            id: c.id,
+            order: c.order,
+            title: c.title,
+            kind: c.kind,
+        }
     }
 }
 
@@ -66,10 +71,12 @@ pub async fn cmd_set_selection(
     project_id: ProjectId,
     skipped_ids: Vec<ChapterId>,
 ) -> Result<(), AppError> {
-    store.set_selection(&project_id, &skipped_ids).map_err(|e| match e {
-        StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
-        other => AppError::Other(format!("store.set_selection: {other}")),
-    })?;
+    store
+        .set_selection(&project_id, &skipped_ids)
+        .map_err(|e| match e {
+            StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+            other => AppError::Other(format!("store.set_selection: {other}")),
+        })?;
     Ok(())
 }
 
@@ -88,8 +95,8 @@ pub async fn cmd_project_chapters(
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     match &project.sources.text {
         TextSource::Epub(path) => {
-            let chapters = parse_epub(path)
-                .map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
+            let chapters =
+                parse_epub(path).map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
             Ok(chapters.into_iter().map(ChapterMeta::from).collect())
         }
         TextSource::LooseFiles { paths } => Ok(paths

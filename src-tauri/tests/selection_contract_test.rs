@@ -87,7 +87,11 @@ fn set_selection_round_trips_across_stores() {
         // Empty → some ids.
         store.set_selection(&p.id, &[cid(2), cid(0)]).unwrap();
         let got = store.get(&p.id).unwrap().unwrap();
-        assert_eq!(got.skipped_chapters, vec![cid(0), cid(2)], "sorted + deduped");
+        assert_eq!(
+            got.skipped_chapters,
+            vec![cid(0), cid(2)],
+            "sorted + deduped"
+        );
 
         // Replace wholesale: ids absent from the new set must clear.
         store.set_selection(&p.id, &[cid(1)]).unwrap();
@@ -405,7 +409,10 @@ async fn run_skips_marked_chapters_and_imports_only_remainder() {
         .collect();
     assert_eq!(uploaded.len(), expected_imports);
     for s in &skipped_idx {
-        assert!(!uploaded.contains(s), "skipped chapter has receipt: {uploaded:?}");
+        assert!(
+            !uploaded.contains(s),
+            "skipped chapter has receipt: {uploaded:?}"
+        );
     }
 }
 

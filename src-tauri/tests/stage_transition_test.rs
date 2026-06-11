@@ -39,9 +39,9 @@ fn sample(title: &str, stage: ProjectStage) -> Project {
         last_activity_at: None,
         stage,
         last_transition_at: None,
-    skipped_chapters: vec![],
-    absorb_policy: AbsorbPolicy::default(),
-    mapping: None,
+        skipped_chapters: vec![],
+        absorb_policy: AbsorbPolicy::default(),
+        mapping: None,
     }
 }
 

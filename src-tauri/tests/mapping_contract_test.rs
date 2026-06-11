@@ -106,7 +106,10 @@ fn apply_mapping_op_round_trips_through_persistence() {
         assert_eq!(returned.parking_lot, vec![track_id_for(&track(1))]);
 
         let persisted = store.get(&id).unwrap().unwrap().mapping.unwrap();
-        assert_eq!(persisted, returned, "returned state must equal persisted state");
+        assert_eq!(
+            persisted, returned,
+            "returned state must equal persisted state"
+        );
 
         // Next op chains off the persisted op_id.
         let returned = store
@@ -120,10 +123,7 @@ fn apply_mapping_op_round_trips_through_persistence() {
             )
             .expect("second op applies");
         assert_eq!(returned.op_id, 2);
-        assert_eq!(
-            store.get(&id).unwrap().unwrap().mapping.unwrap(),
-            returned
-        );
+        assert_eq!(store.get(&id).unwrap().unwrap().mapping.unwrap(), returned);
     }
 }
 

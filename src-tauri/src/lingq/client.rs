@@ -280,11 +280,7 @@ impl LingqClient {
         audio_mp3: &Path,
         opts: &LessonOpts,
     ) -> Result<i64, LingqError> {
-        let url = format!(
-            "{}/api/v3/{}/lessons/import/",
-            self.base_url,
-            self.lang()
-        );
+        let url = format!("{}/api/v3/{}/lessons/import/", self.base_url, self.lang());
 
         let audio_bytes = tokio::fs::read(audio_mp3)
             .await

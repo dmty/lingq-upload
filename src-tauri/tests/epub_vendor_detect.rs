@@ -41,7 +41,8 @@ fn build_epub(entries: &[(&str, &[u8])]) -> Vec<u8> {
     {
         let cursor = Cursor::new(&mut buf);
         let mut zip = ZipWriter::new(cursor);
-        let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, body) in entries {
             zip.start_file(*name, opts).unwrap();
             zip.write_all(body).unwrap();
@@ -214,7 +215,11 @@ fn detect(bytes: &[u8]) -> lingq_upload_lib::core::epub::VendorDetection {
 fn adversarial_kobo_fixture_is_committed() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/epub/kobo/adversarial_mixed_classes.epub");
-    assert!(path.exists(), "missing committed fixture: {}", path.display());
+    assert!(
+        path.exists(),
+        "missing committed fixture: {}",
+        path.display()
+    );
 }
 
 #[test]
@@ -234,8 +239,7 @@ fn adversarial_kobo_fixture_pinned_by_sha256() {
 #[test]
 #[ignore = "regenerates the committed fixture; run explicitly with --ignored"]
 fn writes_adversarial_kobo_fixture_to_disk() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/epub/kobo");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epub/kobo");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("adversarial_mixed_classes.epub");
     std::fs::write(&path, build_kobo_adversarial_mixed()).unwrap();
@@ -246,11 +250,7 @@ fn writes_adversarial_kobo_fixture_to_disk() {
 fn dense_kobo_book_classified_kobo() {
     let d = detect(&build_kobo_fixture());
     assert_eq!(d.vendor, EpubVendor::Kobo);
-    assert!(
-        d.confidence >= 0.8,
-        "confidence {} below 0.8",
-        d.confidence
-    );
+    assert!(d.confidence >= 0.8, "confidence {} below 0.8", d.confidence);
     assert!(
         d.signals.iter().any(|s| s.starts_with("kobo_span")),
         "missing kobo_span signal in {:?}",

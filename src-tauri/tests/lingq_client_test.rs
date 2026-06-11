@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use lingq_upload_lib::lingq::{
-    AccountProfile, Collection, LanguageCode, Language, LessonOpts, LingqClient, LingqError,
+    AccountProfile, Collection, Language, LanguageCode, LessonOpts, LingqClient, LingqError,
 };
 use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;

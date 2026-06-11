@@ -87,7 +87,13 @@ fn swap_between_chapters_unpairs_source_chapter() {
 #[test]
 fn park_unpairs_and_pushes_to_lot() {
     let state = seed_three_pairs();
-    let next = apply_mapping_op(&state, MappingOp::Park { track_id: "t1".into() }).unwrap();
+    let next = apply_mapping_op(
+        &state,
+        MappingOp::Park {
+            track_id: "t1".into(),
+        },
+    )
+    .unwrap();
 
     assert_eq!(next.pairs[1].track_id, None);
     assert!(next.pairs[1].touched);
@@ -98,7 +104,13 @@ fn park_unpairs_and_pushes_to_lot() {
 #[test]
 fn park_unknown_track_errors() {
     let state = seed_three_pairs();
-    let err = apply_mapping_op(&state, MappingOp::Park { track_id: "nope".into() }).unwrap_err();
+    let err = apply_mapping_op(
+        &state,
+        MappingOp::Park {
+            track_id: "nope".into(),
+        },
+    )
+    .unwrap_err();
     assert!(matches!(err, MappingError::UnknownTrack(_)));
 }
 

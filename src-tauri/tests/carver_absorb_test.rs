@@ -62,7 +62,8 @@ fn assert_fixture(name: &str, expected_sha: &str) -> PathBuf {
     });
     let got = format!("{:x}", Sha256::digest(&bytes));
     assert_eq!(
-        got, expected_sha,
+        got,
+        expected_sha,
         "fixture sha256 drift for {}: expected {expected_sha}, got {got}",
         path.display()
     );
@@ -83,12 +84,24 @@ fn diff(a: u32, b: u32) -> u32 {
 #[test]
 fn forward_offsets_distinct_from_backward_and_drop() {
     let runs_a = [
-        SilenceRun { start_ms: 5_000, end_ms: 6_000 },
-        SilenceRun { start_ms: 9_000, end_ms: 10_000 },
+        SilenceRun {
+            start_ms: 5_000,
+            end_ms: 6_000,
+        },
+        SilenceRun {
+            start_ms: 9_000,
+            end_ms: 10_000,
+        },
     ];
     let runs_b = [
-        SilenceRun { start_ms: 4_000, end_ms: 5_500 },
-        SilenceRun { start_ms: 7_000, end_ms: 8_500 },
+        SilenceRun {
+            start_ms: 4_000,
+            end_ms: 5_500,
+        },
+        SilenceRun {
+            start_ms: 7_000,
+            end_ms: 8_500,
+        },
     ];
     for runs in [&runs_a[..], &runs_b[..]] {
         let f = offsets(runs, AbsorbPolicy::Forward);
@@ -103,23 +116,39 @@ fn forward_offsets_distinct_from_backward_and_drop() {
 #[test]
 fn boundaries_within_50ms_of_silence_edge() {
     let runs = [
-        SilenceRun { start_ms: 5_000, end_ms: 6_000 },
-        SilenceRun { start_ms: 9_000, end_ms: 10_000 },
+        SilenceRun {
+            start_ms: 5_000,
+            end_ms: 6_000,
+        },
+        SilenceRun {
+            start_ms: 9_000,
+            end_ms: 10_000,
+        },
     ];
-    for policy in [AbsorbPolicy::Forward, AbsorbPolicy::Backward, AbsorbPolicy::Drop] {
+    for policy in [
+        AbsorbPolicy::Forward,
+        AbsorbPolicy::Backward,
+        AbsorbPolicy::Drop,
+    ] {
         let bs = boundaries_from_silences(&runs, policy);
         for b in &bs {
             let on_edge = runs.iter().any(|r| {
                 diff(b.cut_offset_ms, r.start_ms) <= 50 || diff(b.cut_offset_ms, r.end_ms) <= 50
             });
-            assert!(on_edge, "boundary {b:?} not within 50ms of any silence edge");
+            assert!(
+                on_edge,
+                "boundary {b:?} not within 50ms of any silence edge"
+            );
         }
     }
 }
 
 #[test]
 fn drop_kinds_pair_with_shared_track_index() {
-    let runs = [SilenceRun { start_ms: 5_000, end_ms: 6_000 }];
+    let runs = [SilenceRun {
+        start_ms: 5_000,
+        end_ms: 6_000,
+    }];
     let bs = boundaries_from_silences(&runs, AbsorbPolicy::Drop);
     assert_eq!(bs.len(), 2);
     assert_eq!(bs[0].kind, BoundaryKind::DropStart);
@@ -129,10 +158,16 @@ fn drop_kinds_pair_with_shared_track_index() {
 
 #[test]
 fn forward_backward_emit_cut_kind() {
-    let runs = [SilenceRun { start_ms: 5_000, end_ms: 6_000 }];
+    let runs = [SilenceRun {
+        start_ms: 5_000,
+        end_ms: 6_000,
+    }];
     for policy in [AbsorbPolicy::Forward, AbsorbPolicy::Backward] {
         let bs = boundaries_from_silences(&runs, policy);
-        assert!(bs.iter().all(|b| b.kind == BoundaryKind::Cut), "policy={policy:?}");
+        assert!(
+            bs.iter().all(|b| b.kind == BoundaryKind::Cut),
+            "policy={policy:?}"
+        );
     }
 }
 
@@ -197,12 +232,27 @@ async fn assert_clip_matches_golden(stem: &str, sha256: &str) {
         (AbsorbPolicy::Backward, &golden.backward_offsets_ms),
         (AbsorbPolicy::Drop, &golden.drop_offsets_ms),
     ] {
-        let opts = CarveOpts { absorb: policy, ..Default::default() };
-        let boundaries = carve(&clip, opts).await.unwrap_or_else(|e| panic!("carve {stem}: {e}"));
-        let got: Vec<u32> = boundaries.iter().map(|b: &Boundary| b.cut_offset_ms).collect();
-        assert_eq!(got.len(), expected.len(), "policy={policy:?} got {got:?} expected {expected:?}");
+        let opts = CarveOpts {
+            absorb: policy,
+            ..Default::default()
+        };
+        let boundaries = carve(&clip, opts)
+            .await
+            .unwrap_or_else(|e| panic!("carve {stem}: {e}"));
+        let got: Vec<u32> = boundaries
+            .iter()
+            .map(|b: &Boundary| b.cut_offset_ms)
+            .collect();
+        assert_eq!(
+            got.len(),
+            expected.len(),
+            "policy={policy:?} got {got:?} expected {expected:?}"
+        );
         for (g, e) in got.iter().zip(expected.iter()) {
-            assert!(diff(*g, *e) <= 50, "policy={policy:?} offset {g} not within 50ms of expected {e}");
+            assert!(
+                diff(*g, *e) <= 50,
+                "policy={policy:?} offset {g} not within 50ms of expected {e}"
+            );
         }
     }
 }
@@ -231,14 +281,20 @@ async fn carve_clip_c_tail_silence_keeps_final_boundary() {
     let clip = assert_fixture("clip_c.wav", CLIP_C_SHA256);
     let golden = load_golden("clip_c.golden_offsets.json");
     for (policy, expected_last) in [
-        (AbsorbPolicy::Backward, *golden.backward_offsets_ms.last().unwrap()),
+        (
+            AbsorbPolicy::Backward,
+            *golden.backward_offsets_ms.last().unwrap(),
+        ),
         (AbsorbPolicy::Drop, *golden.drop_offsets_ms.last().unwrap()),
     ] {
-        let opts = CarveOpts { absorb: policy, ..Default::default() };
+        let opts = CarveOpts {
+            absorb: policy,
+            ..Default::default()
+        };
         let boundaries = carve(&clip, opts).await.expect("carve clip_c");
-        let last = boundaries.last().unwrap_or_else(|| {
-            panic!("policy={policy:?}: tail-silence boundary missing")
-        });
+        let last = boundaries
+            .last()
+            .unwrap_or_else(|| panic!("policy={policy:?}: tail-silence boundary missing"));
         assert!(
             diff(last.cut_offset_ms, expected_last) <= 50,
             "policy={policy:?} final boundary {} not within 50ms of {expected_last}",

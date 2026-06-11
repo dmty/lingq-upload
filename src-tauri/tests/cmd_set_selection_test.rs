@@ -85,9 +85,7 @@ fn cmd_set_selection_round_trip() {
 
     // Persist again, drop the in-memory handle, re-open the store, and
     // confirm the selection survived a process boundary (JSON on disk).
-    store
-        .set_selection(&project.id, &[cid(1), cid(3)])
-        .unwrap();
+    store.set_selection(&project.id, &[cid(1), cid(3)]).unwrap();
     drop(store);
 
     let reopened: Arc<dyn ProjectStore> = Arc::new(JsonProjectStore::new(store_dir.path()));
