@@ -7,12 +7,14 @@
 //! front/back-matter tagging keys off normalised title prefixes.
 
 use std::collections::HashMap;
-use std::io::Read;
 
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use super::{normalize_title, Chapter, ChapterId, ChapterKind, EpubError};
+use super::{
+    find_case_insensitive, normalize_title, parent_dir, read_container_opf_path,
+    read_to_string_from_zip, Chapter, ChapterId, ChapterKind, EpubError,
+};
 use crate::core::text::strip_ruby;
 
 /// Marker type for the Kobo strategy. The runtime entry point is
@@ -366,120 +368,6 @@ fn extract_html_title(xml: &str) -> Option<String> {
         None
     } else {
         Some(t.to_string())
-    }
-}
-
-fn find_case_insensitive(haystack: &str, needle_lower_ascii: &str) -> Option<usize> {
-    let hb = haystack.as_bytes();
-    let nb = needle_lower_ascii.as_bytes();
-    if nb.is_empty() || hb.len() < nb.len() {
-        return None;
-    }
-    'outer: for i in 0..=hb.len() - nb.len() {
-        for j in 0..nb.len() {
-            if hb[i + j].to_ascii_lowercase() != nb[j] {
-                continue 'outer;
-            }
-        }
-        return Some(i);
-    }
-    None
-}
-
-// --- shared zip + decode helpers (cloned from kindle::* to avoid reaching
-// into a sibling module's private surface). Kept small on purpose.
-
-fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-) -> Result<String, EpubError> {
-    let xml = read_to_string_from_zip(zip, "META-INF/container.xml")?;
-    let mut reader = Reader::from_str(&xml);
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"rootfile" {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"full-path" {
-                            let v = attr
-                                .unescape_value()
-                                .map_err(|err| EpubError::Parse(err.to_string()))?;
-                            return Ok(v.into_owned());
-                        }
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(EpubError::Parse(e.to_string())),
-            _ => {}
-        }
-        buf.clear();
-    }
-    Err(EpubError::Parse("no rootfile in container.xml".into()))
-}
-
-/// Decompressed-size ceiling per zip entry. EPUB bytes are untrusted; a
-/// crafted entry can deflate to gigabytes. Real chapter XHTML tops out well
-/// under a megabyte.
-const MAX_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
-
-fn read_to_string_from_zip<R: std::io::Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    name: &str,
-) -> Result<String, EpubError> {
-    let f = zip
-        .by_name(name)
-        .map_err(|e| EpubError::Parse(format!("missing {name}: {e}")))?;
-    let mut bytes = Vec::new();
-    f.take(MAX_ENTRY_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| EpubError::Io(e.to_string()))?;
-    if bytes.len() as u64 > MAX_ENTRY_BYTES {
-        return Err(EpubError::Parse(format!(
-            "{name}: decompressed entry exceeds {MAX_ENTRY_BYTES} byte cap"
-        )));
-    }
-    decode_xml_bytes(&bytes, name)
-}
-
-fn decode_xml_bytes(bytes: &[u8], name: &str) -> Result<String, EpubError> {
-    if bytes.starts_with(&[0xFF, 0xFE]) {
-        return decode_utf16(&bytes[2..], true, name);
-    }
-    if bytes.starts_with(&[0xFE, 0xFF]) {
-        return decode_utf16(&bytes[2..], false, name);
-    }
-    let body: &[u8] = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        &bytes[3..]
-    } else {
-        bytes
-    };
-    std::str::from_utf8(body)
-        .map(|s| s.to_string())
-        .map_err(|_| EpubError::Parse(format!("{name}: not valid utf-8 / utf-16")))
-}
-
-fn decode_utf16(bytes: &[u8], le: bool, name: &str) -> Result<String, EpubError> {
-    if !bytes.len().is_multiple_of(2) {
-        return Err(EpubError::Parse(format!("{name}: truncated utf-16")));
-    }
-    let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|c| {
-            if le {
-                u16::from_le_bytes([c[0], c[1]])
-            } else {
-                u16::from_be_bytes([c[0], c[1]])
-            }
-        })
-        .collect();
-    String::from_utf16(&units).map_err(|_| EpubError::Parse(format!("{name}: invalid utf-16")))
-}
-
-fn parent_dir(p: &str) -> &str {
-    match p.rfind('/') {
-        Some(i) => &p[..i],
-        None => "",
     }
 }
 
