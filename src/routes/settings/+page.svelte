@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { commands, type TrashEntry } from "$lib/ipc/bindings";
+  import {
+    commands,
+    type BackendChoice,
+    type DevBackendInfo,
+    type TrashEntry,
+  } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { formatRelative } from "$lib/format";
 
@@ -17,6 +22,33 @@
   let purgeTimer: ReturnType<typeof setTimeout> | null = null;
   let rowBusyId = $state<string | null>(null);
   let rowErrors = $state<Record<string, string>>({});
+
+  let devBackend = $state<DevBackendInfo | null>(null);
+  let devBackendBusy = $state(false);
+  let devBackendError = $state<string | null>(null);
+
+  async function loadDevBackend() {
+    const res = await commands.cmdGetDevBackend();
+    if (res.status === "ok") {
+      devBackend = res.data;
+      devBackendError = null;
+    } else {
+      devBackendError = appErrorMessage(res.error);
+    }
+  }
+
+  async function setDevBackend(choice: BackendChoice) {
+    if (devBackendBusy) return;
+    devBackendBusy = true;
+    devBackendError = null;
+    const res = await commands.cmdSetDevBackend(choice);
+    if (res.status === "ok") {
+      await loadDevBackend();
+    } else {
+      devBackendError = appErrorMessage(res.error);
+    }
+    devBackendBusy = false;
+  }
 
   async function loadTrash() {
     const res = await commands.cmdListTrash();
@@ -135,6 +167,7 @@
   onMount(() => {
     void refresh();
     void loadTrash();
+    void loadDevBackend();
   });
 </script>
 
@@ -347,6 +380,93 @@
       </ul>
     {/if}
   </details>
+
+  {#if devBackend?.is_debug}
+    <details
+      class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
+    >
+      <summary class="cursor-pointer text-md font-semibold text-fg">
+        Developer
+      </summary>
+      <p class="mt-2 text-sm text-fg-muted">
+        Dev-only options. Hidden in release builds.
+      </p>
+
+      <div class="mt-5">
+        <h3 class="text-sm font-semibold text-fg">Secrets backend</h3>
+        <p class="mt-1 text-sm text-fg-subtle">
+          The OS keychain prompts for your login password whenever the dev
+          binary's signature changes — every <code class="tabular"
+            >cargo tauri dev</code
+          >
+          rebuild. The file shim avoids that by storing dev keys in a
+          <code class="tabular">0600</code> JSON file under app-data.
+        </p>
+
+        <fieldset
+          class="mt-4 space-y-2"
+          disabled={devBackendBusy || devBackend.env_override}
+        >
+          <label class="flex items-start gap-3">
+            <input
+              type="radio"
+              name="dev-backend"
+              value="file"
+              checked={devBackend.current === "file"}
+              onchange={() => setDevBackend("file")}
+              class="mt-0.5 h-4 w-4 accent-accent"
+            />
+            <span class="text-sm">
+              <span class="font-medium text-fg">File shim</span>
+              <span class="block text-fg-muted">
+                No keychain prompt across rebuilds. Recommended for dev.
+              </span>
+            </span>
+          </label>
+
+          <label class="flex items-start gap-3">
+            <input
+              type="radio"
+              name="dev-backend"
+              value="keychain"
+              checked={devBackend.current === "keychain"}
+              onchange={() => setDevBackend("keychain")}
+              class="mt-0.5 h-4 w-4 accent-accent"
+            />
+            <span class="text-sm">
+              <span class="font-medium text-fg">OS keychain</span>
+              <span class="block text-fg-muted">
+                Exercises the production code path; will prompt for your
+                password after each rebuild.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        {#if devBackend.env_override}
+          <p class="mt-3 text-xs text-fg-muted">
+            Forced to OS keychain by <code class="tabular"
+              >LINGQ_USE_REAL_KEYCHAIN</code
+            > env var. Unset it to use this toggle.
+          </p>
+        {/if}
+
+        {#if devBackendError}
+          <div
+            role="alert"
+            class="mt-3 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
+          >
+            {devBackendError}
+          </div>
+        {/if}
+
+        <p class="mt-4 text-xs text-fg-subtle">
+          The previously-saved API key lives in whichever backend wrote it —
+          switch and re-save to migrate.
+        </p>
+      </div>
+    </details>
+  {/if}
 
   <details class="mt-8 rounded-md border border-border bg-surface p-4 text-sm">
     <summary

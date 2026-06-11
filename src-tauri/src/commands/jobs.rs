@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use chrono::{DateTime, Utc};
 
-use super::parse_lang;
+use super::{app_data_dir, parse_lang};
 use crate::core::identity::ProjectId;
 use crate::core::job::{run_project_job, JobSink};
 use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
@@ -21,7 +21,7 @@ use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::lingq::LingqClient;
-use crate::secrets::{RealKeyring, SecretsStore};
+use crate::secrets::SecretsStore;
 
 /// Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
 /// rehydration. Includes only the fields the Run screen needs to render chips.
@@ -117,7 +117,7 @@ pub async fn cmd_start_project_job(
     cancels: tauri::State<'_, JobCancelMap>,
     project_id: ProjectId,
 ) -> Result<Uuid, AppError> {
-    let secrets = SecretsStore::new(Box::new(RealKeyring::new()));
+    let secrets = SecretsStore::new_default(&app_data_dir(&app)?);
     let key = secrets.load_key()?.ok_or(AppError::MissingApiKey)?;
 
     let project = store
