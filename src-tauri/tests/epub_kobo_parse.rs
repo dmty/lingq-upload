@@ -83,11 +83,26 @@ fn build_kobo_epub() -> Vec<u8> {
         ("META-INF/container.xml", CONTAINER_XML.as_bytes().to_vec()),
         ("OEBPS/content.opf", opf_with_nav().as_bytes().to_vec()),
         ("OEBPS/nav.xhtml", nav_xhtml().as_bytes().to_vec()),
-        ("OEBPS/cover.xhtml", kobo_body("Cover image alt text.").into_bytes()),
-        ("OEBPS/ch1.xhtml", kobo_body("Opening paragraph.").into_bytes()),
-        ("OEBPS/ch2.xhtml", kobo_body("Middle paragraph.").into_bytes()),
-        ("OEBPS/ch3.xhtml", kobo_body("Closing paragraph.").into_bytes()),
-        ("OEBPS/ata.xhtml", kobo_body("Author bio text.").into_bytes()),
+        (
+            "OEBPS/cover.xhtml",
+            kobo_body("Cover image alt text.").into_bytes(),
+        ),
+        (
+            "OEBPS/ch1.xhtml",
+            kobo_body("Opening paragraph.").into_bytes(),
+        ),
+        (
+            "OEBPS/ch2.xhtml",
+            kobo_body("Middle paragraph.").into_bytes(),
+        ),
+        (
+            "OEBPS/ch3.xhtml",
+            kobo_body("Closing paragraph.").into_bytes(),
+        ),
+        (
+            "OEBPS/ata.xhtml",
+            kobo_body("Author bio text.").into_bytes(),
+        ),
     ];
     let mut buf = Vec::new();
     {
@@ -137,7 +152,10 @@ fn detected_kobo_routes_through_kobo_strategy() {
     // Autodetect routing must reach the same output as the pinned strategy —
     // i.e. parse_epub_bytes actually goes through detection, not a default.
     let auto = parse_epub_bytes(&bytes).expect("autodetect parse");
-    assert_eq!(auto, chapters, "autodetect did not route to the Kobo strategy");
+    assert_eq!(
+        auto, chapters,
+        "autodetect did not route to the Kobo strategy"
+    );
 }
 
 #[test]
@@ -318,7 +336,8 @@ fn missing_nav_falls_back_to_html_title() {
     {
         let cursor = Cursor::new(&mut buf);
         let mut zip = ZipWriter::new(cursor);
-        let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, body) in [
             ("mimetype", b"application/epub+zip" as &[u8]),
             ("META-INF/container.xml", CONTAINER_XML.as_bytes()),
@@ -337,6 +356,66 @@ fn missing_nav_falls_back_to_html_title() {
     assert_eq!(chapters[0].title, "Prologue");
     assert_eq!(chapters[1].title, "Chapter Two");
     assert_eq!(chapters[0].kind, ChapterKind::FrontMatter);
+}
+
+/// Calibre-converted EPUBs stamp the book title into every spine file's
+/// `<head><title>` — using that as a chapter fallback would paint every
+/// chapter in the list with the book name. When the same head title repeats
+/// across 2+ spine entries with no NCX hit, the fallback must drop the
+/// repeated title and fall through to "Chapter N".
+#[test]
+fn repeated_head_title_treated_as_book_title_and_skipped() {
+    let opf = r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata/>
+  <manifest>
+    <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+    <itemref idref="c2"/>
+    <itemref idref="c3"/>
+  </spine>
+</package>"#;
+    // Same `<title>` everywhere — the book title pattern.
+    let body = |para: &str| -> String {
+        format!(
+            r#"<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>My Trade Book Volume 1</title></head>
+<body><p><span class="koboSpan">{para}</span></p></body></html>"#
+        )
+    };
+    let mut buf = Vec::new();
+    {
+        let cursor = Cursor::new(&mut buf);
+        let mut zip = ZipWriter::new(cursor);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body_bytes) in [
+            ("mimetype", b"application/epub+zip".to_vec()),
+            ("META-INF/container.xml", CONTAINER_XML.as_bytes().to_vec()),
+            ("OEBPS/content.opf", opf.as_bytes().to_vec()),
+            ("OEBPS/ch1.xhtml", body("a").into_bytes()),
+            ("OEBPS/ch2.xhtml", body("b").into_bytes()),
+            ("OEBPS/ch3.xhtml", body("c").into_bytes()),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(&body_bytes).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+    let chapters = parse_epub_with_strategy(&buf, HeadingStrategy::Kobo).expect("parse");
+    assert_eq!(
+        chapters
+            .iter()
+            .map(|c| c.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Chapter 1", "Chapter 2", "Chapter 3"],
+        "repeated head title is the book title; must not leak into chapter list",
+    );
 }
 
 #[test]
