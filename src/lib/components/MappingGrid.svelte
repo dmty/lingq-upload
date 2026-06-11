@@ -68,8 +68,6 @@
     mo.observe(gridRef, {
       childList: true,
       subtree: true,
-      attributes: true,
-      characterData: true,
     });
     window.addEventListener("scroll", bumpLayout, true);
     window.addEventListener("resize", bumpLayout);
@@ -119,16 +117,32 @@
 
   const connectors = $derived(computeConnectors());
 
-  function confidenceClass(c: number): string {
-    if (c >= 0.8) return "border-l-4 border-l-success";
-    if (c >= 0.6) return "border-l-4 border-l-warning";
-    return "border-l-4 border-l-error";
-  }
+  type ConfidenceBand = {
+    borderClass: string;
+    label: "high" | "med" | "low";
+    textClass: string;
+  };
 
-  function confidenceLabel(c: number): string {
-    if (c >= 0.8) return "high";
-    if (c >= 0.6) return "med";
-    return "low";
+  function confidenceBand(c: number): ConfidenceBand {
+    if (c >= 0.8) {
+      return {
+        borderClass: "border-l-4 border-l-success",
+        label: "high",
+        textClass: "text-success",
+      };
+    }
+    if (c >= 0.6) {
+      return {
+        borderClass: "border-l-4 border-l-warning",
+        label: "med",
+        textClass: "text-warning",
+      };
+    }
+    return {
+      borderClass: "border-l-4 border-l-error",
+      label: "low",
+      textClass: "text-error",
+    };
   }
 
   function pairFor(chapterId: string) {
@@ -205,8 +219,10 @@
   }
 
   // Re-render the "just now → 30s ago" footer text passively (no animation).
+  // Interval runs only while there's a save timestamp to display.
   let footerTick = $state(0);
   $effect(() => {
+    if (lastSavedAt == null) return;
     const t = setInterval(() => {
       footerTick++;
     }, 5_000);
@@ -250,11 +266,12 @@
       {#each chapters as chapter (chapter.id)}
         {@const pair = pairFor(chapter.id)}
         {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
+        {@const band = confidenceBand(displayConf)}
         {@const touched = pair?.touched ?? false}
         <li
           bind:this={chapterRowRefs[chapter.id]}
           class="flex items-center gap-2 rounded-sm bg-surface px-2 py-1.5 text-sm {pair
-            ? confidenceClass(displayConf)
+            ? band.borderClass
             : 'border-l-4 border-l-transparent'}"
           data-testid="mapping-chapter-row"
           data-chapter-id={chapter.id}
@@ -269,17 +286,12 @@
           <span class="flex-1 truncate text-fg">{chapter.title}</span>
           {#if pair}
             <span
-              class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {displayConf >=
-              0.8
-                ? 'text-success'
-                : displayConf >= 0.6
-                  ? 'text-warning'
-                  : 'text-error'}"
+              class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {band.textClass}"
               data-testid="confidence-chip"
               data-confidence={displayConf}
-              data-confidence-band={confidenceLabel(displayConf)}
+              data-confidence-band={band.label}
             >
-              {confidenceLabel(displayConf)}
+              {band.label}
             </span>
             {#if touched}
               <span
@@ -321,11 +333,9 @@
       {/each}
     </svg>
 
-    <div class="col-start-2"></div>
-
     <!-- Right column: tracks -->
     <ul
-      class="space-y-1"
+      class="col-start-3 space-y-1"
       data-testid="mapping-track-col"
       role="listbox"
       aria-label="Audio tracks"
