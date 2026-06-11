@@ -77,7 +77,7 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
 
     // href→title map sourced from nav.xhtml when present. Keys are resolved
     // zip paths so spine lookups match directly.
-    let nav_titles: HashMap<String, String> = match opf.nav_href.as_deref() {
+    let (nav_titles, _nav_count): (HashMap<String, String>, usize) = match opf.nav_href.as_deref() {
         Some(nav_href) => {
             let full = join_zip_path(&opf.base_dir, nav_href).unwrap_or_default();
             match read_to_string_from_zip(zip, &full) {
@@ -85,10 +85,10 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
                     let nav_base = parent_dir(&full).to_string();
                     parse_nav_titles(&xml, &nav_base)
                 }
-                Err(_) => HashMap::new(),
+                Err(_) => (HashMap::new(), 0),
             }
         }
-        None => HashMap::new(),
+        None => (HashMap::new(), 0),
     };
 
     // (spine_href, title, body) tuples for surviving chapters. spine_href is
@@ -238,21 +238,25 @@ fn parse_opf(opf_xml: &str, opf_path: &str) -> Result<OpfData, EpubError> {
 /// Hrefs are joined against `nav_base` so the returned keys match the spine
 /// resolution.
 ///
-/// If the document declares no `epub:type="toc"` on any `<nav>` but contains
-/// exactly one `<nav>` overall, that nav is accepted as the toc. Producers
-/// (some Sigil exports) omit the epub:type attribute when there is only one
-/// nav and the relationship is unambiguous.
+/// Returns the resolved-href → title map plus the total `<nav>` element
+/// count seen during the walk. If no nav declares `epub:type="toc"` but the
+/// document contains exactly one `<nav>` overall, that sole nav's entries
+/// are kept as the toc (some Sigil exports drop epub:type when there is no
+/// ambiguity).
 ///
 /// Sub-entries from a nested `<ol>` are flattened into the same flat map; the
 /// hash is href-keyed so nested duplicates collapse onto the same chapter.
-fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
-    let nav_count = count_nav_elements(xml);
-    let mut out: HashMap<String, String> = HashMap::new();
+fn parse_nav_titles(xml: &str, nav_base: &str) -> (HashMap<String, String>, usize) {
+    let mut toc_out: HashMap<String, String> = HashMap::new();
+    let mut sole_candidate: HashMap<String, String> = HashMap::new();
+    let mut saw_toc = false;
+    let mut nav_count: usize = 0;
+
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
 
-    let mut in_toc_nav = false;
     let mut nav_depth = 0i32;
+    let mut current_is_toc = false;
     let mut pending_href: Option<String> = None;
     let mut text_buf = String::new();
     let mut in_a = false;
@@ -262,23 +266,21 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
             Ok(Event::Start(e)) => {
                 let name = e.name();
                 if name.as_ref() == b"nav" {
-                    let is_toc = e.attributes().flatten().any(|a| {
-                        let k = a.key.as_ref();
-                        (k == b"epub:type" || k.ends_with(b":type") || k == b"type")
-                            && a.unescape_value()
-                                .map(|v| v.split_whitespace().any(|t| t == "toc"))
-                                .unwrap_or(false)
-                    });
-                    // Sole-nav relaxation: if the doc has exactly one <nav>
-                    // and that one lacks epub:type, treat it as the toc.
-                    let accept = is_toc || (!in_toc_nav && nav_count == 1);
-                    if accept && !in_toc_nav {
-                        in_toc_nav = true;
-                        nav_depth = 1;
-                    } else if in_toc_nav {
-                        nav_depth += 1;
+                    if nav_depth == 0 {
+                        nav_count += 1;
+                        current_is_toc = e.attributes().flatten().any(|a| {
+                            let k = a.key.as_ref();
+                            (k == b"epub:type" || k.ends_with(b":type") || k == b"type")
+                                && a.unescape_value()
+                                    .map(|v| v.split_whitespace().any(|t| t == "toc"))
+                                    .unwrap_or(false)
+                        });
+                        if current_is_toc {
+                            saw_toc = true;
+                        }
                     }
-                } else if in_toc_nav && name.as_ref() == b"a" {
+                    nav_depth += 1;
+                } else if nav_depth > 0 && name.as_ref() == b"a" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"href" {
                             if let Ok(v) = attr.unescape_value() {
@@ -288,6 +290,11 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                     }
                     text_buf.clear();
                     in_a = true;
+                }
+            }
+            Ok(Event::Empty(e)) => {
+                if e.name().as_ref() == b"nav" && nav_depth == 0 {
+                    nav_count += 1;
                 }
             }
             Ok(Event::Text(t)) => {
@@ -306,17 +313,20 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
                             let path = path_part(&href);
                             let resolved = join_zip_path(nav_base, &path).unwrap_or_default();
                             if !resolved.is_empty() {
-                                out.entry(resolved).or_insert(title);
+                                if current_is_toc {
+                                    toc_out.entry(resolved).or_insert(title);
+                                } else {
+                                    sole_candidate.entry(resolved).or_insert(title);
+                                }
                             }
                         }
                     }
                     text_buf.clear();
                     in_a = false;
-                } else if name.as_ref() == b"nav" && in_toc_nav {
+                } else if name.as_ref() == b"nav" && nav_depth > 0 {
                     nav_depth -= 1;
-                    if nav_depth <= 0 {
-                        in_toc_nav = false;
-                        nav_depth = 0;
+                    if nav_depth == 0 {
+                        current_is_toc = false;
                     }
                 }
             }
@@ -326,27 +336,15 @@ fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, String> {
         }
         buf.clear();
     }
-    out
-}
 
-fn count_nav_elements(xml: &str) -> usize {
-    let mut reader = Reader::from_str(xml);
-    let mut buf = Vec::new();
-    let mut count = 0usize;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"nav" {
-                    count += 1;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    count
+    let out = if saw_toc {
+        toc_out
+    } else if nav_count == 1 {
+        sole_candidate
+    } else {
+        HashMap::new()
+    };
+    (out, nav_count)
 }
 
 fn path_part(href: &str) -> String {
@@ -579,7 +577,8 @@ mod tests {
     </ol>
   </nav>
 </body></html>"#;
-        let m = parse_nav_titles(nav, "OEBPS");
+        let (m, n) = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(n, 1);
         assert_eq!(m.get("OEBPS/ch1.xhtml").map(String::as_str), Some("Cover"));
         assert_eq!(
             m.get("OEBPS/ch2.xhtml").map(String::as_str),
@@ -605,7 +604,8 @@ mod tests {
     </ol>
   </nav>
 </body></html>"#;
-        let m = parse_nav_titles(nav, "OEBPS");
+        let (m, n) = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(n, 2);
         assert_eq!(m.len(), 1);
         assert_eq!(m.get("OEBPS/ch1.xhtml").map(String::as_str), Some("Real Chapter"));
     }
@@ -630,7 +630,7 @@ mod tests {
     </ol>
   </nav>
 </body></html>"#;
-        let m = parse_nav_titles(nav, "OEBPS");
+        let (m, _) = parse_nav_titles(nav, "OEBPS");
         assert_eq!(
             m.get("OEBPS/part1.xhtml").map(String::as_str),
             Some("Part One"),
@@ -654,7 +654,8 @@ mod tests {
     </ol>
   </nav>
 </body></html>"#;
-        let m = parse_nav_titles(nav, "OEBPS");
+        let (m, n) = parse_nav_titles(nav, "OEBPS");
+        assert_eq!(n, 1);
         assert_eq!(
             m.get("OEBPS/ch1.xhtml").map(String::as_str),
             Some("Only Chapter"),
