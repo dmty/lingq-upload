@@ -46,6 +46,13 @@ const state = $state<State>({
 let pendingFlush: Promise<void> = Promise.resolve();
 
 let opDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+// Wall-clock of the first enqueue in the current debounce window. Used to
+// cap how long a rapid burst can starve the flush: once 500ms has elapsed
+// since the first op, the next op flushes immediately instead of resetting
+// the timer again.
+let firstEnqueueAt: number | null = null;
+const OP_DEBOUNCE_MS = 500;
+const OP_MAX_WAIT_MS = 500;
 type QueuedOp = {
   op: MappingOp;
   // mappingState captured at enqueue time, before any optimistic mutation
@@ -67,6 +74,7 @@ function drainQueue() {
     clearTimeout(opDebounceTimer);
     opDebounceTimer = null;
   }
+  firstEnqueueAt = null;
   for (const q of pendingOps.splice(0)) settle(q);
 }
 
@@ -238,11 +246,25 @@ export const mapping = {
         reject,
       });
       state.pendingWrites += 1;
+      const now = Date.now();
+      if (firstEnqueueAt == null) firstEnqueueAt = now;
+      // Max-wait cap: if the first op in this burst is already older than
+      // the debounce window, flush now instead of resetting the timer.
+      if (now - firstEnqueueAt >= OP_MAX_WAIT_MS) {
+        if (opDebounceTimer != null) {
+          clearTimeout(opDebounceTimer);
+          opDebounceTimer = null;
+        }
+        firstEnqueueAt = null;
+        pendingFlush = pendingFlush.then(flushPendingOps, flushPendingOps);
+        return;
+      }
       if (opDebounceTimer != null) clearTimeout(opDebounceTimer);
       opDebounceTimer = setTimeout(() => {
         opDebounceTimer = null;
+        firstEnqueueAt = null;
         pendingFlush = pendingFlush.then(flushPendingOps, flushPendingOps);
-      }, 500);
+      }, OP_DEBOUNCE_MS);
     });
   },
 
@@ -276,6 +298,7 @@ export const mapping = {
     if (opDebounceTimer != null) {
       clearTimeout(opDebounceTimer);
       opDebounceTimer = null;
+      firstEnqueueAt = null;
       pendingFlush = pendingFlush.then(flushPendingOps, flushPendingOps);
     }
     return pendingFlush;
