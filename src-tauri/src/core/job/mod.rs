@@ -15,10 +15,11 @@ use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
+use crate::core::matcher::ops::RECOMPUTED_CONFIDENCE;
 use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
-    auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingState, MatchOutcome,
-    MismatchCondition, MismatchResponse,
+    auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
+    MatchOutcome, MismatchCondition, MismatchResponse,
 };
 use crate::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectStage};
 use crate::core::store::ProjectStore;
@@ -601,6 +602,98 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
             bucket_preview,
         })),
         _ => Ok(None),
+    }
+}
+
+/// Build the initial [`MappingState`] that backs the mapping-grid review
+/// step after the user picks a mismatch response. One pair per eligible
+/// chapter; pairs share a `track_id` when multiple chapters belong to the
+/// same `SplitProportional` bucket. Returns `Ok(None)` for `Cancel` or for
+/// projects whose sources resolve to zero chapters or zero tracks (the grid
+/// has nothing useful to render).
+pub async fn seed_mapping_for_response(
+    project: &Project,
+    response: MismatchResponse,
+) -> Result<Option<MappingState>, AppError> {
+    if matches!(response, MismatchResponse::Cancel | MismatchResponse::Unknown) {
+        return Ok(None);
+    }
+    let tracks = resolve_audio_tracks(project).await?;
+    let (epub_bytes, strategy) = epub_inputs(project);
+    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+    if chapters.is_empty() || tracks.is_empty() {
+        return Ok(None);
+    }
+    let pairs: Vec<MappingPair> = match response {
+        MismatchResponse::SingleLesson => {
+            let tid = track_id_for(&tracks[0]);
+            chapters
+                .iter()
+                .map(|c| new_pair(c.id.clone(), Some(tid.clone())))
+                .collect()
+        }
+        MismatchResponse::SplitProportional => {
+            let text_chars: Vec<usize> =
+                chapters.iter().map(|c| c.body.chars().count()).collect();
+            let atoms: Vec<ChapterAtom> = tracks
+                .iter()
+                .map(|t| {
+                    let (start, end) = t
+                        .window
+                        .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
+                    ChapterAtom {
+                        start,
+                        end,
+                        title: t.title.clone(),
+                    }
+                })
+                .collect();
+            let buckets = proportional_pack(&atoms, &text_chars);
+            let mut pairs: Vec<MappingPair> = Vec::with_capacity(chapters.len());
+            for (bucket_idx, bucket) in buckets.iter().enumerate() {
+                let tid = track_id_for(&tracks[bucket_idx]);
+                for ci in bucket.text_range.clone() {
+                    pairs.push(new_pair(chapters[ci].id.clone(), Some(tid.clone())));
+                }
+            }
+            // Guard the rare degenerate case where ranges don't cover every
+            // chapter so the grid stays consistent with the chapter list.
+            for c in chapters.iter() {
+                if !pairs.iter().any(|p| p.chapter_id == c.id) {
+                    pairs.push(new_pair(c.id.clone(), None));
+                }
+            }
+            pairs
+        }
+        MismatchResponse::PairAccept | MismatchResponse::PairDrop => {
+            let n = chapters.len().min(tracks.len());
+            chapters
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    let tid = if i < n { Some(track_id_for(&tracks[i])) } else { None };
+                    new_pair(c.id.clone(), tid)
+                })
+                .collect()
+        }
+        MismatchResponse::Cancel | MismatchResponse::Unknown => return Ok(None),
+    };
+    Ok(Some(MappingState {
+        pairs,
+        parking_lot: Vec::new(),
+        op_id: 0,
+    }))
+}
+
+fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {
+    MappingPair {
+        chapter_id,
+        track_id,
+        confidence: RECOMPUTED_CONFIDENCE,
+        touched: false,
+        original_confidence: RECOMPUTED_CONFIDENCE,
     }
 }
 

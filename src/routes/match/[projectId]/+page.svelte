@@ -256,7 +256,11 @@
     if (typeof sessionStorage !== "undefined") {
       sessionStorage.removeItem(previewKey);
     }
-    goto(`/run/${projectKey}`);
+    // Re-hydrate from the backend so the seeded MappingState replaces the
+    // resolver UI with the mapping grid. The grid's own Continue button
+    // takes the user to /run.
+    await mapping.load(projectKey);
+    busy = false;
   }
 </script>
 

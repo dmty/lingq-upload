@@ -3,13 +3,14 @@ use std::sync::Arc;
 use chrono::Utc;
 
 use crate::core::identity::ProjectId;
-use crate::core::job::{inspect_mismatch, MismatchInspection};
+use crate::core::job::{inspect_mismatch, seed_mapping_for_response, MismatchInspection};
 use crate::core::matcher::{allowed, MismatchCondition, MismatchResponse};
 use crate::core::project::MatcherDecision;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 
-/// Record the user's matcher decision and advance the project.
+/// Record the user's matcher decision and seed the initial mapping-grid
+/// state so the review step has pairs to render.
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_matcher_resolve(
@@ -20,22 +21,30 @@ pub async fn cmd_matcher_resolve(
     chapter_count: usize,
     track_count: usize,
 ) -> Result<(), AppError> {
-    let mut project = store
+    let project = store
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     let preselect = allowed(condition).1;
-    project.matcher_decision = Some(MatcherDecision {
+    let decision = MatcherDecision {
         condition,
         response,
         chapter_count,
         track_count,
         user_overrode: response != preselect,
         decided_at: Utc::now(),
-    });
+    };
+    // Resolve sources outside the store lock — pure read-only filesystem
+    // work; the atomic write below applies decision + mapping together.
+    let seeded = seed_mapping_for_response(&project, response).await?;
     store
-        .put(&project)
-        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
+        .update(&project_id, &mut |p| {
+            p.matcher_decision = Some(decision.clone());
+            if seeded.is_some() {
+                p.mapping = seeded.clone();
+            }
+        })
+        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
     Ok(())
 }
 
