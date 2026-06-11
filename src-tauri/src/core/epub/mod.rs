@@ -1,6 +1,9 @@
+mod body;
 pub mod detect;
+pub mod kindle;
 pub mod kobo;
 pub mod parse;
+mod toc;
 
 use std::fmt;
 use std::io::Read;
@@ -40,9 +43,7 @@ pub fn autodetect_vendor_bytes(bytes: &[u8]) -> Result<VendorDetection, EpubErro
 /// Tagged by the heading strategy at parse time. `Body` is the default;
 /// `FrontMatter` / `BackMatter` flag preface / epilogue chapters so the UI
 /// can preselect them as skipped.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ChapterKind {
     #[default]
