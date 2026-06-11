@@ -197,6 +197,60 @@ export const tauriStubInitScript = `
             if (key in byProject) return byProject[key];
             return window.__matcherInspection__ || null;
         },
+        // Mirror the Rust backend: record the decision and seed an initial
+        // MappingState so the next cmd_project_load returns it and the page
+        // renders the mapping grid for review.
+        cmd_matcher_resolve: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const response = args && args.response;
+            if (response === "cancel" || response === "unknown") return null;
+            const chapters = window.__pickerState__.chaptersByProject[key] || [];
+            const seeded = window.__matcherSeedByProject__ && window.__matcherSeedByProject__[key];
+            let pairs = [];
+            if (seeded && Array.isArray(seeded.pairs)) {
+                pairs = seeded.pairs;
+            } else if (response === "single_lesson") {
+                const tid = "t0";
+                pairs = chapters.map((c) => ({
+                    chapter_id: c.id,
+                    track_id: tid,
+                    confidence: 1.0,
+                    touched: false,
+                    original_confidence: 1.0,
+                }));
+            } else if (response === "split_proportional") {
+                const trackCount = (args && args.trackCount) || 1;
+                const n = chapters.length;
+                pairs = chapters.map((c, i) => {
+                    const bucket = Math.min(
+                        trackCount - 1,
+                        Math.floor((i * trackCount) / Math.max(1, n)),
+                    );
+                    return {
+                        chapter_id: c.id,
+                        track_id: "t" + bucket,
+                        confidence: 1.0,
+                        touched: false,
+                        original_confidence: 1.0,
+                    };
+                });
+            } else {
+                // pair_accept / pair_drop: positional pairing.
+                const trackCount = (args && args.trackCount) || 0;
+                pairs = chapters.map((c, i) => ({
+                    chapter_id: c.id,
+                    track_id: i < trackCount ? "t" + i : null,
+                    confidence: 1.0,
+                    touched: false,
+                    original_confidence: 1.0,
+                }));
+            }
+            const mappings = readMappings();
+            mappings[key] = { pairs, parking_lot: [], op_id: 0 };
+            writeMappings(mappings);
+            return null;
+        },
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't

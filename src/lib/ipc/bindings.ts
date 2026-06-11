@@ -200,7 +200,8 @@ async cmdCreateProjectWithResolution(candidate: Candidate, language: string, col
 }
 },
 /**
- * Record the user's matcher decision and advance the project.
+ * Record the user's matcher decision and seed the initial mapping-grid
+ * state so the review step has pairs to render.
  */
 async cmdMatcherResolve(projectId: ProjectId, condition: MismatchCondition, response: MismatchResponse, chapterCount: number, trackCount: number) : Promise<Result<null, AppError>> {
     try {
