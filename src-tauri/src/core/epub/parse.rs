@@ -57,12 +57,13 @@ pub fn parse_epub_with_strategy(
 }
 
 mod kindle {
-    use std::io::Read;
-
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
-    use super::super::ChapterId;
+    use super::super::{
+        find_case_insensitive, parent_dir, read_container_opf_path, read_to_string_from_zip,
+        ChapterId,
+    };
     use super::{Chapter, EpubError};
     use crate::core::text::strip_ruby;
 
@@ -105,124 +106,6 @@ mod kindle {
             });
         }
         Ok(chapters)
-    }
-
-    /// Decompressed-size ceiling per zip entry. EPUB bytes are untrusted; a
-    /// crafted entry can deflate to gigabytes.
-    const MAX_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
-
-    /// Read a zip entry as a `String`, sniffing UTF-8 / UTF-16 (LE/BE) BOMs.
-    /// EPUBs in the wild are mostly UTF-8 with the occasional UTF-16 (Kindle).
-    /// Other encodings return a parse error rather than mojibake.
-    fn read_to_string_from_zip<R: std::io::Read + std::io::Seek>(
-        zip: &mut zip::ZipArchive<R>,
-        name: &str,
-    ) -> Result<String, EpubError> {
-        let f = zip
-            .by_name(name)
-            .map_err(|e| EpubError::Parse(format!("missing {name}: {e}")))?;
-        let mut bytes = Vec::new();
-        f.take(MAX_ENTRY_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| EpubError::Io(e.to_string()))?;
-        if bytes.len() as u64 > MAX_ENTRY_BYTES {
-            return Err(EpubError::Parse(format!(
-                "{name}: decompressed entry exceeds {MAX_ENTRY_BYTES} byte cap"
-            )));
-        }
-        decode_xml_bytes(&bytes, name)
-    }
-
-    fn decode_xml_bytes(bytes: &[u8], name: &str) -> Result<String, EpubError> {
-        // UTF-16 LE BOM.
-        if bytes.starts_with(&[0xFF, 0xFE]) {
-            return decode_utf16(&bytes[2..], true, name);
-        }
-        // UTF-16 BE BOM.
-        if bytes.starts_with(&[0xFE, 0xFF]) {
-            return decode_utf16(&bytes[2..], false, name);
-        }
-        // UTF-8 BOM.
-        let body: &[u8] = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
-            &bytes[3..]
-        } else {
-            bytes
-        };
-        match std::str::from_utf8(body) {
-            Ok(s) => Ok(s.to_string()),
-            Err(_) => {
-                // Detect declared encoding for a helpful error; only utf-8 and
-                // utf-16 are supported for now.
-                let declared = sniff_xml_encoding(body).unwrap_or_else(|| "unknown".into());
-                Err(EpubError::Parse(format!(
-                    "{name}: unsupported text encoding '{declared}' (only utf-8 and utf-16 are supported)"
-                )))
-            }
-        }
-    }
-
-    fn decode_utf16(bytes: &[u8], little_endian: bool, name: &str) -> Result<String, EpubError> {
-        if !bytes.len().is_multiple_of(2) {
-            return Err(EpubError::Parse(format!("{name}: truncated utf-16 stream")));
-        }
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|c| {
-                if little_endian {
-                    u16::from_le_bytes([c[0], c[1]])
-                } else {
-                    u16::from_be_bytes([c[0], c[1]])
-                }
-            })
-            .collect();
-        String::from_utf16(&units)
-            .map_err(|_| EpubError::Parse(format!("{name}: invalid utf-16 sequence")))
-    }
-
-    fn sniff_xml_encoding(bytes: &[u8]) -> Option<String> {
-        let head = &bytes[..bytes.len().min(256)];
-        let lc: Vec<u8> = head.iter().map(|b| b.to_ascii_lowercase()).collect();
-        let key = b"encoding=";
-        let idx = lc.windows(key.len()).position(|w| w == key)?;
-        let after = &head[idx + key.len()..];
-        let quote = *after.first()?;
-        if quote != b'"' && quote != b'\'' {
-            return None;
-        }
-        let rest = &after[1..];
-        let end = rest.iter().position(|&b| b == quote)?;
-        std::str::from_utf8(&rest[..end])
-            .ok()
-            .map(|s| s.to_string())
-    }
-
-    fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
-        zip: &mut zip::ZipArchive<R>,
-    ) -> Result<String, EpubError> {
-        let xml = read_to_string_from_zip(zip, "META-INF/container.xml")?;
-        let mut reader = Reader::from_str(&xml);
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"rootfile" {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"full-path" {
-                                let v = attr
-                                    .unescape_value()
-                                    .map_err(|err| EpubError::Parse(err.to_string()))?;
-                                return Ok(v.into_owned());
-                            }
-                        }
-                    }
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => return Err(EpubError::Parse(e.to_string())),
-                _ => {}
-            }
-            buf.clear();
-        }
-        Err(EpubError::Parse("no rootfile in container.xml".into()))
     }
 
     fn parse_opf_spine(opf_xml: &str, opf_path: &str) -> Result<(Vec<String>, String), EpubError> {
@@ -273,13 +156,6 @@ mod kindle {
             .filter_map(|idref| manifest.get(&idref).cloned())
             .collect();
         Ok((hrefs, base_dir))
-    }
-
-    fn parent_dir(p: &str) -> &str {
-        match p.rfind('/') {
-            Some(i) => &p[..i],
-            None => "",
-        }
     }
 
     /// Resolve a manifest href against the OPF base directory.
@@ -449,25 +325,6 @@ mod kindle {
         None
     }
 
-    /// Case-insensitive substring search where the needle is already lower-case
-    /// ASCII. Returns the byte offset of the first match in `haystack`.
-    fn find_case_insensitive(haystack: &str, needle_lower_ascii: &str) -> Option<usize> {
-        let hb = haystack.as_bytes();
-        let nb = needle_lower_ascii.as_bytes();
-        if nb.is_empty() || hb.len() < nb.len() {
-            return None;
-        }
-        'outer: for i in 0..=hb.len() - nb.len() {
-            for j in 0..nb.len() {
-                if hb[i + j].to_ascii_lowercase() != nb[j] {
-                    continue 'outer;
-                }
-            }
-            return Some(i);
-        }
-        None
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -534,54 +391,5 @@ mod kindle {
             assert_eq!(extract_first_heading(html), Some("Second-level".into()));
         }
 
-        #[test]
-        fn decode_xml_bytes_utf8_passthrough() {
-            let s = decode_xml_bytes(b"<?xml version=\"1.0\"?><a/>", "x.xml").unwrap();
-            assert!(s.starts_with("<?xml"));
-        }
-
-        #[test]
-        fn decode_xml_bytes_utf8_bom_stripped() {
-            let mut b = vec![0xEF, 0xBB, 0xBF];
-            b.extend_from_slice(b"<a/>");
-            let s = decode_xml_bytes(&b, "x.xml").unwrap();
-            assert_eq!(s, "<a/>");
-        }
-
-        #[test]
-        fn decode_xml_bytes_utf16_le_with_bom() {
-            // <?xml version="1.0" encoding="utf-16"?><a/> in UTF-16 LE with BOM.
-            let s_orig = "<?xml version=\"1.0\"?><a/>";
-            let mut bytes = vec![0xFF, 0xFE];
-            for u in s_orig.encode_utf16() {
-                bytes.extend_from_slice(&u.to_le_bytes());
-            }
-            let s = decode_xml_bytes(&bytes, "x.xml").unwrap();
-            assert_eq!(s, s_orig);
-        }
-
-        #[test]
-        fn decode_xml_bytes_utf16_be_with_bom() {
-            let s_orig = "<a>漢</a>";
-            let mut bytes = vec![0xFE, 0xFF];
-            for u in s_orig.encode_utf16() {
-                bytes.extend_from_slice(&u.to_be_bytes());
-            }
-            let s = decode_xml_bytes(&bytes, "x.xml").unwrap();
-            assert_eq!(s, s_orig);
-        }
-
-        #[test]
-        fn decode_xml_bytes_rejects_unknown_encoding() {
-            // Latin-1-ish bytes that are not valid utf-8.
-            let bytes = b"<?xml version=\"1.0\" encoding=\"latin-1\"?>\xE9".to_vec();
-            let err = decode_xml_bytes(&bytes, "x.xml").unwrap_err();
-            match err {
-                EpubError::Parse(msg) => {
-                    assert!(msg.contains("latin-1"), "got {msg}");
-                }
-                _ => panic!("expected Parse"),
-            }
-        }
     }
 }
