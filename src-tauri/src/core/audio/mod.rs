@@ -40,6 +40,11 @@ const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
 /// Truncate captured ffmpeg stderr to keep error payloads bounded for logs / IPC.
 const STDERR_CAPTURE_BYTES: usize = 4 * 1024;
 
+/// Hard cap on stderr buffered for `silencedetect` parsing. A long real-world
+/// audiobook produces well under 1 MiB of detector lines; 4 MiB bounds the
+/// worst case so a pathological ffmpeg log can't exhaust RAM before we parse.
+pub(crate) const MAX_STDERR_PARSE_BYTES: usize = 4 * 1024 * 1024;
+
 #[derive(Error, Debug, Serialize, Deserialize, Type, Clone)]
 #[serde(tag = "kind", content = "message")]
 #[allow(dead_code)]
