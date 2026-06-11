@@ -96,37 +96,24 @@ pub fn boundaries_from_silences(runs: &[SilenceRun], policy: AbsorbPolicy) -> Ve
     let mut out = Vec::with_capacity(runs.len() * 2);
     let mut next_track: usize = 1;
     for run in runs {
-        match policy {
-            AbsorbPolicy::Forward => {
-                out.push(Boundary {
-                    track_index: next_track,
-                    cut_offset_ms: run.end_ms,
-                    kind: BoundaryKind::Cut,
-                });
-                next_track += 1;
-            }
-            AbsorbPolicy::Backward => {
-                out.push(Boundary {
-                    track_index: next_track,
-                    cut_offset_ms: run.start_ms,
-                    kind: BoundaryKind::Cut,
-                });
-                next_track += 1;
-            }
-            AbsorbPolicy::Drop => {
-                out.push(Boundary {
-                    track_index: next_track,
-                    cut_offset_ms: run.start_ms,
-                    kind: BoundaryKind::DropStart,
-                });
-                out.push(Boundary {
-                    track_index: next_track,
-                    cut_offset_ms: run.end_ms,
-                    kind: BoundaryKind::DropEnd,
-                });
-                next_track += 1;
-            }
+        // (offset, kind) pairs to emit for this run. `next_track` advances
+        // once per run, regardless of how many boundaries the policy emits.
+        let entries: &[(u32, BoundaryKind)] = match policy {
+            AbsorbPolicy::Forward => &[(run.end_ms, BoundaryKind::Cut)],
+            AbsorbPolicy::Backward => &[(run.start_ms, BoundaryKind::Cut)],
+            AbsorbPolicy::Drop => &[
+                (run.start_ms, BoundaryKind::DropStart),
+                (run.end_ms, BoundaryKind::DropEnd),
+            ],
+        };
+        for &(cut_offset_ms, kind) in entries {
+            out.push(Boundary {
+                track_index: next_track,
+                cut_offset_ms,
+                kind,
+            });
         }
+        next_track += 1;
     }
     out
 }
