@@ -94,10 +94,9 @@ pub enum CarveError {
 /// `Drop`: emit BOTH ends so the silent span belongs to no track.
 pub fn boundaries_from_silences(runs: &[SilenceRun], policy: AbsorbPolicy) -> Vec<Boundary> {
     let mut out = Vec::with_capacity(runs.len() * 2);
-    let mut next_track: usize = 1;
-    for run in runs {
-        // (offset, kind) pairs to emit for this run. `next_track` advances
-        // once per run, regardless of how many boundaries the policy emits.
+    // `next_track` advances once per run, regardless of how many boundaries
+    // the policy emits.
+    for (next_track, run) in (1..).zip(runs.iter()) {
         let entries: &[(u32, BoundaryKind)] = match policy {
             AbsorbPolicy::Forward => &[(run.end_ms, BoundaryKind::Cut)],
             AbsorbPolicy::Backward => &[(run.start_ms, BoundaryKind::Cut)],
@@ -113,7 +112,6 @@ pub fn boundaries_from_silences(runs: &[SilenceRun], policy: AbsorbPolicy) -> Ve
                 kind,
             });
         }
-        next_track += 1;
     }
     out
 }
