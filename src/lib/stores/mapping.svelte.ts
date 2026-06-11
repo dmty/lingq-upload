@@ -174,6 +174,16 @@ export const mapping = {
     state.pendingWrites = 0;
     state.status = "loading";
     state.error = null;
+    // Clear project-scoped state synchronously so a reused match-page
+    // instance never renders the previous project's chapters/mapping
+    // during the in-flight load.
+    state.projectId = null;
+    state.chapters = [];
+    state.skippedIds = [];
+    state.mappingState = null;
+    state.absorbPolicy = "forward";
+    state.revertEpoch = 0;
+    state.lastSavedAt = null;
     const loaded = await commands.cmdProjectLoad(key);
     if (loaded.status === "error") {
       state.status = "error";

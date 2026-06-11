@@ -187,8 +187,16 @@ export const tauriStubInitScript = `
         },
         // Mismatch inspection for the /match route. None = no decision yet,
         // route renders the empty resolver shell without any decision copy.
-        // Tests can pin a fixture via window.__matcherInspection__.
-        cmd_matcher_inspect: () => window.__matcherInspection__ || null,
+        // Tests can pin a fixture via window.__matcherInspection__ for the
+        // single-project case, or window.__matcherInspectionByProject__ keyed
+        // by content_hash to drive multi-project navigation specs.
+        cmd_matcher_inspect: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const byProject = window.__matcherInspectionByProject__ || {};
+            if (key in byProject) return byProject[key];
+            return window.__matcherInspection__ || null;
+        },
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't

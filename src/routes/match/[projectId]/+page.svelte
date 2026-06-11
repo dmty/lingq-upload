@@ -53,13 +53,20 @@
 
   // Single load path: the store does the one cmd_project_load round trip and
   // exposes everything the page needs (id, absorb policy, mapping, chapters).
+  // The page component is reused across `/match/:projectId` navigations, so
+  // every project-scoped $state above must be re-seeded each run and any
+  // in-flight load for a previous projectKey must not clobber the new one.
   $effect(() => {
-    if (!projectKey) {
+    const key = projectKey;
+    resetProjectState();
+    if (!key) {
       hydrating = false;
       return;
     }
+    let cancelled = false;
     void (async () => {
-      await mapping.load(projectKey);
+      await mapping.load(key);
+      if (cancelled || projectKey !== key) return;
       if (mapping.status === "error") {
         error = mapping.error;
         hydrating = false;
@@ -71,9 +78,29 @@
         hydrating = false;
         return;
       }
-      await hydrateFromBackend();
+      await hydrateFromBackend(key);
+      if (cancelled || projectKey !== key) return;
     })();
+    return () => {
+      cancelled = true;
+    };
   });
+
+  function resetProjectState() {
+    title = "Untitled";
+    chapters = 0;
+    tracks = 0;
+    condition = "count_off";
+    options = ["cancel"];
+    bucketPreview = null;
+    selected = "cancel";
+    hydrating = true;
+    busy = false;
+    error = null;
+    projectIdValue = null;
+    absorbPolicy = "forward";
+    settingsOpen = false;
+  }
 
   function applyParams(): boolean {
     const p = page.url.searchParams;
@@ -101,20 +128,21 @@
     return true;
   }
 
-  async function hydrateFromBackend() {
+  async function hydrateFromBackend(key: string) {
     const pid = mapping.projectId;
     if (!pid) {
       hydrating = false;
       return;
     }
     const inspected = await commands.cmdMatcherInspect(pid);
+    if (projectKey !== key) return;
     if (inspected.status === "error") {
       error = appErrorMessage(inspected.error);
       hydrating = false;
       return;
     }
     if (inspected.data == null) {
-      goto(`/run/${projectKey}`);
+      goto(`/run/${key}`);
       return;
     }
     const data = inspected.data;
