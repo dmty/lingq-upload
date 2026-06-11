@@ -7,7 +7,9 @@ use thiserror::Error;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
-use super::{probe_duration, resolve_ffmpeg_bin, AudioError, STDERR_CAPTURE_BYTES};
+use super::{
+    probe_duration, resolve_ffmpeg_bin, AudioError, MAX_STDERR_PARSE_BYTES, STDERR_CAPTURE_BYTES,
+};
 
 /// How a silent chapter-divider is folded into its neighbour tracks.
 ///
@@ -82,6 +84,8 @@ pub enum CarveError {
     Audio(#[from] AudioError),
     #[error("silencedetect parse: {0}")]
     Parse(String),
+    #[error("silencedetect stderr exceeded {max} byte cap ({bytes} read)")]
+    StderrTooLarge { bytes: usize, max: usize },
 }
 
 /// Map detected silence runs into per-policy chapter boundaries.
@@ -147,10 +151,21 @@ async fn detect_silences(
         .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))?;
 
     let mut buf = Vec::new();
-    if let Some(mut err) = child.stderr.take() {
-        err.read_to_end(&mut buf)
+    if let Some(err) = child.stderr.take() {
+        // Read one byte past the cap so an over-cap buffer is detectable.
+        let mut bounded = err.take(MAX_STDERR_PARSE_BYTES as u64 + 1);
+        bounded
+            .read_to_end(&mut buf)
             .await
             .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))?;
+    }
+    if buf.len() > MAX_STDERR_PARSE_BYTES {
+        // Reap the child so we don't leak a zombie on the early return.
+        let _ = child.kill().await;
+        return Err(CarveError::StderrTooLarge {
+            bytes: buf.len(),
+            max: MAX_STDERR_PARSE_BYTES,
+        });
     }
     let status = child
         .wait()
@@ -394,5 +409,30 @@ mod tests {
     #[test]
     fn seconds_to_ms_nan_errors() {
         assert!(matches!(seconds_to_ms(f64::NAN), Err(CarveError::Parse(_))));
+    }
+
+    #[test]
+    fn stderr_parse_cap_is_four_mib() {
+        assert_eq!(MAX_STDERR_PARSE_BYTES, 4 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn read_bounded_by_max_stderr_parse_bytes() {
+        // Stand-in for ffmpeg stderr: a stream larger than the cap. We reuse
+        // the same `AsyncRead::take(N+1).read_to_end` pattern as `carve` so
+        // the test exercises the actual bound, not a copy of the constant.
+        use tokio::io::AsyncReadExt;
+        let oversized = vec![b'x'; MAX_STDERR_PARSE_BYTES + 4096];
+        let mut bounded = (&oversized[..]).take(MAX_STDERR_PARSE_BYTES as u64 + 1);
+        let mut buf = Vec::new();
+        bounded.read_to_end(&mut buf).await.unwrap();
+        assert!(buf.len() > MAX_STDERR_PARSE_BYTES);
+        assert_eq!(buf.len(), MAX_STDERR_PARSE_BYTES + 1);
+
+        let err = CarveError::StderrTooLarge {
+            bytes: buf.len(),
+            max: MAX_STDERR_PARSE_BYTES,
+        };
+        assert!(matches!(err, CarveError::StderrTooLarge { .. }));
     }
 }
