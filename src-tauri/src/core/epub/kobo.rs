@@ -29,43 +29,40 @@ impl KoboStrategy {
 // Exact normalised-title match (not a prefix). A chapter literally titled
 // "Cover Notes" therefore stays Body — false positives are worse than a
 // missed pre-select, since the user can always re-mark it from the UI.
-const FRONT_MATTER_TITLES: &[&str] = &[
-    "cover",
-    "title",
-    "title page",
-    "copyright",
-    "imprint",
-    "dedication",
-    "epigraph",
-    "preface",
-    "foreword",
-    "prologue",
-    "contents",
-    "table of contents",
-    "目次",
-    "まえがき",
-    "はじめに",
-    "序文",
-    "序章",
-];
-
-const BACK_MATTER_TITLES: &[&str] = &[
-    "acknowledgments",
-    "acknowledgements",
-    "about the author",
-    "about the publisher",
-    "afterword",
-    "epilogue",
-    "appendix",
-    "bibliography",
-    "glossary",
-    "index",
-    "notes",
-    "colophon",
-    "奥付",
-    "あとがき",
-    "解説",
-    "謝辞",
+const MATTER_TITLES: &[(&str, ChapterKind)] = &[
+    ("cover", ChapterKind::FrontMatter),
+    ("title", ChapterKind::FrontMatter),
+    ("title page", ChapterKind::FrontMatter),
+    ("copyright", ChapterKind::FrontMatter),
+    ("imprint", ChapterKind::FrontMatter),
+    ("dedication", ChapterKind::FrontMatter),
+    ("epigraph", ChapterKind::FrontMatter),
+    ("preface", ChapterKind::FrontMatter),
+    ("foreword", ChapterKind::FrontMatter),
+    ("prologue", ChapterKind::FrontMatter),
+    ("contents", ChapterKind::FrontMatter),
+    ("table of contents", ChapterKind::FrontMatter),
+    ("目次", ChapterKind::FrontMatter),
+    ("まえがき", ChapterKind::FrontMatter),
+    ("はじめに", ChapterKind::FrontMatter),
+    ("序文", ChapterKind::FrontMatter),
+    ("序章", ChapterKind::FrontMatter),
+    ("acknowledgments", ChapterKind::BackMatter),
+    ("acknowledgements", ChapterKind::BackMatter),
+    ("about the author", ChapterKind::BackMatter),
+    ("about the publisher", ChapterKind::BackMatter),
+    ("afterword", ChapterKind::BackMatter),
+    ("epilogue", ChapterKind::BackMatter),
+    ("appendix", ChapterKind::BackMatter),
+    ("bibliography", ChapterKind::BackMatter),
+    ("glossary", ChapterKind::BackMatter),
+    ("index", ChapterKind::BackMatter),
+    ("notes", ChapterKind::BackMatter),
+    ("colophon", ChapterKind::BackMatter),
+    ("奥付", ChapterKind::BackMatter),
+    ("あとがき", ChapterKind::BackMatter),
+    ("解説", ChapterKind::BackMatter),
+    ("謝辞", ChapterKind::BackMatter),
 ];
 
 pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
@@ -152,11 +149,10 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
 
 fn classify_kind(title: &str) -> ChapterKind {
     let norm = normalize_title(title);
-    if FRONT_MATTER_TITLES.iter().any(|t| *t == norm) {
-        return ChapterKind::FrontMatter;
-    }
-    if BACK_MATTER_TITLES.iter().any(|t| *t == norm) {
-        return ChapterKind::BackMatter;
+    for &(needle, kind) in MATTER_TITLES {
+        if needle == norm {
+            return kind;
+        }
     }
     ChapterKind::Body
 }
