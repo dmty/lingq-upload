@@ -21,6 +21,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_save_lingq_key,
             commands::secrets::cmd_load_lingq_key,
             commands::secrets::cmd_clear_lingq_key,
+            commands::secrets::cmd_get_dev_backend,
+            commands::secrets::cmd_set_dev_backend,
             commands::ingest::manual_source_from_files,
             commands::ingest::cmd_ingest_scan,
             commands::lingq::cmd_account_profile,
@@ -65,6 +67,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<ingest::SeriesRef>()
         .typ::<ingest::IngestError>()
         .typ::<commands::upload::UploadResult>()
+        .typ::<commands::secrets::DevBackendInfo>()
+        .typ::<secrets::BackendChoice>()
         .typ::<core::identity::ProjectId>()
         .typ::<core::epub::Chapter>()
         .typ::<core::epub::ChapterKind>()

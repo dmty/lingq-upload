@@ -47,6 +47,22 @@ async cmdClearLingqKey() : Promise<Result<null, AppError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async cmdGetDevBackend() : Promise<Result<DevBackendInfo, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_get_dev_backend") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdSetDevBackend(choice: BackendChoice) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_dev_backend", { choice }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };
@@ -358,6 +374,12 @@ export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; mes
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
 /**
+ * Which backend the secrets layer uses. In release builds the choice is
+ * fixed to `Keychain`; the variant exists in the type so the IPC surface
+ * stays the same across debug/release.
+ */
+export type BackendChoice = "file" | "keychain"
+/**
  * Read-only preview row for the Mismatch UI's `SplitProportional` card.
  * One row per audio atom: text-chapter index range that the proportional
  * packer assigned, the atom's title and duration, and the bucket's
@@ -398,6 +420,12 @@ export type ChapterReceipt = { chapter_index: number; track_index?: number | nul
 export type Collection = { id: number; title: string }
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
+/**
+ * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
+ * hide the toggle in release builds; `env_override` flags when the choice
+ * is forced by the `LINGQ_USE_REAL_KEYCHAIN` env var.
+ */
+export type DevBackendInfo = { is_debug: boolean; current: BackendChoice; env_override: boolean }
 export type EpubVendor = "kindle" | "kobo" | "generic"
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
 export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy?: EpubVendor | null } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 

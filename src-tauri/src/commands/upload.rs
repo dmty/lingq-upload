@@ -6,13 +6,13 @@ use specta::Type;
 use tauri::AppHandle;
 use uuid::Uuid;
 
-use super::parse_lang;
+use super::{app_data_dir, parse_lang};
 use crate::core::{audio, text};
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::ingest::{AudioSource, Candidate, TextSource};
 use crate::lingq::{LessonOpts, LingqClient};
-use crate::secrets::{RealKeyring, SecretsStore};
+use crate::secrets::SecretsStore;
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone)]
 pub struct UploadResult {
@@ -43,7 +43,7 @@ pub async fn upload_one_shot(
         ));
     };
 
-    let store = SecretsStore::new(Box::new(RealKeyring::new()));
+    let store = SecretsStore::new_default(&app_data_dir(&app)?);
     let key = store.load_key()?.ok_or(AppError::MissingApiKey)?;
 
     let strategy = match crate::core::epub::autodetect_vendor(&text_path) {
