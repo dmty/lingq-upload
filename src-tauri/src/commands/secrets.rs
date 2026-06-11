@@ -83,8 +83,7 @@ pub fn cmd_set_dev_backend(app: AppHandle, choice: BackendChoice) -> Result<(), 
         let prefs = crate::secrets::DevPrefs {
             backend: Some(choice),
         };
-        crate::secrets::dev_prefs_save(&dir, &prefs)
-            .map_err(|e| AppError::Io(e.to_string()))?;
+        crate::secrets::dev_prefs_save(&dir, &prefs).map_err(|e| AppError::Io(e.to_string()))?;
         tracing::warn!(?choice, "dev secrets backend changed via settings");
         Ok(())
     }

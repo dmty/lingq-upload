@@ -315,11 +315,7 @@ impl ProjectStore for JsonProjectStore {
         write_atomic(&path, &bytes)
     }
 
-    fn set_selection(
-        &self,
-        id: &ProjectId,
-        skipped_ids: &[ChapterId],
-    ) -> Result<(), StoreError> {
+    fn set_selection(&self, id: &ProjectId, skipped_ids: &[ChapterId]) -> Result<(), StoreError> {
         let lock = self.write_lock(id);
         let _guard = lock.lock().expect("project write lock poisoned");
         let mut project = self

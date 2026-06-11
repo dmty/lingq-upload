@@ -80,11 +80,7 @@ impl ProjectStore for InMemoryProjectStore {
         Ok(())
     }
 
-    fn set_selection(
-        &self,
-        id: &ProjectId,
-        skipped_ids: &[ChapterId],
-    ) -> Result<(), StoreError> {
+    fn set_selection(&self, id: &ProjectId, skipped_ids: &[ChapterId]) -> Result<(), StoreError> {
         let key = id.join_key();
         let mut guard = self.lock();
         let project = guard

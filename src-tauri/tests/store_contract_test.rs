@@ -46,9 +46,9 @@ fn sample(title: &str, language: &str) -> Project {
         last_activity_at: None,
         stage: ProjectStage::New,
         last_transition_at: None,
-    skipped_chapters: vec![],
-    absorb_policy: AbsorbPolicy::default(),
-    mapping: None,
+        skipped_chapters: vec![],
+        absorb_policy: AbsorbPolicy::default(),
+        mapping: None,
     }
 }
 
@@ -243,9 +243,7 @@ fn atomic_write_leaves_no_tmp_files_behind() {
         "project.json present"
     );
     assert!(
-        !entries
-            .iter()
-            .any(|n| n.to_string_lossy().contains(".tmp")),
+        !entries.iter().any(|n| n.to_string_lossy().contains(".tmp")),
         "no tmp files: {entries:?}"
     );
 }
@@ -308,9 +306,7 @@ fn powercut_simulation_preserves_prior_selection() {
         .map(|e| e.unwrap().file_name())
         .collect();
     assert!(
-        !entries
-            .iter()
-            .any(|n| n.to_string_lossy().contains(".tmp")),
+        !entries.iter().any(|n| n.to_string_lossy().contains(".tmp")),
         "no tmp files after set_selection: {entries:?}"
     );
     let got = store.get(&p.id).unwrap().unwrap();
@@ -460,9 +456,7 @@ fn json_store_patch_chapter_atomic() {
         .map(|e| e.unwrap().file_name())
         .collect();
     assert!(
-        !entries
-            .iter()
-            .any(|n| n.to_string_lossy().contains(".tmp")),
+        !entries.iter().any(|n| n.to_string_lossy().contains(".tmp")),
         "no tmp files: {entries:?}"
     );
 }

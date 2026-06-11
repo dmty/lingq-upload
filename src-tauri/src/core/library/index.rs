@@ -238,9 +238,9 @@ mod tests {
             last_activity_at: None,
             stage: Default::default(),
             last_transition_at: None,
-        skipped_chapters: vec![],
-        absorb_policy: AbsorbPolicy::default(),
-        mapping: None,
+            skipped_chapters: vec![],
+            absorb_policy: AbsorbPolicy::default(),
+            mapping: None,
         }
     }
 

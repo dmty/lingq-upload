@@ -18,9 +18,7 @@ use super::{
 /// glues onto the NEXT chapter. `Backward` cuts at the START of the silence
 /// (silence stays with the PREVIOUS chapter). `Drop` emits a paired (start,
 /// end) so the silent run is excised from both sides.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AbsorbPolicy {
     #[default]
@@ -134,13 +132,7 @@ async fn detect_silences(
     let min_d = format!("{:.3}", (min_silence_ms as f64) / 1000.0);
     let af = format!("silencedetect=noise={silence_db}dB:d={min_d}");
     let mut child = Command::new(&bin)
-        .args([
-            "-hide_banner",
-            "-nostats",
-            "-v",
-            "info",
-            "-i",
-        ])
+        .args(["-hide_banner", "-nostats", "-v", "info", "-i"])
         .arg(path)
         .args(["-af", &af, "-f", "null", "-"])
         .stdin(Stdio::null())
@@ -278,10 +270,16 @@ mod tests {
         let b = boundaries_from_silences(&fx(), AbsorbPolicy::Drop);
         assert_eq!(b.len(), 4);
         assert_eq!((b[0].cut_offset_ms, b[1].cut_offset_ms), (5_000, 6_000));
-        assert_eq!((b[0].kind, b[1].kind), (BoundaryKind::DropStart, BoundaryKind::DropEnd));
+        assert_eq!(
+            (b[0].kind, b[1].kind),
+            (BoundaryKind::DropStart, BoundaryKind::DropEnd)
+        );
         assert_eq!(b[0].track_index, b[1].track_index);
         assert_eq!((b[2].cut_offset_ms, b[3].cut_offset_ms), (9_000, 10_000));
-        assert_eq!((b[2].kind, b[3].kind), (BoundaryKind::DropStart, BoundaryKind::DropEnd));
+        assert_eq!(
+            (b[2].kind, b[3].kind),
+            (BoundaryKind::DropStart, BoundaryKind::DropEnd)
+        );
     }
 
     #[test]
@@ -297,7 +295,11 @@ mod tests {
 
     #[test]
     fn no_runs_emits_no_boundaries() {
-        for policy in [AbsorbPolicy::Forward, AbsorbPolicy::Backward, AbsorbPolicy::Drop] {
+        for policy in [
+            AbsorbPolicy::Forward,
+            AbsorbPolicy::Backward,
+            AbsorbPolicy::Drop,
+        ] {
             assert!(boundaries_from_silences(&[], policy).is_empty());
         }
     }
@@ -306,11 +308,28 @@ mod tests {
     fn single_run_spanning_whole_clip() {
         // Degenerate input: one silence covering the entire clip. Forward /
         // Backward still emit one cut, Drop emits a paired exclusion.
-        let runs = [SilenceRun { start_ms: 0, end_ms: 60_000 }];
+        let runs = [SilenceRun {
+            start_ms: 0,
+            end_ms: 60_000,
+        }];
         let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
-        assert_eq!(f, vec![Boundary { track_index: 1, cut_offset_ms: 60_000, kind: BoundaryKind::Cut }]);
+        assert_eq!(
+            f,
+            vec![Boundary {
+                track_index: 1,
+                cut_offset_ms: 60_000,
+                kind: BoundaryKind::Cut
+            }]
+        );
         let b = boundaries_from_silences(&runs, AbsorbPolicy::Backward);
-        assert_eq!(b, vec![Boundary { track_index: 1, cut_offset_ms: 0, kind: BoundaryKind::Cut }]);
+        assert_eq!(
+            b,
+            vec![Boundary {
+                track_index: 1,
+                cut_offset_ms: 0,
+                kind: BoundaryKind::Cut
+            }]
+        );
         let d = boundaries_from_silences(&runs, AbsorbPolicy::Drop);
         assert_eq!(d.len(), 2);
         assert_eq!(d[0].cut_offset_ms, 0);
@@ -320,8 +339,14 @@ mod tests {
     #[test]
     fn silence_at_t_zero() {
         let runs = [
-            SilenceRun { start_ms: 0, end_ms: 1_500 },
-            SilenceRun { start_ms: 30_000, end_ms: 31_000 },
+            SilenceRun {
+                start_ms: 0,
+                end_ms: 1_500,
+            },
+            SilenceRun {
+                start_ms: 30_000,
+                end_ms: 31_000,
+            },
         ];
         let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
         assert_eq!(f[0].cut_offset_ms, 1_500);
@@ -332,8 +357,14 @@ mod tests {
     #[test]
     fn silence_at_clip_end() {
         let runs = [
-            SilenceRun { start_ms: 10_000, end_ms: 11_000 },
-            SilenceRun { start_ms: 59_500, end_ms: 60_000 },
+            SilenceRun {
+                start_ms: 10_000,
+                end_ms: 11_000,
+            },
+            SilenceRun {
+                start_ms: 59_500,
+                end_ms: 60_000,
+            },
         ];
         let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
         assert_eq!(f.last().unwrap().cut_offset_ms, 60_000);
@@ -346,8 +377,14 @@ mod tests {
         // ffmpeg silencedetect won't emit this, but the pure function is
         // total over its input — guard against malformed callers.
         let runs = [
-            SilenceRun { start_ms: 5_000, end_ms: 7_000 },
-            SilenceRun { start_ms: 6_000, end_ms: 8_000 },
+            SilenceRun {
+                start_ms: 5_000,
+                end_ms: 7_000,
+            },
+            SilenceRun {
+                start_ms: 6_000,
+                end_ms: 8_000,
+            },
         ];
         let f = boundaries_from_silences(&runs, AbsorbPolicy::Forward);
         assert_eq!(f.len(), 2);

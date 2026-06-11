@@ -127,8 +127,8 @@ pub fn detect_vendor<R: std::io::Read + std::io::Seek>(
         signals.push("toc_ncx".to_string());
     }
 
-    let is_kobo_cluster = max_kobo_total_in_body >= KOBO_CLUSTER_FLOOR
-        || bodies_with_kobo_hit >= KOBO_CLUSTER_FLOOR;
+    let is_kobo_cluster =
+        max_kobo_total_in_body >= KOBO_CLUSTER_FLOOR || bodies_with_kobo_hit >= KOBO_CLUSTER_FLOOR;
 
     let (vendor, confidence) = if is_kobo_cluster {
         let conf = 0.6 + (total_kobo_in_bodies.min(12) as f32) / 30.0;
@@ -158,24 +158,20 @@ fn collect_candidate_files<R: std::io::Read + std::io::Seek>(
     let mut body_count = 0usize;
     for i in 0..zip.len() {
         let name = {
-            let entry = zip
-                .by_index(i)
-                .map_err(|e| EpubError::Zip(e.to_string()))?;
+            let entry = zip.by_index(i).map_err(|e| EpubError::Zip(e.to_string()))?;
             entry.name().to_string()
         };
         let lower = name.to_ascii_lowercase();
-        let kind = if lower.ends_with(".xhtml")
-            || lower.ends_with(".html")
-            || lower.ends_with(".htm")
-        {
-            FileKind::Body
-        } else if lower.ends_with(".css") {
-            FileKind::Css
-        } else if lower.ends_with(".ncx") {
-            FileKind::Ncx
-        } else {
-            continue;
-        };
+        let kind =
+            if lower.ends_with(".xhtml") || lower.ends_with(".html") || lower.ends_with(".htm") {
+                FileKind::Body
+            } else if lower.ends_with(".css") {
+                FileKind::Css
+            } else if lower.ends_with(".ncx") {
+                FileKind::Ncx
+            } else {
+                continue;
+            };
         if matches!(kind, FileKind::Body) {
             // Cap applies in zip-entry order, not spine order: >12 marker-free
             // front files degrade Kobo→Kindle, which still parses acceptably —

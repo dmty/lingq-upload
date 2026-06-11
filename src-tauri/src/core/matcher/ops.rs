@@ -80,9 +80,15 @@ pub enum MappingError {
 pub fn apply(state: &MappingState, op: MappingOp) -> Result<MappingState, MappingError> {
     let mut next = state.clone();
     match op {
-        MappingOp::Swap { chapter_id, track_id } => swap(&mut next, chapter_id, track_id)?,
+        MappingOp::Swap {
+            chapter_id,
+            track_id,
+        } => swap(&mut next, chapter_id, track_id)?,
         MappingOp::Park { track_id } => park(&mut next, track_id)?,
-        MappingOp::Unpark { track_id, chapter_id } => unpark(&mut next, track_id, chapter_id)?,
+        MappingOp::Unpark {
+            track_id,
+            chapter_id,
+        } => unpark(&mut next, track_id, chapter_id)?,
     }
     next.op_id = state.op_id.saturating_add(1);
     Ok(next)
@@ -181,7 +187,8 @@ fn pair_idx(state: &MappingState, chapter_id: &ChapterId) -> Result<usize, Mappi
 /// untouched. Unpaired pairs (`track_id == None`) never block — there is no
 /// pairing to confirm. Pure.
 pub fn gate_continue(state: &MappingState) -> bool {
-    state.pairs.iter().all(|p| {
-        p.touched || p.track_id.is_none() || p.original_confidence >= 0.6
-    })
+    state
+        .pairs
+        .iter()
+        .all(|p| p.touched || p.track_id.is_none() || p.original_confidence >= 0.6)
 }

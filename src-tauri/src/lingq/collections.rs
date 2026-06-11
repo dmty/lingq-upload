@@ -98,10 +98,7 @@ impl LingqClient {
         }
     }
 
-    async fn search_collection(
-        &self,
-        title: &str,
-    ) -> Result<Option<CollectionId>, LingqError> {
+    async fn search_collection(&self, title: &str) -> Result<Option<CollectionId>, LingqError> {
         let search_url = format!(
             "{}/api/v3/{}/collections/?search={}",
             self.base_url(),

@@ -62,11 +62,7 @@ pub trait ProjectStore: Send + Sync {
     /// Atomic on the JSON store (tempfile + fsync + rename, AD-022) and
     /// serialised against concurrent writers to the same project so a
     /// read-modify-write race cannot drop the older edit.
-    fn set_selection(
-        &self,
-        id: &ProjectId,
-        skipped_ids: &[ChapterId],
-    ) -> Result<(), StoreError>;
+    fn set_selection(&self, id: &ProjectId, skipped_ids: &[ChapterId]) -> Result<(), StoreError>;
     /// Apply `op` to the project's `MappingState` atomically: load, gate on
     /// `expected_op_id == state.op_id + 1`, apply, persist — all under the
     /// per-project write lock so concurrent callers cannot race the RMW.

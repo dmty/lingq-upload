@@ -125,8 +125,7 @@ pub async fn run_project_job(
             return Err(e);
         }
     };
-    let skipped_set: HashSet<ChapterId> =
-        project.skipped_chapters.iter().cloned().collect();
+    let skipped_set: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
 
     let known_ids: HashSet<&ChapterId> = chapters.iter().map(|c| &c.id).collect();
     let orphan_skips: Vec<&ChapterId> = skipped_set
@@ -615,7 +614,10 @@ pub async fn seed_mapping_for_response(
     project: &Project,
     response: MismatchResponse,
 ) -> Result<Option<MappingState>, AppError> {
-    if matches!(response, MismatchResponse::Cancel | MismatchResponse::Unknown) {
+    if matches!(
+        response,
+        MismatchResponse::Cancel | MismatchResponse::Unknown
+    ) {
         return Ok(None);
     }
     let tracks = resolve_audio_tracks(project).await?;
@@ -635,8 +637,7 @@ pub async fn seed_mapping_for_response(
                 .collect()
         }
         MismatchResponse::SplitProportional => {
-            let text_chars: Vec<usize> =
-                chapters.iter().map(|c| c.body.chars().count()).collect();
+            let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
             let atoms: Vec<ChapterAtom> = tracks
                 .iter()
                 .map(|t| {
@@ -673,7 +674,11 @@ pub async fn seed_mapping_for_response(
                 .iter()
                 .enumerate()
                 .map(|(i, c)| {
-                    let tid = if i < n { Some(track_id_for(&tracks[i])) } else { None };
+                    let tid = if i < n {
+                        Some(track_id_for(&tracks[i]))
+                    } else {
+                        None
+                    };
                     new_pair(c.id.clone(), tid)
                 })
                 .collect()
@@ -952,8 +957,8 @@ fn resolve_chapters(
             Some(bytes) => crate::core::epub::parse_epub_with_strategy(bytes, strategy)
                 .map_err(|e| AppError::Other(format!("epub parse: {e}"))),
             None => {
-                let bytes = std::fs::read(p)
-                    .map_err(|e| AppError::Other(format!("epub read: {e}")))?;
+                let bytes =
+                    std::fs::read(p).map_err(|e| AppError::Other(format!("epub read: {e}")))?;
                 crate::core::epub::parse_epub_with_strategy(&bytes, strategy)
                     .map_err(|e| AppError::Other(format!("epub parse: {e}")))
             }
@@ -1099,7 +1104,11 @@ mod tests {
 
     #[test]
     fn eligible_chapters_drops_skipped_not_yet_uploaded() {
-        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let chapters = vec![
+            chapter(0, "c0", "b0"),
+            chapter(1, "c1", "b1"),
+            chapter(2, "c2", "b2"),
+        ];
         let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
 
         let eligible = eligible_chapters(&chapters, &skipped, &[]);
@@ -1109,18 +1118,30 @@ mod tests {
 
     #[test]
     fn eligible_chapters_keeps_skipped_chapter_that_already_uploaded() {
-        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let chapters = vec![
+            chapter(0, "c0", "b0"),
+            chapter(1, "c1", "b1"),
+            chapter(2, "c2", "b2"),
+        ];
         let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
         let receipts = vec![uploaded_receipt(1)];
 
         let eligible = eligible_chapters(&chapters, &skipped, &receipts);
         let orders: Vec<usize> = eligible.iter().map(|c| c.order).collect();
-        assert_eq!(orders, vec![0, 1, 2], "skip only gates not-yet-uploaded chapters");
+        assert_eq!(
+            orders,
+            vec![0, 1, 2],
+            "skip only gates not-yet-uploaded chapters"
+        );
     }
 
     #[test]
     fn single_lesson_plan_over_eligible_set_excludes_skipped_body() {
-        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
+        let chapters = vec![
+            chapter(0, "c0", "b0"),
+            chapter(1, "c1", "b1"),
+            chapter(2, "c2", "b2"),
+        ];
         let skipped: HashSet<ChapterId> = [ChapterId::from_order(1)].into_iter().collect();
         let eligible = eligible_chapters(&chapters, &skipped, &[]);
         let decision = MatcherDecision {
@@ -1139,14 +1160,28 @@ mod tests {
         };
         assert_eq!(plan.steps.len(), 1);
         let text = &plan.steps[0].text;
-        assert!(text.contains("b0") && text.contains("b2"), "merged text: {text}");
-        assert!(!text.contains("b1"), "skipped body leaked into merged text: {text}");
+        assert!(
+            text.contains("b0") && text.contains("b2"),
+            "merged text: {text}"
+        );
+        assert!(
+            !text.contains("b1"),
+            "skipped body leaked into merged text: {text}"
+        );
     }
 
     #[test]
     fn plan_from_mapping_follows_pairs_and_excludes_parked_tracks() {
-        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1"), chapter(2, "c2", "b2")];
-        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let chapters = vec![
+            chapter(0, "c0", "b0"),
+            chapter(1, "c1", "b1"),
+            chapter(2, "c2", "b2"),
+        ];
+        let tracks = vec![
+            track(0, "/x/a.mp3"),
+            track(1, "/x/b.mp3"),
+            track(2, "/x/c.mp3"),
+        ];
         let mapping = MappingState {
             pairs: vec![
                 pair(0, Some(track_id_for(&tracks[1]))),
@@ -1214,13 +1249,21 @@ mod tests {
             .iter()
             .map(|s| (s.chapter_index, s.track_index))
             .collect();
-        assert_eq!(got, vec![(0, 1), (1, 0)], "mapping pairing must win over index order");
+        assert_eq!(
+            got,
+            vec![(0, 1), (1, 0)],
+            "mapping pairing must win over index order"
+        );
     }
 
     #[test]
     fn pair_accept_leftover_indices_start_past_full_chapter_count() {
         let chapters = vec![chapter(0, "c0", "b0"), chapter(2, "c2", "b2")];
-        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let tracks = vec![
+            track(0, "/x/a.mp3"),
+            track(1, "/x/b.mp3"),
+            track(2, "/x/c.mp3"),
+        ];
         let decision = MatcherDecision {
             condition: MismatchCondition::CountOff,
             response: MismatchResponse::PairAccept,
