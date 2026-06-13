@@ -423,7 +423,7 @@
         <div class="mt-4 grid gap-3">
           <DropZone
             variant="text"
-            path={textPath}
+            paths={textPath ? [textPath] : []}
             hovered={hoverZone === "text"}
             disabled={busy}
             onPick={() => pick("text")}
@@ -432,7 +432,7 @@
           />
           <DropZone
             variant="audio"
-            path={audioPath}
+            paths={audioPath ? [audioPath] : []}
             hovered={hoverZone === "audio"}
             disabled={busy}
             onPick={() => pick("audio")}

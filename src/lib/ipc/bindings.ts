@@ -82,6 +82,20 @@ async cmdIngestScan(source: LibrarySource, root: string) : Promise<Result<Candid
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Expand a dropped directory into the ordered list of top-level audio files
+ * it contains. Non-recursive; extensions `m4b` / `m4a` / `mp3` (case-insens).
+ * Sorted by natural order on the file name so "1, 2, 10" reads as 1, 2, 10
+ * rather than 1, 10, 2.
+ */
+async cmdExpandAudioDir(dirPath: string) : Promise<Result<string[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_expand_audio_dir", { dirPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async cmdAccountProfile() : Promise<Result<AccountProfile, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_account_profile") };

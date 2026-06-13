@@ -13,7 +13,7 @@
     type TextSource,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
-  import { extOf, filenameStem } from "$lib/paths";
+  import { basename, extOf, filenameStem } from "$lib/paths";
   import { joinKey } from "$lib/identity";
   import {
     formatLanguageOption,
@@ -29,7 +29,8 @@
 
   let source = $state<Source>("manual");
   let textPath = $state("");
-  let audioPath = $state("");
+  let audioPaths = $state<string[]>([]);
+  let audioOriginFolder = $state<string | null>(null);
   let lang = $state("");
   let title = $state("");
   let busy = $state(false);
@@ -108,32 +109,104 @@
     return null;
   }
 
-  function assignToZone(zone: "text" | "audio", paths: string[]) {
-    const matching = paths.find((p) => zoneForExt(extOf(p)) === zone);
-    const path = matching ?? paths[0];
-    if (!path) return;
-    if (zone === "text") {
-      textPath = path;
-      if (!title) title = filenameStem(path);
-    } else {
-      audioPath = path;
+  function appendAudio(newPaths: string[]) {
+    if (!newPaths.length) return;
+    const existing = new Set(audioPaths);
+    const additions: string[] = [];
+    for (const p of newPaths) {
+      if (!existing.has(p)) {
+        existing.add(p);
+        additions.push(p);
+      }
     }
+    if (!additions.length) return;
+    audioPaths = [...audioPaths, ...additions];
+    audioOriginFolder = null;
+  }
+
+  function assignToZone(zone: "text" | "audio", paths: string[]) {
+    if (zone === "audio") {
+      const audio = paths.filter((p) => zoneForExt(extOf(p)) === "audio");
+      if (audio.length) appendAudio(audio);
+      return;
+    }
+    const matching =
+      paths.find((p) => zoneForExt(extOf(p)) === zone) ?? paths[0];
+    if (!matching) return;
+    textPath = matching;
+    if (!title) title = filenameStem(matching);
   }
 
   function assignDropped(paths: string[]) {
     if (!paths.length) return;
     let textCandidate: string | null = null;
-    let audioCandidate: string | null = null;
+    const audioCandidates: string[] = [];
     for (const p of paths) {
       const z = zoneForExt(extOf(p));
       if (z === "text" && !textCandidate) textCandidate = p;
-      else if (z === "audio" && !audioCandidate) audioCandidate = p;
+      else if (z === "audio") audioCandidates.push(p);
     }
     if (textCandidate) {
       textPath = textCandidate;
       if (!title) title = filenameStem(textCandidate);
     }
-    if (audioCandidate) audioPath = audioCandidate;
+    if (audioCandidates.length) appendAudio(audioCandidates);
+  }
+
+  async function expandFolderDrop(path: string): Promise<boolean> {
+    const ext = extOf(path);
+    if (ext) return false;
+    const res = await commands.cmdExpandAudioDir(path);
+    if (res.status !== "ok" || res.data.length === 0) return false;
+    const existing = new Set(audioPaths);
+    const additions = res.data.filter((p) => !existing.has(p));
+    if (!additions.length) return true;
+    audioPaths = [...audioPaths, ...additions];
+    audioOriginFolder = basename(path);
+    return true;
+  }
+
+  async function handleDrop(paths: string[]) {
+    if (!paths.length) return;
+    const leftover: string[] = [];
+    for (const p of paths) {
+      const ext = extOf(p);
+      if (!ext) {
+        const expanded = await expandFolderDrop(p);
+        if (!expanded) leftover.push(p);
+      } else {
+        leftover.push(p);
+      }
+    }
+    if (leftover.length) assignDropped(leftover);
+  }
+
+  async function handleDropOnZone(zone: "text" | "audio", paths: string[]) {
+    if (zone !== "audio") {
+      assignToZone(zone, paths);
+      return;
+    }
+    const leftover: string[] = [];
+    for (const p of paths) {
+      const ext = extOf(p);
+      if (!ext) {
+        const expanded = await expandFolderDrop(p);
+        if (!expanded) leftover.push(p);
+      } else {
+        leftover.push(p);
+      }
+    }
+    if (leftover.length) assignToZone("audio", leftover);
+  }
+
+  function removeAudio(p: string) {
+    audioPaths = audioPaths.filter((q) => q !== p);
+    audioOriginFolder = null;
+  }
+
+  function clearAudio() {
+    audioPaths = [];
+    audioOriginFolder = null;
   }
 
   // Tauri 2's drag-drop event reports CSS pixels on macOS but physical pixels
@@ -160,8 +233,8 @@
           hoverZone = null;
         } else if (p.type === "drop") {
           const zone = resolveZone(p.position.x, p.position.y);
-          if (zone) assignToZone(zone, p.paths);
-          else assignDropped(p.paths);
+          if (zone) void handleDropOnZone(zone, p.paths);
+          else void handleDrop(p.paths);
           hoverZone = null;
         }
       });
@@ -192,7 +265,7 @@
     busy
       ? false
       : isManual
-        ? !!textPath && !!audioPath && !!lang.trim() && !!title.trim()
+        ? !!textPath && audioPaths.length > 0 && !!lang.trim() && !!title.trim()
         : pickedCandidate !== null,
   );
 
@@ -209,18 +282,23 @@
 
   async function pickAudio() {
     const sel = await open({
-      multiple: false,
+      multiple: true,
       filters: [{ name: "Audio", extensions: ["m4b", "m4a", "mp3"] }],
     });
-    if (typeof sel === "string") audioPath = sel;
+    const picked: string[] =
+      sel == null ? [] : Array.isArray(sel) ? sel : [sel];
+    if (picked.length) appendAudio(picked);
   }
 
   function toTextSource(path: string): TextSource {
     return { kind: "epub", value: path } as TextSource;
   }
 
-  function toAudioSource(path: string): AudioSource {
-    return { kind: "single_file", value: path } as AudioSource;
+  function toAudioSource(paths: string[]): AudioSource {
+    if (paths.length === 1) {
+      return { kind: "single_file", value: paths[0] } as AudioSource;
+    }
+    return { kind: "multiple_files", value: paths } as AudioSource;
   }
 
   function buildPayload(): {
@@ -237,7 +315,7 @@
         title: c.title,
       };
     }
-    if (!textPath || !audioPath) return null;
+    if (!textPath || audioPaths.length === 0) return null;
     const c: Candidate = {
       source_id: source,
       title,
@@ -246,7 +324,7 @@
       series: null,
       cover_path: null,
       text_source: toTextSource(textPath),
-      audio_source: toAudioSource(audioPath),
+      audio_source: toAudioSource(audioPaths),
       chapter_manifest: null,
       metadata_extras: {},
     };
@@ -333,7 +411,7 @@
       </legend>
       <DropZone
         variant="text"
-        path={textPath}
+        paths={textPath ? [textPath] : []}
         hovered={hoverZone === "text"}
         disabled={busy}
         onPick={pickText}
@@ -348,11 +426,13 @@
       </legend>
       <DropZone
         variant="audio"
-        path={audioPath}
+        paths={audioPaths}
         hovered={hoverZone === "audio"}
         disabled={busy}
         onPick={pickAudio}
-        onClear={() => (audioPath = "")}
+        onRemove={removeAudio}
+        onClear={clearAudio}
+        originLabel={audioOriginFolder ?? undefined}
         ref={(el) => (audioDropEl = el)}
       />
     </fieldset>
