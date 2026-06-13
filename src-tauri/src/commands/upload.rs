@@ -10,7 +10,7 @@ use super::{app_data_dir, parse_lang};
 use crate::core::{audio, text};
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
-use crate::ingest::{AudioSource, Candidate, TextSource};
+use crate::ingest::{audio_source_paths, Candidate, TextSource};
 use crate::lingq::{LessonOpts, LingqClient};
 use crate::secrets::SecretsStore;
 
@@ -37,11 +37,18 @@ pub async fn upload_one_shot(
         ));
     };
 
-    let Some(AudioSource::SingleFile(audio_path)) = candidate.audio_source.clone() else {
+    let Some(audio_source) = candidate.audio_source.as_ref() else {
         return Err(AppError::Unsupported(
-            "one-shot upload requires a single audio file".into(),
+            "one-shot upload requires an audio source".into(),
         ));
     };
+    let audio_paths = audio_source_paths(audio_source)?;
+    let [audio_path] = <[PathBuf; 1]>::try_from(audio_paths).map_err(|paths| {
+        AppError::Unsupported(format!(
+            "one-shot upload requires a single audio file (got {})",
+            paths.len()
+        ))
+    })?;
 
     let store = SecretsStore::new_default(&app_data_dir(&app)?);
     let key = store.load_key()?.ok_or(AppError::MissingApiKey)?;

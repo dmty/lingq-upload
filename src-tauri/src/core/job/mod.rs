@@ -25,7 +25,7 @@ use crate::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectStag
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
-use crate::ingest::{AudioSource, TextSource};
+use crate::ingest::{audio_source_paths, AudioSource, TextSource};
 use crate::lingq::{ImportLessonRequest, LessonStatus, LingqClient};
 
 /// Returns the next lifecycle stage the project should advance to, or `None`
@@ -992,20 +992,22 @@ async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppE
     let Some(source) = project.sources.audio.as_ref() else {
         return Err(AppError::Other("project has no audio source".into()));
     };
-    match source {
-        AudioSource::SingleFile(p) | AudioSource::LibationManifest(p) => {
-            expand_single_file(p).await
-        }
-        AudioSource::Folder(dir) => {
-            let mut paths = list_audio_in_dir(dir)?;
-            paths.sort();
-            let mut out = Vec::with_capacity(paths.len());
-            for (i, p) in paths.into_iter().enumerate() {
-                out.push(track_for(&p, i).await);
-            }
-            Ok(out)
-        }
+    let paths = audio_source_paths(source)?;
+    // Single-path sources (SingleFile, LibationManifest) get the chapter-atom
+    // probe so embedded chapters fan out into virtual tracks. Multi-path
+    // sources (Folder, eventually MultipleFiles) treat each entry as a whole
+    // track in listed order.
+    if matches!(
+        source,
+        AudioSource::SingleFile(_) | AudioSource::LibationManifest(_)
+    ) {
+        return expand_single_file(&paths[0]).await;
     }
+    let mut out = Vec::with_capacity(paths.len());
+    for (i, p) in paths.into_iter().enumerate() {
+        out.push(track_for(&p, i).await);
+    }
+    Ok(out)
 }
 
 /// Probe the file for embedded chapter atoms. If two or more survive the
@@ -1046,25 +1048,6 @@ async fn track_for(path: &Path, order: usize) -> AudioTrack {
             .map(|s| s.to_string()),
         window: None,
     }
-}
-
-fn list_audio_in_dir(dir: &Path) -> Result<Vec<PathBuf>, AppError> {
-    let mut out = Vec::new();
-    let entries = std::fs::read_dir(dir).map_err(AppError::from)?;
-    for entry in entries.flatten() {
-        let p = entry.path();
-        if !p.is_file() {
-            continue;
-        }
-        let ext = p
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_ascii_lowercase);
-        if matches!(ext.as_deref(), Some("m4b" | "m4a" | "mp3")) {
-            out.push(p);
-        }
-    }
-    Ok(out)
 }
 
 #[cfg(test)]
@@ -1301,21 +1284,6 @@ mod tests {
             PlanOrPause::Cancelled => "Cancelled",
             PlanOrPause::Failed(_) => "Failed",
         }
-    }
-
-    #[test]
-    fn list_audio_filters_extensions() {
-        let dir = tempfile::tempdir().unwrap();
-        for name in ["a.mp3", "b.m4b", "c.m4a", "d.txt", "e.flac"] {
-            std::fs::write(dir.path().join(name), b"x").unwrap();
-        }
-        let mut got = list_audio_in_dir(dir.path()).unwrap();
-        got.sort();
-        let names: Vec<_> = got
-            .iter()
-            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(names, vec!["a.mp3", "b.m4b", "c.m4a"]);
     }
 
     #[test]
