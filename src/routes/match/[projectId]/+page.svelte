@@ -275,127 +275,128 @@
         onFlush={() => mapping.flush()}
       />
     {:else}
-      <aside class="border-r border-border bg-surface p-3 text-sm text-fg-muted">
+      <aside
+        class="border-r border-border bg-surface p-3 text-sm text-fg-muted"
+      >
         Loading chapters…
       </aside>
     {/if}
   </div>
 
-<section class="mx-auto max-w-3xl flex-1 space-y-6 pt-6">
-  {#if mapping.mappingState}
-    <header class="flex items-baseline justify-between gap-3">
-      <h1 class="text-lg font-semibold text-fg">Confirm chapter ↔ track pairing</h1>
-      {#if projectIdValue}
+  <section class="mx-auto max-w-3xl flex-1 space-y-6 px-8 pt-6">
+    {#if mapping.mappingState}
+      <header class="flex items-baseline justify-between gap-3">
+        <h1 class="text-lg font-semibold text-fg">
+          Confirm chapter ↔ track pairing
+        </h1>
+        {#if projectIdValue}
+          <button
+            type="button"
+            class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg hover:bg-surface-sunken"
+            aria-expanded={settingsOpen}
+            aria-controls="project-settings-panel"
+            onclick={() => (settingsOpen = !settingsOpen)}
+            data-testid="project-settings-toggle"
+          >
+            Project settings {settingsOpen ? "▲" : "▼"}
+          </button>
+        {/if}
+      </header>
+      {#if settingsOpen && projectIdValue}
+        <div id="project-settings-panel" data-testid="project-settings-panel">
+          <ProjectSettings projectId={projectIdValue} bind:absorbPolicy />
+        </div>
+      {/if}
+      <MappingGrid
+        chapters={mapping.chapters}
+        tracks={trackRows}
+        mappingState={mapping.mappingState}
+        lastSavedAt={mapping.lastSavedAt}
+        saving={mapping.saving}
+        canContinue={mappingGateOk}
+        onOp={handleMappingOp}
+        onConfirmPair={handleConfirmPair}
+        onContinue={handleMappingContinue}
+      />
+    {:else}
+      <header>
+        <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
+      </header>
+
+      {#if hydrating}
+        <p class="text-sm text-fg-muted">Re-probing project sources…</p>
+      {:else}
+        <MismatchEvidence {title} {chapters} {tracks} {condition} />
+
+        <div class="space-y-2">
+          {#each options.filter((o) => o !== "cancel") as opt (opt)}
+            <ResponseCard
+              response={opt}
+              selected={selected === opt}
+              onSelect={() => (selected = opt)}
+            />
+          {/each}
+        </div>
+      {/if}
+
+      {#if selected === "split_proportional" && bucketPreview && bucketPreview.length > 0}
+        <div class="rounded-md border border-border bg-surface p-4">
+          <p class="text-sm font-medium text-fg">Proposed split</p>
+          <p class="mt-1 text-xs text-fg-muted">
+            Text chapters are grouped proportionally by audio chapter duration.
+          </p>
+          <ul class="mt-3 space-y-1 text-sm text-fg">
+            {#each bucketPreview as row, i (i)}
+              {@const label = row.atomTitle ?? `Atom ${i + 1}`}
+              {@const drift = isDrifting(row)}
+              <li class="flex items-baseline gap-2 tabular">
+                <span>
+                  Ch {row.textRangeStart + 1}–{row.textRangeEnd} → {label} ({formatDuration(
+                    row.atomDurationSec,
+                  )})
+                </span>
+                <span class="text-xs text-fg-muted">
+                  chars/sec: {row.charsPerSec.toFixed(1)}
+                </span>
+                {#if drift}
+                  <span
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-warning/10 text-[10px] font-semibold text-warning"
+                    title="This bucket's chars/sec deviates more than ±30% from the median — the narrator may have skipped or added material at this boundary."
+                    aria-label="Drift warning"
+                  >
+                    i
+                  </span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      {#if error}
+        <p
+          class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm"
+        >
+          {error}
+        </p>
+      {/if}
+
+      <div class="flex justify-end gap-2">
+        <a
+          href="/library"
+          class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken"
+        >
+          Back
+        </a>
         <button
           type="button"
-          class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg hover:bg-surface-sunken"
-          aria-expanded={settingsOpen}
-          aria-controls="project-settings-panel"
-          onclick={() => (settingsOpen = !settingsOpen)}
-          data-testid="project-settings-toggle"
+          onclick={confirm}
+          disabled={busy || hydrating}
+          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
         >
-          Project settings {settingsOpen ? "▲" : "▼"}
+          Confirm
         </button>
-      {/if}
-    </header>
-    {#if settingsOpen && projectIdValue}
-      <div id="project-settings-panel" data-testid="project-settings-panel">
-        <ProjectSettings
-          projectId={projectIdValue}
-          bind:absorbPolicy
-        />
       </div>
     {/if}
-    <MappingGrid
-      chapters={mapping.chapters}
-      tracks={trackRows}
-      mappingState={mapping.mappingState}
-      lastSavedAt={mapping.lastSavedAt}
-      saving={mapping.saving}
-      canContinue={mappingGateOk}
-      onOp={handleMappingOp}
-      onConfirmPair={handleConfirmPair}
-      onContinue={handleMappingContinue}
-    />
-  {:else}
-  <header>
-    <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
-  </header>
-
-  {#if hydrating}
-    <p class="text-sm text-fg-muted">Re-probing project sources…</p>
-  {:else}
-    <MismatchEvidence {title} {chapters} {tracks} {condition} />
-
-    <div class="space-y-2">
-      {#each options as opt (opt)}
-        <ResponseCard
-          response={opt}
-          selected={selected === opt}
-          onSelect={() => (selected = opt)}
-        />
-      {/each}
-    </div>
-  {/if}
-
-  {#if selected === "split_proportional" && bucketPreview && bucketPreview.length > 0}
-    <div class="rounded-md border border-border bg-surface p-4">
-      <p class="text-sm font-medium text-fg">Proposed split</p>
-      <p class="mt-1 text-xs text-fg-muted">
-        Text chapters are grouped proportionally by audio chapter duration.
-      </p>
-      <ul class="mt-3 space-y-1 text-sm text-fg">
-        {#each bucketPreview as row, i (i)}
-          {@const label = row.atomTitle ?? `Atom ${i + 1}`}
-          {@const drift = isDrifting(row)}
-          <li class="flex items-baseline gap-2 tabular">
-            <span>
-              Ch {row.textRangeStart + 1}–{row.textRangeEnd} → {label} ({formatDuration(
-                row.atomDurationSec,
-              )})
-            </span>
-            <span class="text-xs text-fg-muted">
-              chars/sec: {row.charsPerSec.toFixed(1)}
-            </span>
-            {#if drift}
-              <span
-                class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-warning/10 text-[10px] font-semibold text-warning"
-                title="This bucket's chars/sec deviates more than ±30% from the median — the narrator may have skipped or added material at this boundary."
-                aria-label="Drift warning"
-              >
-                i
-              </span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if error}
-    <p
-      class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm"
-    >
-      {error}
-    </p>
-  {/if}
-
-  <div class="flex justify-end gap-2">
-    <a
-      href="/library"
-      class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken"
-    >
-      Back
-    </a>
-    <button
-      type="button"
-      onclick={confirm}
-      disabled={busy || hydrating}
-      class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-    >
-      Confirm
-    </button>
-  </div>
-  {/if}
-</section>
+  </section>
 </div>

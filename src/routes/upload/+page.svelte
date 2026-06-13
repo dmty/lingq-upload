@@ -7,12 +7,15 @@
     commands,
     type Collection,
     type JobEvent,
-    type Language,
     type Stage,
     type UploadResult,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
+  import {
+    formatLanguageOption,
+    languagesStore,
+  } from "$lib/stores/languages.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import ProgressPanel from "$lib/components/ProgressPanel.svelte";
   import ResultPanel from "$lib/components/ResultPanel.svelte";
@@ -36,8 +39,10 @@
   let error = $state<string | null>(null);
   let result = $state<UploadResult | null>(null);
 
-  let languages = $state<Language[]>([]);
-  let languagesError = $state<string | null>(null);
+  const languages = $derived(languagesStore.languages);
+  const languagesError = $derived(
+    languages.length === 0 ? languagesStore.error : null,
+  );
   let showAllLanguages = $state(false);
   let collections = $state<Collection[]>([]);
   let collectionsError = $state<string | null>(null);
@@ -139,12 +144,6 @@
     return "Upload lesson";
   });
 
-  function formatLanguageOption(l: Language): string {
-    return l.known_words > 0
-      ? `${l.title} (${l.known_words.toLocaleString()})`
-      : l.title;
-  }
-
   function stageLabel(stage: Stage["kind"]): string {
     switch (stage) {
       case "parsing":
@@ -181,22 +180,6 @@
       case "Log":
       case "Cancelled":
         break;
-    }
-  }
-
-  async function loadLanguages() {
-    languagesError = null;
-    let username: string | null = null;
-    const profileRes = await commands.cmdAccountProfile();
-    if (profileRes.status === "ok") {
-      username = profileRes.data.username;
-    }
-    const res = await commands.cmdListLanguages(username);
-    if (res.status === "ok") {
-      languages = [...res.data].sort((a, b) => b.known_words - a.known_words);
-      if (username) showAllLanguages = false;
-    } else {
-      languagesError = appErrorMessage(res.error);
     }
   }
 
@@ -242,7 +225,7 @@
           hoverZone = null;
         }
       });
-      await loadLanguages();
+      void languagesStore.ensureLoaded();
     })();
     return () => {
       unlisten?.();

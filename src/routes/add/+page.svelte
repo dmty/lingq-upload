@@ -15,6 +15,12 @@
   import { appErrorMessage } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
   import { joinKey } from "$lib/identity";
+  import {
+    formatLanguageOption,
+    getSavedLanguage,
+    languagesStore,
+    saveLanguage,
+  } from "$lib/stores/languages.svelte";
   import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import BookPicker from "$lib/components/BookPicker.svelte";
@@ -38,6 +44,41 @@
   let audioDropEl = $state<HTMLButtonElement | null>(null);
   let hoverZone = $state<"text" | "audio" | null>(null);
   let unlistenDrop: UnlistenFn | undefined;
+
+  let showAllLanguages = $state(false);
+  let defaultApplied = false;
+
+  const languages = $derived(languagesStore.languages);
+  const languagesError = $derived(
+    languages.length === 0 ? languagesStore.error : null,
+  );
+
+  const visibleLanguages = $derived(
+    showAllLanguages ? languages : languages.filter((l) => l.known_words > 0),
+  );
+
+  function applyDefaultLanguage() {
+    if (lang || defaultApplied || languages.length === 0) return;
+    defaultApplied = true;
+    const saved = getSavedLanguage();
+    const match =
+      (saved && languages.find((l) => l.code === saved)) ??
+      visibleLanguages[0] ??
+      languages[0];
+    if (!match) return;
+    lang = match.code;
+    if (!visibleLanguages.some((l) => l.code === match.code)) {
+      showAllLanguages = true;
+    }
+  }
+
+  $effect(() => {
+    if (languages.length > 0) applyDefaultLanguage();
+  });
+
+  $effect(() => {
+    if (lang) saveLanguage(lang);
+  });
 
   const TEXT_EXTS = ["epub", "xhtml", "html", "htm", "txt"];
   const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
@@ -129,6 +170,7 @@
         return;
       }
       unlistenDrop = off;
+      void languagesStore.ensureLoaded();
     })();
     return () => {
       disposed = true;
@@ -323,7 +365,7 @@
         <input
           type="text"
           bind:value={title}
-          class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
+          class="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm"
           disabled={busy}
         />
       </label>
@@ -331,13 +373,32 @@
         <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
           Language
         </span>
-        <input
-          type="text"
+        <select
           bind:value={lang}
-          placeholder="ja, en, …"
-          class="w-full rounded-sm border border-border bg-surface px-3 py-1.5 text-sm"
-          disabled={busy}
-        />
+          disabled={busy || visibleLanguages.length === 0}
+          class="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm text-fg outline-none disabled:bg-surface-sunken disabled:text-fg-subtle"
+        >
+          <option value="" disabled>
+            {languagesError ? "Could not load languages" : "Select language…"}
+          </option>
+          {#each visibleLanguages as l (l.code)}
+            <option value={l.code}>{formatLanguageOption(l)}</option>
+          {/each}
+        </select>
+        {#if languagesError}
+          <span class="block text-xs text-error">{languagesError}</span>
+        {:else if languages.length > 0}
+          <label
+            class="flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted"
+          >
+            <input
+              type="checkbox"
+              bind:checked={showAllLanguages}
+              class="h-3.5 w-3.5 accent-accent"
+            />
+            Show all LingQ languages
+          </label>
+        {/if}
       </label>
     </div>
   {:else if pickedCandidate}
