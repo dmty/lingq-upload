@@ -8,6 +8,10 @@
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { formatRelative } from "$lib/format";
+  import {
+    clearSavedLanguage,
+    languagesStore,
+  } from "$lib/stores/languages.svelte";
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
@@ -134,6 +138,9 @@
     const res = await commands.cmdSaveLingqKey(key);
     if (res.status === "ok") {
       key = "";
+      languagesStore.invalidate();
+      clearSavedLanguage();
+      void languagesStore.ensureLoaded();
       await refresh();
       justSaved = true;
       setTimeout(() => (justSaved = false), 600);
@@ -148,6 +155,8 @@
     error = null;
     const res = await commands.cmdClearLingqKey();
     if (res.status === "ok") {
+      languagesStore.invalidate();
+      clearSavedLanguage();
       await refresh();
     } else {
       error = appErrorMessage(res.error);

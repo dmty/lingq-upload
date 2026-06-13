@@ -32,9 +32,8 @@
 </script>
 
 <div class="rounded-md border border-border bg-surface p-4">
-  <p class="text-sm text-fg-muted">Chapter counts don't match.</p>
-  <p class="mt-1 text-base">
-    <em class="font-medium">{title}</em>
+  <p class="text-base font-medium text-fg">
+    <em class="not-italic">{title}</em>
   </p>
-  <p class="mt-2 text-sm text-fg">{explanation}</p>
+  <p class="mt-1.5 text-sm text-fg-muted">{explanation}</p>
 </div>

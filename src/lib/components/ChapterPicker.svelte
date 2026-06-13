@@ -144,9 +144,10 @@
     if (shiftKey && lastClicked != null) {
       const anchorIdx = sorted.findIndex((r) => r.id === lastClicked);
       if (anchorIdx >= 0) {
-        const [lo, hi] = anchorIdx < targetIdx
-          ? [anchorIdx, targetIdx]
-          : [targetIdx, anchorIdx];
+        const [lo, hi] =
+          anchorIdx < targetIdx
+            ? [anchorIdx, targetIdx]
+            : [targetIdx, anchorIdx];
         const next = { ...checked };
         for (let i = lo; i <= hi; i++) {
           next[sorted[i].id] = newState;
@@ -204,6 +205,9 @@
 
   const sortedChapters = $derived(rowsSorted());
   const isVirtualised = $derived(chapters.length > 100);
+  const frontMatterCount = $derived(
+    chapters.filter((c) => c.kind === "front_matter").length,
+  );
 </script>
 
 <aside
@@ -212,28 +216,28 @@
 >
   <header class="flex items-center justify-between gap-2">
     <h2 class="text-sm font-semibold text-fg">Chapters</h2>
-    <button
-      type="button"
-      class="rounded-full border px-2 py-0.5 text-xs font-medium {skipFrontChip
-        ? 'border-accent bg-accent/10 text-accent'
-        : 'border-border bg-surface text-fg-muted hover:bg-surface-sunken'}"
-      data-testid="skip-front-chip"
-      aria-pressed={skipFrontChip}
-      onclick={toggleSkipFrontChip}
-    >
-      Skip front-matter
-    </button>
+    {#if frontMatterCount > 0}
+      <button
+        type="button"
+        class="rounded-full border px-2 py-0.5 text-xs font-medium {skipFrontChip
+          ? 'border-accent bg-accent/10 text-accent'
+          : 'border-border bg-surface text-fg-muted hover:bg-surface-sunken'}"
+        data-testid="skip-front-chip"
+        aria-pressed={skipFrontChip}
+        onclick={toggleSkipFrontChip}
+      >
+        {skipFrontChip ? "Front-matter skipped" : "Skip front-matter"} · {frontMatterCount}
+      </button>
+    {/if}
   </header>
 
   {#if isVirtualised}
     <p class="text-[10px] text-fg-muted">{chapters.length} chapters</p>
   {/if}
 
-  <ul
-    class="flex-1 overflow-y-auto"
-    data-testid="chapter-list"
-  >
+  <ul class="flex-1 overflow-y-auto" data-testid="chapter-list">
     {#each sortedChapters as row (row.id)}
+      {@const isMatter = row.kind !== "body"}
       <li class="flex items-center gap-2 py-1">
         <input
           type="checkbox"
@@ -255,12 +259,20 @@
             lastShiftKey = false;
           }}
         />
-        <span class="flex-1 truncate text-sm text-fg">{row.title}</span>
         <span
-          class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
+          class="flex-1 truncate text-sm {isMatter
+            ? 'italic text-fg-muted'
+            : 'text-fg'}"
         >
-          {kindLabel(row.kind)}
+          {row.title}
         </span>
+        {#if isMatter}
+          <span
+            class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
+          >
+            {kindLabel(row.kind)}
+          </span>
+        {/if}
       </li>
     {/each}
   </ul>
