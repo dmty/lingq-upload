@@ -993,21 +993,42 @@ async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppE
         return Err(AppError::Other("project has no audio source".into()));
     };
     let paths = audio_source_paths(source)?;
-    // Single-path sources (SingleFile, LibationManifest) get the chapter-atom
-    // probe so embedded chapters fan out into virtual tracks. Multi-path
-    // sources (Folder, eventually MultipleFiles) treat each entry as a whole
-    // track in listed order.
-    if matches!(
-        source,
-        AudioSource::SingleFile(_) | AudioSource::LibationManifest(_)
-    ) {
-        return expand_single_file(&paths[0]).await;
+    // Match is exhaustive on purpose: adding a fifth variant must force every
+    // dispatch site to update. See AD-018.
+    match source {
+        AudioSource::SingleFile(_) | AudioSource::LibationManifest(_) => {
+            if paths.is_empty() {
+                return Err(AppError::Other(
+                    "audio source resolved to zero paths".into(),
+                ));
+            }
+            expand_single_file(&paths[0]).await
+        }
+        AudioSource::Folder(_) => {
+            let mut out = Vec::with_capacity(paths.len());
+            for (i, p) in paths.into_iter().enumerate() {
+                out.push(track_for(&p, i).await);
+            }
+            Ok(out)
+        }
+        AudioSource::MultipleFiles(_) => {
+            // Per-file chapter-atom probe: each path expands via the same
+            // path single-file sources take. A running `order` index
+            // re-stamps the concatenated tracks so embedded atoms in one
+            // file slot in at that file's position without colliding with
+            // its neighbours.
+            let mut out: Vec<AudioTrack> = Vec::with_capacity(paths.len());
+            let mut order = 0usize;
+            for p in paths {
+                for mut track in expand_single_file(&p).await? {
+                    track.order = order;
+                    order += 1;
+                    out.push(track);
+                }
+            }
+            Ok(out)
+        }
     }
-    let mut out = Vec::with_capacity(paths.len());
-    for (i, p) in paths.into_iter().enumerate() {
-        out.push(track_for(&p, i).await);
-    }
-    Ok(out)
 }
 
 /// Probe the file for embedded chapter atoms. If two or more survive the
@@ -1284,6 +1305,189 @@ mod tests {
             PlanOrPause::Cancelled => "Cancelled",
             PlanOrPause::Failed(_) => "Failed",
         }
+    }
+
+    // --- resolve_audio_tracks: MultipleFiles fanout ----------------------
+    //
+    // Per-file chapter-atom probe with a running `order` index across the
+    // concatenated tracks. `resolve_audio_tracks` matches every variant
+    // exhaustively (no `_ =>` arm) — the compiler enforces that on any
+    // future variant; that contract is documented in AD-018.
+    //
+    // The probe needs ffmpeg + ffprobe on PATH; tests skip cleanly when
+    // those aren't installed, same convention as the m4b integration tests.
+
+    fn ffprobe_available() -> bool {
+        std::process::Command::new("which")
+            .arg("ffprobe")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .is_some()
+            && std::process::Command::new("which")
+                .arg("ffmpeg")
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .is_some()
+    }
+
+    fn fixture_audio(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/audio")
+            .join(name)
+    }
+
+    fn make_silent_m4a(dir: &Path, name: &str, seconds: u32) -> PathBuf {
+        let p = dir.join(name);
+        let status = std::process::Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-hide_banner",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=22050:cl=stereo",
+                "-t",
+                &seconds.to_string(),
+                "-c:a",
+                "aac",
+                "-b:a",
+                "32k",
+            ])
+            .arg(&p)
+            .status()
+            .expect("spawn ffmpeg");
+        assert!(status.success(), "ffmpeg failed for {}", p.display());
+        p
+    }
+
+    fn project_with_audio(audio: AudioSource) -> Project {
+        let mut p = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
+        p.sources.audio = Some(audio);
+        p
+    }
+
+    #[tokio::test]
+    async fn resolve_multiple_files_atomless_yields_one_track_per_file() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
+        let b = make_silent_m4a(dir.path(), "b.m4a", 1);
+        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+        let project = project_with_audio(AudioSource::MultipleFiles(vec![
+            a.clone(),
+            b.clone(),
+            c.clone(),
+        ]));
+
+        let tracks = resolve_audio_tracks(&project).await.unwrap();
+        assert_eq!(tracks.len(), 3);
+        let orders: Vec<usize> = tracks.iter().map(|t| t.order).collect();
+        assert_eq!(orders, vec![0, 1, 2]);
+        let paths: Vec<PathBuf> = tracks.iter().map(|t| t.path.clone()).collect();
+        assert_eq!(paths, vec![a, b, c]);
+        assert!(tracks.iter().all(|t| t.window.is_none()));
+    }
+
+    #[tokio::test]
+    async fn resolve_multiple_files_single_atomful_matches_single_file_expansion() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let m4b = fixture_audio("synth_chapters_generic.m4b");
+        if !m4b.exists() {
+            eprintln!("fixture missing — skipping");
+            return;
+        }
+
+        let single =
+            resolve_audio_tracks(&project_with_audio(AudioSource::SingleFile(m4b.clone())))
+                .await
+                .unwrap();
+        let wrapped =
+            resolve_audio_tracks(&project_with_audio(AudioSource::MultipleFiles(vec![m4b])))
+                .await
+                .unwrap();
+
+        assert_eq!(single.len(), wrapped.len());
+        assert_eq!(single.len(), 3, "fixture carries 3 chapter atoms");
+        for (s, w) in single.iter().zip(wrapped.iter()) {
+            assert_eq!(s.order, w.order);
+            assert_eq!(s.path, w.path);
+            assert_eq!(s.title, w.title);
+            assert_eq!(s.window, w.window);
+        }
+    }
+
+    #[tokio::test]
+    async fn resolve_multiple_files_mixed_atoms_uses_running_order() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let m4b = fixture_audio("synth_chapters_generic.m4b");
+        if !m4b.exists() {
+            eprintln!("fixture missing — skipping");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
+        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+
+        let project = project_with_audio(AudioSource::MultipleFiles(vec![
+            a.clone(),
+            m4b.clone(),
+            c.clone(),
+        ]));
+        let tracks = resolve_audio_tracks(&project).await.unwrap();
+
+        // a (1) + b's 3 atoms (3) + c (1) = 5 tracks
+        assert_eq!(tracks.len(), 5);
+        let orders: Vec<usize> = tracks.iter().map(|t| t.order).collect();
+        assert_eq!(orders, vec![0, 1, 2, 3, 4]);
+
+        assert_eq!(tracks[0].path, a);
+        assert!(tracks[0].window.is_none());
+        for t in &tracks[1..4] {
+            assert_eq!(t.path, m4b);
+            assert!(t.window.is_some(), "atom track must carry a window");
+        }
+        assert_eq!(tracks[4].path, c);
+        assert!(tracks[4].window.is_none());
+    }
+
+    #[tokio::test]
+    async fn resolve_multiple_files_skips_invalid_entries() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
+        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+        let missing = PathBuf::from("/definitely/not/a/real/audio.m4a");
+
+        let project = project_with_audio(AudioSource::MultipleFiles(vec![
+            a.clone(),
+            missing,
+            c.clone(),
+        ]));
+        let tracks = resolve_audio_tracks(&project).await.unwrap();
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].path, a);
+        assert_eq!(tracks[1].path, c);
+        assert_eq!(tracks[0].order, 0);
+        assert_eq!(tracks[1].order, 1);
     }
 
     #[test]
