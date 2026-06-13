@@ -373,7 +373,7 @@ export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Other"; message: string }
 export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
-export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string }
+export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
 /**
  * Which backend the secrets layer uses. In release builds the choice is
  * fixed to `Keychain`; the variant exists in the type so the IPC surface

@@ -36,14 +36,25 @@ pub enum AudioSource {
     SingleFile(PathBuf),
     Folder(PathBuf),
     LibationManifest(PathBuf),
+    MultipleFiles(Vec<PathBuf>),
+}
+
+fn has_audio_extension(p: &Path) -> bool {
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    matches!(ext.as_deref(), Some("m4b" | "m4a" | "mp3"))
 }
 
 /// Resolve an `AudioSource` to the ordered list of audio file paths it
 /// represents. `SingleFile` and `LibationManifest` yield a single entry;
 /// `Folder` yields top-level files whose extension is `m4b` / `m4a` / `mp3`,
-/// case-insensitive, sorted by path. Shared between the upload command and
-/// the job orchestrator so both agree on what "the audio tracks for this
-/// project" means.
+/// case-insensitive, sorted by path; `MultipleFiles` yields the given paths
+/// in their original order after dropping entries that don't exist, aren't
+/// files, or lack an audio extension (invalid entries are logged and
+/// skipped). Shared between the upload command and the job orchestrator so
+/// both agree on what "the audio tracks for this project" means.
 pub fn audio_source_paths(src: &AudioSource) -> std::io::Result<Vec<PathBuf>> {
     match src {
         AudioSource::SingleFile(p) | AudioSource::LibationManifest(p) => Ok(vec![p.clone()]),
@@ -54,15 +65,32 @@ pub fn audio_source_paths(src: &AudioSource) -> std::io::Result<Vec<PathBuf>> {
                 if !p.is_file() {
                     continue;
                 }
-                let ext = p
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(str::to_ascii_lowercase);
-                if matches!(ext.as_deref(), Some("m4b" | "m4a" | "mp3")) {
+                if has_audio_extension(&p) {
                     out.push(p);
                 }
             }
             out.sort();
+            Ok(out)
+        }
+        AudioSource::MultipleFiles(paths) => {
+            let mut out = Vec::with_capacity(paths.len());
+            for p in paths {
+                if !p.is_file() {
+                    tracing::warn!(
+                        path = %p.display(),
+                        "multiple_files: skipping entry that does not exist or is not a file",
+                    );
+                    continue;
+                }
+                if !has_audio_extension(p) {
+                    tracing::warn!(
+                        path = %p.display(),
+                        "multiple_files: skipping entry without audio extension (m4b/m4a/mp3)",
+                    );
+                    continue;
+                }
+                out.push(p.clone());
+            }
             Ok(out)
         }
     }
@@ -204,5 +232,53 @@ mod tests {
             "/definitely/not/a/real/dir",
         )));
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn multiple_files_round_trips_through_serde_json() {
+        let original = AudioSource::MultipleFiles(vec![
+            PathBuf::from("/tmp/a.m4b"),
+            PathBuf::from("/tmp/b.m4b"),
+            PathBuf::from("/tmp/c.m4b"),
+        ]);
+        let json = serde_json::to_string(&original).unwrap();
+        assert!(
+            json.contains("\"multiple_files\""),
+            "expected snake_case tag in: {json}"
+        );
+        let back: AudioSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn multiple_files_preserves_input_order_and_drops_invalid() {
+        let dir = tempdir().unwrap();
+        let a = dir.path().join("z_first.m4b");
+        let b = dir.path().join("a_second.mp3");
+        let c = dir.path().join("m_third.m4a");
+        for p in [&a, &b, &c] {
+            fs::write(p, b"x").unwrap();
+        }
+        let cover = dir.path().join("cover.jpg");
+        fs::write(&cover, b"x").unwrap();
+        let missing = dir.path().join("ghost.m4b");
+
+        let src = AudioSource::MultipleFiles(vec![a.clone(), missing, cover, b.clone(), c.clone()]);
+        let got = audio_source_paths(&src).unwrap();
+        assert_eq!(
+            got,
+            vec![a, b, c],
+            "order preserved, invalid entries dropped"
+        );
+    }
+
+    #[test]
+    fn multiple_files_empty_after_filter_returns_empty_vec() {
+        let dir = tempdir().unwrap();
+        let cover = dir.path().join("cover.jpg");
+        fs::write(&cover, b"x").unwrap();
+        let src = AudioSource::MultipleFiles(vec![cover, PathBuf::from("/nope/x.m4b")]);
+        let got = audio_source_paths(&src).unwrap();
+        assert!(got.is_empty());
     }
 }

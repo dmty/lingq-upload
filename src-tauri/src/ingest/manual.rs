@@ -16,18 +16,43 @@ impl ManualSource {
         lang: &str,
         title: Option<String>,
     ) -> Result<Candidate, IngestError> {
+        Self::from_files_many(epub, vec![audio], lang, title)
+    }
+
+    /// Build a manual `Candidate` from an EPUB and one or more audio files.
+    /// One path collapses to `AudioSource::SingleFile` so existing single-path
+    /// call sites stay byte-identical; two or more paths yield
+    /// `AudioSource::MultipleFiles` with order preserved as given.
+    pub fn from_files_many(
+        epub: PathBuf,
+        audio: Vec<PathBuf>,
+        lang: &str,
+        title: Option<String>,
+    ) -> Result<Candidate, IngestError> {
+        if audio.is_empty() {
+            return Err(IngestError::Parse(
+                "manual source requires at least one audio file".into(),
+            ));
+        }
+
         let resolved_title = match title {
             Some(t) if !t.is_empty() => t,
-            _ => audio
+            _ => audio[0]
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_string())
                 .ok_or_else(|| {
                     IngestError::Parse(format!(
                         "cannot derive title from audio path: {}",
-                        audio.display()
+                        audio[0].display()
                     ))
                 })?,
+        };
+
+        let audio_source = if audio.len() == 1 {
+            AudioSource::SingleFile(audio.into_iter().next().expect("non-empty"))
+        } else {
+            AudioSource::MultipleFiles(audio)
         };
 
         Ok(Candidate {
@@ -38,7 +63,7 @@ impl ManualSource {
             series: None,
             cover_path: None,
             text_source: TextSource::Epub(epub),
-            audio_source: Some(AudioSource::SingleFile(audio)),
+            audio_source: Some(audio_source),
             chapter_manifest: None,
             metadata_extras: HashMap::new(),
         })

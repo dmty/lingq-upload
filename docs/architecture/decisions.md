@@ -320,6 +320,8 @@ pub struct IngestRegistry { /* Vec<Box<dyn IngestSource>> */ }
 
 **Convention:** Public extension traits live under `src-tauri/src/{codecs,languages,ingest}/mod.rs` and re-export via `lib.rs` so out-of-tree builds (a future plugin host) can depend on them. Heading strategies are not a trait — adding an EPUB vendor is an additive `EpubVendor` variant plus a strategy module (AD-016).
 
+**`AudioSource` variant set.** `ingest::AudioSource` has four variants — `SingleFile`, `Folder`, `LibationManifest`, `MultipleFiles` — and the enum is the public contract for "where the audio bytes for a project come from". Adding a variant is additive but the compiler must enforce that every dispatch site updates in lockstep: the resolver in `core/job/mod.rs::resolve_audio_tracks` matches the variant set **exhaustively** (no `_ =>` arm), the upload guard in `commands/upload.rs` flows through the shared `audio_source_paths` helper in `ingest/mod.rs`, the builder helpers in `ingest/manual.rs` pick the right variant from the input shape, and any new `IngestSource` impl picks the right variant at scan time. Drop a variant and every one of those sites must be re-checked the same way.
+
 ## AD-021 — Project identity is a multi-key tuple, not a scalar
 
 **Decision:** A project's identity is a small bag of external keys plus a derived content hash, not a single ID. All projects (Calibre-sourced, Libation-sourced, manually picked) carry the same shape; some slots may be `None`.
