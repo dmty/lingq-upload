@@ -1,5 +1,6 @@
 pub mod add_project;
 pub mod demo;
+pub mod files;
 pub mod ingest;
 pub mod jobs;
 pub mod library;

@@ -25,6 +25,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_set_dev_backend,
             commands::ingest::manual_source_from_files,
             commands::ingest::cmd_ingest_scan,
+            commands::files::cmd_expand_audio_dir,
             commands::lingq::cmd_account_profile,
             commands::lingq::cmd_list_languages,
             commands::lingq::cmd_list_collections,
