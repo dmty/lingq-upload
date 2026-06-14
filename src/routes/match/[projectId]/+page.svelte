@@ -1,9 +1,13 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { open } from "@tauri-apps/plugin-dialog";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     commands,
     type AbsorbPolicy,
+    type AudioSource,
     type BucketPreview,
     type MappingOp,
     type MismatchCondition,
@@ -11,11 +15,13 @@
     type ProjectId as ProjectIdType,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import { basename, extOf } from "$lib/paths";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
   import ChapterPicker from "$lib/components/ChapterPicker.svelte";
   import MappingGrid from "$lib/components/MappingGrid.svelte";
   import ProjectSettings from "$lib/components/ProjectSettings.svelte";
+  import DropZone from "$lib/components/DropZone.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
@@ -51,6 +57,18 @@
   let absorbPolicy = $state<AbsorbPolicy>("forward");
   let settingsOpen = $state(false);
 
+  // Audio-expand affordance (sub-case A only: no receipts yet). Toggled by the
+  // "+ Add more audio" button; reveals a DropZone seeded from the project's
+  // current audio source.
+  let audioPaths = $state<string[]>([]);
+  let audioOriginFolder = $state<string | null>(null);
+  let receiptCount = $state(0);
+  let expandOpen = $state(false);
+  let busyReplace = $state(false);
+  let replaceError = $state<string | null>(null);
+  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let localHover = $state(false);
+
   // Single load path: the store does the one cmd_project_load round trip and
   // exposes everything the page needs (id, absorb policy, mapping, chapters).
   // The page component is reused across `/match/:projectId` navigations, so
@@ -74,6 +92,8 @@
       }
       projectIdValue = mapping.projectId;
       absorbPolicy = mapping.absorbPolicy;
+      await refreshAudioState(key);
+      if (cancelled || projectKey !== key) return;
       if (applyParams()) {
         hydrating = false;
         return;
@@ -85,6 +105,40 @@
       cancelled = true;
     };
   });
+
+  async function refreshAudioState(key: string) {
+    const loaded = await commands.cmdProjectLoad(key);
+    if (projectKey !== key) return;
+    if (loaded.status === "error") {
+      audioPaths = [];
+      audioOriginFolder = null;
+      receiptCount = 0;
+      return;
+    }
+    const project = loaded.data;
+    receiptCount = project.receipts?.length ?? 0;
+    const src = project.sources.audio ?? null;
+    if (src === null) {
+      audioPaths = [];
+      audioOriginFolder = null;
+      return;
+    }
+    if (src.kind === "folder") {
+      const expanded = await commands.cmdExpandAudioDir(src.value);
+      if (projectKey !== key) return;
+      audioPaths = expanded.status === "ok" ? expanded.data : [];
+      audioOriginFolder = basename(src.value);
+      return;
+    }
+    if (src.kind === "multiple_files") {
+      audioPaths = src.value;
+      audioOriginFolder = null;
+      return;
+    }
+    // single_file | libation_manifest
+    audioPaths = [src.value];
+    audioOriginFolder = null;
+  }
 
   function resetProjectState() {
     title = "Untitled";
@@ -100,6 +154,13 @@
     projectIdValue = null;
     absorbPolicy = "forward";
     settingsOpen = false;
+    audioPaths = [];
+    audioOriginFolder = null;
+    receiptCount = 0;
+    expandOpen = false;
+    busyReplace = false;
+    replaceError = null;
+    localHover = false;
   }
 
   function applyParams(): boolean {
@@ -262,6 +323,192 @@
     await mapping.load(projectKey);
     busy = false;
   }
+
+  const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
+
+  function toAudioSource(paths: string[]): AudioSource {
+    if (paths.length === 1) {
+      return { kind: "single_file", value: paths[0] } as AudioSource;
+    }
+    return { kind: "multiple_files", value: paths } as AudioSource;
+  }
+
+  async function replaceAudio(nextPaths: string[], nextOrigin: string | null) {
+    if (!projectIdValue) return;
+    const pid = projectIdValue;
+    const key = projectKey;
+    busyReplace = true;
+    replaceError = null;
+    const prevPaths = audioPaths;
+    const prevOrigin = audioOriginFolder;
+    audioPaths = nextPaths;
+    audioOriginFolder = nextOrigin;
+    const res = await commands.cmdReplaceAudioSource(
+      pid,
+      toAudioSource(nextPaths),
+    );
+    if (projectKey !== key) {
+      busyReplace = false;
+      return;
+    }
+    if (res.status === "error") {
+      replaceError = appErrorMessage(res.error);
+      // Roll back local state from the server.
+      audioPaths = prevPaths;
+      audioOriginFolder = prevOrigin;
+      await refreshAudioState(key);
+      busyReplace = false;
+      return;
+    }
+    // Re-load mapping so the mismatch panel re-renders against the new track
+    // count, refresh audio + receipts, then re-probe the matcher. When the
+    // count now matches, cmd_matcher_inspect returns None and we redirect.
+    await mapping.load(key);
+    if (projectKey !== key) {
+      busyReplace = false;
+      return;
+    }
+    projectIdValue = mapping.projectId;
+    absorbPolicy = mapping.absorbPolicy;
+    await refreshAudioState(key);
+    if (projectKey !== key) {
+      busyReplace = false;
+      return;
+    }
+    const inspectPid = mapping.projectId;
+    if (inspectPid) {
+      const inspected = await commands.cmdMatcherInspect(inspectPid);
+      if (projectKey !== key) {
+        busyReplace = false;
+        return;
+      }
+      if (inspected.status === "ok") {
+        if (inspected.data == null) {
+          busyReplace = false;
+          goto(`/run/${encodeURIComponent(key)}`);
+          return;
+        }
+        const data = inspected.data;
+        title = data.title;
+        chapters = data.chapter_count;
+        tracks = data.track_count;
+        condition = data.condition;
+        options = data.options;
+        selected = data.preselect;
+        bucketPreview = data.bucket_preview;
+      }
+    }
+    busyReplace = false;
+  }
+
+  async function pickAndReplace() {
+    if (busyReplace) return;
+    const sel = await open({
+      multiple: true,
+      filters: [{ name: "Audio", extensions: AUDIO_EXTS }],
+    });
+    const picked: string[] =
+      sel == null ? [] : Array.isArray(sel) ? sel : [sel];
+    if (!picked.length) return;
+    const existing = new Set(audioPaths);
+    const additions = picked.filter((p) => !existing.has(p));
+    if (!additions.length) return;
+    await replaceAudio([...audioPaths, ...additions], null);
+  }
+
+  async function removeAndReplace(path: string) {
+    if (busyReplace) return;
+    const next = audioPaths.filter((q) => q !== path);
+    await replaceAudio(next, null);
+  }
+
+  async function clearAndReplace() {
+    if (busyReplace) return;
+    await replaceAudio([], null);
+  }
+
+  async function expandFolderDrop(path: string): Promise<boolean> {
+    const ext = extOf(path);
+    if (ext) return false;
+    const res = await commands.cmdExpandAudioDir(path);
+    if (res.status !== "ok" || res.data.length === 0) return false;
+    const existing = new Set(audioPaths);
+    const additions = res.data.filter((p) => !existing.has(p));
+    if (!additions.length) return true;
+    await replaceAudio([...audioPaths, ...additions], basename(path));
+    return true;
+  }
+
+  async function handleAudioDrop(paths: string[]) {
+    if (busyReplace) return;
+    const leftover: string[] = [];
+    for (const p of paths) {
+      const ext = extOf(p);
+      if (!ext) {
+        const expanded = await expandFolderDrop(p);
+        if (!expanded) leftover.push(p);
+      } else if (AUDIO_EXTS.includes(ext)) {
+        leftover.push(p);
+      }
+    }
+    if (!leftover.length) return;
+    const existing = new Set(audioPaths);
+    const additions = leftover.filter((p) => !existing.has(p));
+    if (!additions.length) return;
+    await replaceAudio([...audioPaths, ...additions], null);
+  }
+
+  function hitTestAudio(clientX: number, clientY: number): boolean {
+    const el = audioDropEl;
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return (
+      clientX >= r.left &&
+      clientX <= r.right &&
+      clientY >= r.top &&
+      clientY <= r.bottom
+    );
+  }
+
+  function resolveAudioHover(x: number, y: number): boolean {
+    if (hitTestAudio(x, y)) return true;
+    const dpr = window.devicePixelRatio || 1;
+    if (dpr !== 1) return hitTestAudio(x / dpr, y / dpr);
+    return false;
+  }
+
+  // Drag-drop wiring is gated on expandOpen && receiptCount === 0 — attach
+  // when the affordance is live and tear down when it folds away.
+  $effect(() => {
+    if (!expandOpen || receiptCount > 0) return;
+    let disposed = false;
+    let off: UnlistenFn | undefined;
+    void (async () => {
+      const handler = await getCurrentWebview().onDragDropEvent((event) => {
+        if (busyReplace) return;
+        const p = event.payload;
+        if (p.type === "over") {
+          localHover = resolveAudioHover(p.position.x, p.position.y);
+        } else if (p.type === "leave") {
+          localHover = false;
+        } else if (p.type === "drop") {
+          const onZone = resolveAudioHover(p.position.x, p.position.y);
+          localHover = false;
+          if (onZone) void handleAudioDrop(p.paths);
+        }
+      });
+      if (disposed) {
+        handler();
+        return;
+      }
+      off = handler;
+    })();
+    return () => {
+      disposed = true;
+      off?.();
+      localHover = false;
+    };
+  });
 </script>
 
 <div class="flex h-full min-h-screen">
@@ -326,6 +573,57 @@
       {#if hydrating}
         <p class="text-sm text-fg-muted">Re-probing project sources…</p>
       {:else}
+        {#if receiptCount === 0 && error === null}
+          <div class="space-y-2">
+            <button
+              type="button"
+              class="text-xs text-fg-muted hover:text-fg"
+              aria-expanded={expandOpen}
+              aria-controls="add-more-audio-panel"
+              onclick={() => (expandOpen = !expandOpen)}
+            >
+              {expandOpen ? "− Hide audio" : "+ Add more audio"}
+            </button>
+            {#if expandOpen}
+              <div
+                id="add-more-audio-panel"
+                class="space-y-2 rounded-md border border-border bg-surface p-3"
+              >
+                <DropZone
+                  variant="audio"
+                  paths={audioPaths}
+                  hovered={localHover}
+                  disabled={busyReplace}
+                  onPick={pickAndReplace}
+                  onRemove={removeAndReplace}
+                  onClear={clearAndReplace}
+                  originLabel={audioOriginFolder ?? undefined}
+                  ref={(el) => (audioDropEl = el)}
+                />
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs text-fg-subtle">
+                    Changes save as you add or remove files.
+                  </p>
+                  <button
+                    type="button"
+                    class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
+                    onclick={() => (expandOpen = false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {#if replaceError}
+                  <p
+                    class="rounded-sm border border-error-soft bg-error-soft/30 px-3 py-2 text-xs text-fg"
+                  >
+                    {replaceError}
+                  </p>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         <MismatchEvidence {title} {chapters} {tracks} {condition} />
 
         <div class="space-y-2">
