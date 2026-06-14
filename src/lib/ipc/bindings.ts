@@ -241,6 +241,23 @@ async cmdMatcherInspect(projectId: ProjectId) : Promise<Result<MismatchInspectio
 }
 },
 /**
+ * Replace the project's audio source before any chapter has been uploaded.
+ * 
+ * Rejects when `receipts` is non-empty (the upload pipeline has already
+ * written to LingQ — reshaping audio mid-flight is out of scope here) and
+ * when the new source resolves to zero usable files. On success, clears
+ * `matcher_decision` and `mapping`: both were seeded against the prior
+ * track count and would mis-render after the swap.
+ */
+async cmdReplaceAudioSource(projectId: ProjectId, audioSource: AudioSource) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_replace_audio_source", { projectId, audioSource }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Apply a single mapping-editor op to a project and persist the new state.
  * 
  * The store performs the load → gate → apply → put cycle under its
