@@ -156,17 +156,15 @@
       {/each}
     </ul>
   </div>
-{:else}
+{:else if mode === "single"}
   <button
     type="button"
     bind:this={buttonEl}
     onclick={onPick}
     {disabled}
-    class="group flex items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hovered
+    class="group flex w-full items-center gap-3 rounded-md border-[1.5px] border-dashed px-4 py-5 text-left transition-[background,border-color] duration-120 {hovered
       ? 'border-accent bg-accent-soft'
-      : mode === 'single'
-        ? 'border-success bg-success-soft'
-        : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+      : 'border-success bg-success-soft'}"
   >
     {#if variant === "text"}
       <svg
@@ -178,7 +176,7 @@
         stroke-width="1.5"
         stroke-linecap="round"
         stroke-linejoin="round"
-        class={mode === "single" ? "text-success" : "text-fg-muted"}
+        class="text-success"
         aria-hidden="true"
       >
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -196,7 +194,7 @@
         stroke-width="1.5"
         stroke-linecap="round"
         stroke-linejoin="round"
-        class={mode === "single" ? "text-success" : "text-fg-muted"}
+        class="text-success"
         aria-hidden="true"
       >
         <path d="M9 18V5l12-2v13" />
@@ -206,37 +204,78 @@
     {/if}
 
     <div class="flex-1">
-      {#if mode === "single"}
-        <div class="text-sm font-medium text-fg">{basename(paths[0])}</div>
-        <div class="text-xs text-fg-subtle">
-          Click to choose a different file
-        </div>
-      {:else}
-        <div class="text-sm font-medium text-fg">{copy.empty}</div>
-        <div class="text-xs text-fg-subtle">{copy.hint}</div>
-      {/if}
+      <div class="text-sm font-medium text-fg">{basename(paths[0])}</div>
+      <div class="text-xs text-fg-subtle">Click to choose a different file</div>
     </div>
 
-    {#if mode === "single"}
-      <span
-        role="button"
-        tabindex="0"
-        aria-label={copy.clearLabel}
-        onclick={(e) => {
+    <span
+      role="button"
+      tabindex="0"
+      aria-label={copy.clearLabel}
+      onclick={(e) => {
+        e.stopPropagation();
+        onClear();
+      }}
+      onkeydown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
           e.stopPropagation();
+          e.preventDefault();
           onClear();
-        }}
-        onkeydown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.stopPropagation();
-            e.preventDefault();
-            onClear();
-          }
-        }}
-        class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
+        }
+      }}
+      class="rounded-sm px-2 py-1 text-xs text-fg-muted hover:bg-surface hover:text-fg"
+    >
+      ×
+    </span>
+  </button>
+{:else}
+  <button
+    type="button"
+    bind:this={buttonEl}
+    onclick={onPick}
+    {disabled}
+    class="group flex w-full flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-8 text-center transition-[background,border-color] duration-120 {hovered
+      ? 'border-accent bg-accent-soft'
+      : 'border-border-strong bg-surface hover:border-accent hover:bg-accent-soft'}"
+  >
+    {#if variant === "text"}
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="text-fg-muted group-hover:text-accent"
+        aria-hidden="true"
       >
-        ×
-      </span>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="9" y1="14" x2="15" y2="14" />
+        <line x1="9" y1="18" x2="13" y2="18" />
+      </svg>
+    {:else}
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="text-fg-muted group-hover:text-accent"
+        aria-hidden="true"
+      >
+        <path d="M9 18V5l12-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
+      </svg>
     {/if}
+
+    <div class="text-sm font-medium text-fg">{copy.empty}</div>
+    <div class="text-xs text-fg-subtle">{copy.hint}</div>
   </button>
 {/if}
