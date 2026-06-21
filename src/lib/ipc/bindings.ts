@@ -258,6 +258,20 @@ async cmdReplaceAudioSource(projectId: ProjectId, audioSource: AudioSource) : Pr
 }
 },
 /**
+ * Re-run the proportional split over the remaining chapters (excluding
+ * `excluded_chapter_id`) and persist the new mapping with
+ * `partition_locked = false`. Adds the excluded chapter to the project's
+ * skip set so the run loop omits it.
+ */
+async cmdRecomputeSplit(projectId: ProjectId, excludedChapterId: ChapterId | null) : Promise<Result<MappingState, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_recompute_split", { projectId, excludedChapterId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Apply a single mapping-editor op to a project and persist the new state.
  * 
  * The store performs the load → gate → apply → put cycle under its
@@ -411,6 +425,7 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
  * stays the same across debug/release.
  */
 export type BackendChoice = "file" | "keychain"
+export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
 /**
  * Read-only preview row for the Mismatch UI's `SplitProportional` card.
  * One row per audio atom: text-chapter index range that the proportional
@@ -490,7 +505,7 @@ export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; con
  * `confidence` was bumped to the recomputed placeholder by an op.
  */
 original_confidence?: number }
-export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number }
+export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number; partition_locked?: boolean; buckets?: BucketMeta[] }
 export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
 export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
 /**
