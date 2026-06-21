@@ -41,6 +41,43 @@ function fixtureScript(): string {
   })();`;
 }
 
+const DRIFT_KEY = "drift-fixture";
+
+function driftFixtureScript(): string {
+  // 3 tracks: t0 and t1 have charsPerSec 5 (median = 5), t2 has charsPerSec 12 (~140% deviation → drift).
+  const chapters = Array.from({ length: 3 }, (_, i) => ({
+    id: `dr:${i}`, order: i, title: `Chapter ${i + 1}`, body: "x".repeat(100), kind: "body",
+  }));
+  const mapping = {
+    pairs: [
+      { chapter_id: "dr:0", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
+      { chapter_id: "dr:1", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
+      { chapter_id: "dr:2", track_id: "t2", confidence: 1, touched: false, original_confidence: 1 },
+    ],
+    parking_lot: [], op_id: 0, partition_locked: false,
+    buckets: [
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 300, charsPerSec: 5 },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
+      { trackId: "t2", atomTitle: "Audio 3", atomDurationSec: 300, charsPerSec: 12 },
+    ],
+  };
+  const inspection = {
+    title: "Drift Fixture",
+    chapter_count: 3,
+    track_count: 3,
+    condition: "many_to_few" as const,
+    options: ["split_proportional", "cancel"] as const,
+    preselect: "split_proportional" as const,
+    bucket_preview: null,
+  };
+  return `;(() => {
+    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
+    window.__pickerState__.chaptersByProject[${JSON.stringify(DRIFT_KEY)}] = ${JSON.stringify(chapters)};
+    window.__matcherInspection__ = ${JSON.stringify(inspection)};
+    window.__mappingState__.seed(${JSON.stringify(DRIFT_KEY)}, ${JSON.stringify(mapping)});
+  })();`;
+}
+
 const NON_CONTIGUOUS_KEY = "nc-fixture";
 
 function nonContiguousFixtureScript(): string {
@@ -96,6 +133,14 @@ test.describe("banded bucket list", () => {
     await expect(page.getByTestId("bucket-band-meta").first()).toContainText("10:00");
     // no SVG connector layer
     await expect(page.locator('[data-testid="mapping-connector-layer"]')).toHaveCount(0);
+  });
+
+  test("flags a drifting band", async ({ page }) => {
+    await page.addInitScript(driftFixtureScript());
+    await page.goto(`/match/${DRIFT_KEY}`);
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+    // Only t2 (charsPerSec 12) deviates >30% from median 5; t0 and t1 are at the median.
+    await expect(page.getByTestId("bucket-drift")).toHaveCount(1);
   });
 
   test("renders 3 distinct bands for non-contiguous t0,t1,t0 track assignment", async ({ page }) => {

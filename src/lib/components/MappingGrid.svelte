@@ -209,6 +209,19 @@
     const b = buckets.find((b) => b.trackId === trackId);
     return b?.atomTitle ?? trackId;
   }
+
+  function median(xs: number[]): number {
+    const v = xs.filter((x) => x > 0).sort((a, b) => a - b);
+    if (!v.length) return 0;
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+
+  const driftMedian = $derived(median(buckets.map((b) => b.charsPerSec)));
+
+  function isDrift(cps: number): boolean {
+    return driftMedian > 0 && cps > 0 && Math.abs(cps - driftMedian) / driftMedian > 0.3;
+  }
 </script>
 
 <div data-testid="mapping-grid" class="flex w-full flex-col gap-2">
@@ -227,6 +240,13 @@
           <span class="font-medium text-fg">
             {band.meta.atomTitle ?? "Audio"} · {fmtDur(band.meta.atomDurationSec)}
           </span>
+          {#if isDrift(band.meta.charsPerSec)}
+            <span
+              data-testid="bucket-drift"
+              title="chars/sec deviates >±30% from the median — the narrator may have added or skipped material here."
+              class="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+            >drift</span>
+          {/if}
         </header>
       {/if}
       <ul>
