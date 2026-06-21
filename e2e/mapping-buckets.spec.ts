@@ -41,6 +41,42 @@ function fixtureScript(): string {
   })();`;
 }
 
+const NON_CONTIGUOUS_KEY = "nc-fixture";
+
+function nonContiguousFixtureScript(): string {
+  // 3 chapters: t0, t1, t0 — non-adjacent same track_id produces 3 distinct bands.
+  const chapters = Array.from({ length: 3 }, (_, i) => ({
+    id: `nc:${i}`, order: i, title: `Chapter ${i + 1}`, body: "x".repeat(100), kind: "body",
+  }));
+  const mapping = {
+    pairs: [
+      { chapter_id: "nc:0", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
+      { chapter_id: "nc:1", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
+      { chapter_id: "nc:2", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
+    ],
+    parking_lot: [], op_id: 0, partition_locked: false,
+    buckets: [
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
+    ],
+  };
+  const inspection = {
+    title: "NC Fixture",
+    chapter_count: 3,
+    track_count: 2,
+    condition: "many_to_few" as const,
+    options: ["split_proportional", "cancel"] as const,
+    preselect: "split_proportional" as const,
+    bucket_preview: null,
+  };
+  return `;(() => {
+    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
+    window.__pickerState__.chaptersByProject[${JSON.stringify(NON_CONTIGUOUS_KEY)}] = ${JSON.stringify(chapters)};
+    window.__matcherInspection__ = ${JSON.stringify(inspection)};
+    window.__mappingState__.seed(${JSON.stringify(NON_CONTIGUOUS_KEY)}, ${JSON.stringify(mapping)});
+  })();`;
+}
+
 test.describe("banded bucket list", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
@@ -60,5 +96,17 @@ test.describe("banded bucket list", () => {
     await expect(page.getByTestId("bucket-band-meta").first()).toContainText("10:00");
     // no SVG connector layer
     await expect(page.locator('[data-testid="mapping-connector-layer"]')).toHaveCount(0);
+  });
+
+  test("renders 3 distinct bands for non-contiguous t0,t1,t0 track assignment", async ({ page }) => {
+    await page.addInitScript(nonContiguousFixtureScript());
+    await page.goto(`/match/${NON_CONTIGUOUS_KEY}`);
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+    // Non-contiguous same track_id must produce 3 separate bands (not 2).
+    await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(3);
+    // All 3 chapter rows present and numbered in order
+    await expect(page.getByTestId("mapping-chapter-row")).toHaveCount(3);
+    await expect(page.getByTestId("chapter-number").first()).toHaveText("1");
+    await expect(page.getByTestId("chapter-number").last()).toHaveText("3");
   });
 });
