@@ -71,11 +71,11 @@ test.describe("match resolve transitions to mapping grid", () => {
       timeout: 5_000,
     });
 
-    // 85 chapter rows, 6 distinct track rows.
+    // 85 chapter rows, 6 bands (one per contiguous track group).
     await expect(page.getByTestId("mapping-chapter-row")).toHaveCount(
       CHAPTER_COUNT,
     );
-    await expect(page.getByTestId("mapping-track-row")).toHaveCount(
+    await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(
       TRACK_COUNT,
     );
   });
