@@ -245,6 +245,24 @@
 
   const mappingGateOk = $derived(mapping.gateContinue());
 
+  const matterIds = $derived(
+    mapping.chapters.filter((c) => c.kind !== "body").map((c) => c.id),
+  );
+  const allMatterSkipped = $derived(
+    matterIds.length > 0 &&
+      matterIds.every((id) => mapping.skippedIds.includes(id)),
+  );
+
+  function toggleMatter() {
+    const set = new Set(mapping.skippedIds);
+    if (allMatterSkipped) {
+      for (const id of matterIds) set.delete(id);
+    } else {
+      for (const id of matterIds) set.add(id);
+    }
+    mapping.setSkipped([...set]).catch(() => {});
+  }
+
   // submitOp/confirmPair reject when their flush turn fails — that is the
   // signal for awaiting callers; fire-and-forget call sites swallow it
   // (AD-025: the reverted row colour is the only failure surface).
@@ -515,6 +533,16 @@
                     class="rounded-sm border px-2 py-1 text-xs {strategy === 'single_lesson' ? 'border-accent bg-accent-soft text-accent' : 'border-border text-fg-muted'}"
                     onclick={() => setStrategy('single_lesson')}>One lesson</button>
           </div>
+          {#if matterIds.length > 0}
+            <button
+              type="button"
+              data-testid="skip-matter-chip"
+              class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
+              onclick={toggleMatter}
+            >
+              {allMatterSkipped ? "Restore front & back matter" : "Remove front & back matter"}
+            </button>
+          {/if}
           {#if projectIdValue}
             <button
               type="button"
