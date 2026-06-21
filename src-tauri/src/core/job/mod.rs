@@ -15,7 +15,7 @@ use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
-use crate::core::matcher::ops::RECOMPUTED_CONFIDENCE;
+use crate::core::matcher::ops::{build_bucket_meta, RECOMPUTED_CONFIDENCE};
 use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
@@ -685,12 +685,24 @@ pub async fn seed_mapping_for_response(
         }
         MismatchResponse::Cancel | MismatchResponse::Unknown => return Ok(None),
     };
+    let chars_by_chapter: std::collections::HashMap<_, _> = chapters
+        .iter()
+        .map(|c| (c.id.clone(), c.body.chars().count()))
+        .collect();
+    let track_meta: Vec<(_, Option<String>, f64)> = tracks
+        .iter()
+        .map(|t| {
+            let dur = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
+            (track_id_for(t), t.title.clone(), dur)
+        })
+        .collect();
+    let buckets = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
     Ok(Some(MappingState {
         pairs,
         parking_lot: Vec::new(),
         op_id: 0,
         partition_locked: false,
-        buckets: Vec::new(),
+        buckets,
     }))
 }
 
@@ -1554,6 +1566,44 @@ mod tests {
         assert!(
             ["c1", "c2", "c3"].contains(&second),
             "second bucket title was {second}"
+        );
+    }
+
+    #[tokio::test]
+    async fn split_seed_populates_buckets() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        // Two audio tracks of known length: 30 s and 60 s.
+        let a = make_silent_m4a(dir.path(), "a.m4a", 30);
+        let b = make_silent_m4a(dir.path(), "b.m4a", 60);
+
+        // Three text files: first two map to track a, third to track b.
+        let t0 = dir.path().join("00_ch0.txt");
+        let t1 = dir.path().join("01_ch1.txt");
+        let t2 = dir.path().join("02_ch2.txt");
+        std::fs::write(&t0, "a".repeat(100)).unwrap();
+        std::fs::write(&t1, "a".repeat(100)).unwrap();
+        std::fs::write(&t2, "a".repeat(200)).unwrap();
+
+        let mut project = project_with_audio(AudioSource::Folder(dir.path().to_path_buf()));
+        project.sources.text = TextSource::LooseFiles {
+            paths: vec![t0, t1, t2],
+        };
+
+        let seeded = seed_mapping_for_response(&project, MismatchResponse::SplitProportional)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(!seeded.partition_locked);
+        // Two tracks → two buckets.
+        assert_eq!(seeded.buckets.len(), 2, "expected one bucket per atom/track");
+        assert!(
+            seeded.buckets.iter().all(|b| b.atom_duration_sec > 0.0),
+            "every bucket must carry a positive duration"
         );
     }
 }
