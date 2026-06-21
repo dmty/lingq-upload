@@ -689,6 +689,8 @@ pub async fn seed_mapping_for_response(
         pairs,
         parking_lot: Vec::new(),
         op_id: 0,
+        partition_locked: false,
+        buckets: Vec::new(),
     }))
 }
 
@@ -1196,6 +1198,8 @@ mod tests {
             ],
             parking_lot: vec![track_id_for(&tracks[2])],
             op_id: 3,
+            partition_locked: false,
+            buckets: Vec::new(),
         };
 
         let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
@@ -1220,6 +1224,8 @@ mod tests {
             pairs: vec![pair(0, Some("/gone/x.mp3".to_string()))],
             parking_lot: vec![],
             op_id: 1,
+            partition_locked: false,
+            buckets: Vec::new(),
         };
         assert!(matches!(
             plan_from_mapping(&mapping, &chapters, &tracks),
@@ -1242,6 +1248,8 @@ mod tests {
             ],
             parking_lot: vec![],
             op_id: 2,
+            partition_locked: false,
+            buckets: Vec::new(),
         });
 
         let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {

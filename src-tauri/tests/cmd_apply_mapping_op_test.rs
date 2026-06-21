@@ -69,6 +69,7 @@ fn seeded_state() -> MappingState {
         ],
         parking_lot: vec![],
         op_id: 0,
+        ..Default::default()
     }
 }
 

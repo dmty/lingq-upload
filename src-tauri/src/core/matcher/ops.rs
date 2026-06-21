@@ -56,6 +56,15 @@ pub struct MappingPair {
     pub original_confidence: f32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BucketMeta {
+    pub track_id: TrackId,
+    pub atom_title: Option<String>,
+    pub atom_duration_sec: f64,
+    pub chars_per_sec: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Default)]
 pub struct MappingState {
     pub pairs: Vec<MappingPair>,
@@ -63,6 +72,10 @@ pub struct MappingState {
     pub parking_lot: Vec<TrackId>,
     #[serde(default)]
     pub op_id: u64,
+    #[serde(default)]
+    pub partition_locked: bool,
+    #[serde(default)]
+    pub buckets: Vec<BucketMeta>,
 }
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize, Type, PartialEq)]
@@ -183,6 +196,37 @@ fn pair_idx(state: &MappingState, chapter_id: &ChapterId) -> Result<usize, Mappi
         .ok_or_else(|| MappingError::UnknownChapter(chapter_id.to_string()))
 }
 
+/// Group contiguous pairs by shared `track_id` into per-bucket audio metadata.
+/// `track_meta` is (track_id, title, duration_sec); chapters without a track
+/// (parking-lot remnants) start no bucket.
+pub fn build_bucket_meta(
+    pairs: &[MappingPair],
+    track_meta: &[(TrackId, Option<String>, f64)],
+    chars_by_chapter: &std::collections::HashMap<ChapterId, usize>,
+) -> Vec<BucketMeta> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < pairs.len() {
+        let Some(tid) = pairs[i].track_id.clone() else { i += 1; continue; };
+        let start = i;
+        while i < pairs.len() && pairs[i].track_id.as_ref() == Some(&tid) {
+            i += 1;
+        }
+        let chars: usize = pairs[start..i]
+            .iter()
+            .map(|p| *chars_by_chapter.get(&p.chapter_id).unwrap_or(&0))
+            .sum();
+        let (title, dur) = track_meta
+            .iter()
+            .find(|(t, _, _)| *t == tid)
+            .map(|(_, ti, d)| (ti.clone(), *d))
+            .unwrap_or((None, 0.0));
+        let chars_per_sec = if dur > 0.0 { chars as f64 / dur } else { 0.0 };
+        out.push(BucketMeta { track_id: tid, atom_title: title, atom_duration_sec: dur, chars_per_sec });
+    }
+    out
+}
+
 /// True iff no paired pair is both red-`original_confidence` (< 0.6) AND
 /// untouched. Unpaired pairs (`track_id == None`) never block — there is no
 /// pairing to confirm. Pure.
@@ -191,4 +235,36 @@ pub fn gate_continue(state: &MappingState) -> bool {
         .pairs
         .iter()
         .all(|p| p.touched || p.track_id.is_none() || p.original_confidence >= 0.6)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::epub::ChapterId;
+
+    fn cid(s: &str) -> ChapterId {
+        ChapterId(s.to_string())
+    }
+
+    #[test]
+    fn build_bucket_meta_groups_contiguous_track_ids() {
+        use std::collections::HashMap;
+        let pairs = vec![
+            MappingPair { chapter_id: cid("c0"), track_id: Some("t0".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
+            MappingPair { chapter_id: cid("c1"), track_id: Some("t0".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
+            MappingPair { chapter_id: cid("c2"), track_id: Some("t1".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
+        ];
+        let track_meta = vec![
+            ("t0".to_string(), Some("Audio 1".to_string()), 100.0),
+            ("t1".to_string(), Some("Audio 2".to_string()), 50.0),
+        ];
+        let chars: HashMap<ChapterId, usize> =
+            [(cid("c0"), 300), (cid("c1"), 200), (cid("c2"), 100)].into();
+        let buckets = build_bucket_meta(&pairs, &track_meta, &chars);
+        assert_eq!(buckets.len(), 2);
+        assert_eq!(buckets[0].track_id, "t0");
+        assert_eq!(buckets[0].atom_duration_sec, 100.0);
+        assert_eq!(buckets[0].chars_per_sec, 5.0); // (300+200)/100
+        assert_eq!(buckets[1].chars_per_sec, 2.0); // 100/50
+    }
 }
