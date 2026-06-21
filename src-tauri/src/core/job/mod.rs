@@ -706,6 +706,67 @@ pub async fn seed_mapping_for_response(
     }))
 }
 
+/// Re-seed a `SplitProportional` mapping over the eligible chapters, excluding
+/// one additional chapter if provided. The returned state always has
+/// `partition_locked = false`. Used by `cmd_recompute_split` when the
+/// partition is still pristine and the user removes a chapter.
+pub async fn seed_split_excluding(
+    project: &Project,
+    excluded: Option<&ChapterId>,
+) -> Result<MappingState, AppError> {
+    let tracks = resolve_audio_tracks(project).await?;
+    let (epub_bytes, strategy) = epub_inputs(project);
+    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let mut skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    if let Some(cid) = excluded {
+        skipped.insert(cid.clone());
+    }
+    let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+
+    let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
+    let atoms: Vec<ChapterAtom> = tracks
+        .iter()
+        .map(|t| {
+            let (start, end) = t
+                .window
+                .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
+            ChapterAtom { start, end, title: t.title.clone() }
+        })
+        .collect();
+    let buckets = proportional_pack(&atoms, &text_chars);
+    let mut pairs: Vec<MappingPair> = Vec::with_capacity(chapters.len());
+    for (bucket_idx, bucket) in buckets.iter().enumerate() {
+        let tid = track_id_for(&tracks[bucket_idx]);
+        for ci in bucket.text_range.clone() {
+            pairs.push(new_pair(chapters[ci].id.clone(), Some(tid.clone())));
+        }
+    }
+    for c in chapters.iter() {
+        if !pairs.iter().any(|p| p.chapter_id == c.id) {
+            pairs.push(new_pair(c.id.clone(), None));
+        }
+    }
+
+    let chars_by_chapter: std::collections::HashMap<_, _> =
+        chapters.iter().map(|c| (c.id.clone(), c.body.chars().count())).collect();
+    let track_meta: Vec<(_, Option<String>, f64)> = tracks
+        .iter()
+        .map(|t| {
+            let dur = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
+            (track_id_for(t), t.title.clone(), dur)
+        })
+        .collect();
+    let bucket_meta = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
+
+    Ok(MappingState {
+        pairs,
+        parking_lot: Vec::new(),
+        op_id: 0,
+        partition_locked: false,
+        buckets: bucket_meta,
+    })
+}
+
 fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {
     MappingPair {
         chapter_id,
@@ -1605,5 +1666,43 @@ mod tests {
             seeded.buckets.iter().all(|b| b.atom_duration_sec > 0.0),
             "every bucket must carry a positive duration"
         );
+    }
+
+    #[tokio::test]
+    async fn seed_split_excluding_drops_chapter_and_unlocks() {
+        if !ffprobe_available() {
+            eprintln!("ffmpeg/ffprobe missing — skipping");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let a = make_silent_m4a(dir.path(), "a.m4a", 30);
+        let b = make_silent_m4a(dir.path(), "b.m4a", 60);
+
+        // Three text chapters; we will exclude the middle one.
+        let t0 = dir.path().join("00_ch0.txt");
+        let t1 = dir.path().join("01_ch1.txt");
+        let t2 = dir.path().join("02_ch2.txt");
+        std::fs::write(&t0, "a".repeat(100)).unwrap();
+        std::fs::write(&t1, "a".repeat(100)).unwrap();
+        std::fs::write(&t2, "a".repeat(200)).unwrap();
+
+        let mut project = project_with_audio(AudioSource::Folder(dir.path().to_path_buf()));
+        project.sources.text = TextSource::LooseFiles {
+            paths: vec![t0, t1, t2],
+        };
+
+        // ch1 is ChapterId::from_order(1)
+        let excluded = ChapterId::from_order(1);
+        let seeded = seed_split_excluding(&project, Some(&excluded))
+            .await
+            .unwrap();
+
+        assert!(!seeded.partition_locked, "partition must remain unlocked");
+        assert!(
+            seeded.pairs.iter().all(|p| p.chapter_id != excluded),
+            "excluded chapter must not appear in pairs"
+        );
+        // Two remaining chapters, two audio tracks.
+        assert_eq!(seeded.pairs.len(), 2);
     }
 }
