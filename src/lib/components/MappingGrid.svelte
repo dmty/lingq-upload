@@ -26,6 +26,7 @@
     onOp: (op: MappingOp) => void;
     onConfirmPair: (chapterId: string) => void;
     onRemove: (chapterId: string) => void;
+    onUndoRemove: () => void;
     onContinue: () => void;
   };
 
@@ -39,6 +40,8 @@
     canContinue,
     onOp,
     onConfirmPair,
+    onRemove,
+    onUndoRemove,
     onContinue,
   }: Props = $props();
 
@@ -99,6 +102,11 @@
       }
     }
     return out;
+  });
+
+  const removedChapters = $derived.by(() => {
+    const skipped = new Set(skippedIds);
+    return chapters.filter((c) => skipped.has(c.id));
   });
 
   function fmtDur(sec: number): string {
@@ -267,6 +275,13 @@
               >
                 Confirm
               </button>
+              <button
+                type="button"
+                data-testid="chapter-remove"
+                aria-label={`Remove ${row.chapter.title}`}
+                class="text-fg-subtle hover:text-error"
+                onclick={() => onRemove(row.chapter.id)}
+              >×</button>
             </div>
             {#if showInspector}
               <MismatchDiffInspector
@@ -279,6 +294,21 @@
       </ul>
     </section>
   {/each}
+
+  {#if removedChapters.length > 0}
+    <div
+      data-testid="removed-strip"
+      class="rounded-md border border-dashed border-border-strong px-3 py-2 text-xs text-fg-muted"
+    >
+      Removed ({removedChapters.length}): {removedChapters.map((c) => c.title).join(" · ")}
+      <button
+        type="button"
+        data-testid="removed-undo"
+        class="ml-2 text-accent"
+        onclick={() => onUndoRemove()}
+      >undo</button>
+    </div>
+  {/if}
 
   <ParkingLot
     parked={mappingState?.parking_lot ?? []}

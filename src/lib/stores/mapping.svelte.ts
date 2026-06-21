@@ -316,10 +316,13 @@ export const mapping = {
     }
     const pid = state.projectId;
     if (!pid) return;
+    const prevSkipped = [...state.skippedIds];
+    state.skippedIds = [...state.skippedIds, chapterId];
     const res = await commands.cmdRecomputeSplit(pid, chapterId);
     if (res.status === "ok") {
       state.mappingState = res.data;
     } else {
+      state.skippedIds = prevSkipped;
       state.revertEpoch += 1;
     }
   },

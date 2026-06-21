@@ -251,6 +251,28 @@ export const tauriStubInitScript = `
             writeMappings(mappings);
             return null;
         },
+        // Re-split excluding a chapter. Drops the pair, updates skipped set,
+        // returns the updated MappingState with partition_locked: false.
+        cmd_recompute_split: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const excludedId = args && args.excludedChapterId;
+            const mappings = readMappings();
+            const current = mappings[key] || { pairs: [], parking_lot: [], op_id: 0, partition_locked: false, buckets: [] };
+            const next = JSON.parse(JSON.stringify(current));
+            if (excludedId) {
+                next.pairs = next.pairs.filter((p) => p.chapter_id !== excludedId);
+                const skippedMap = readSkipped();
+                const existing = skippedMap[key] || [];
+                if (!existing.includes(excludedId)) existing.push(excludedId);
+                skippedMap[key] = existing;
+                writeSkipped(skippedMap);
+            }
+            next.partition_locked = false;
+            mappings[key] = next;
+            writeMappings(mappings);
+            return next;
+        },
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't
