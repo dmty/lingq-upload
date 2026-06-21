@@ -249,7 +249,7 @@
           {/if}
         </header>
       {/if}
-      <ul>
+      <ul role="listbox" aria-label="Chapter rows">
         {#each band.rows as row (row.chapter.id)}
           {@const pair = row.pair}
           {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
@@ -258,6 +258,8 @@
           {@const showInspector = revealedPairId === row.chapter.id && !!pair?.track_id}
           {@const isSingleton = band.rows.length === 1}
           <li
+            role="option"
+            aria-selected={showInspector}
             bind:this={chapterRowRefs[row.chapter.id]}
             data-testid="mapping-chapter-row"
             data-chapter-id={row.chapter.id}
