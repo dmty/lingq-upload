@@ -18,7 +18,6 @@
   import { basename, extOf } from "$lib/paths";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
-  import ChapterPicker from "$lib/components/ChapterPicker.svelte";
   import MappingGrid from "$lib/components/MappingGrid.svelte";
   import ProjectSettings from "$lib/components/ProjectSettings.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
@@ -26,15 +25,6 @@
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
-
-  const pickerRows = $derived(
-    mapping.chapters.map((c) => ({
-      id: c.id ?? `idx:${c.order}`,
-      order: c.order,
-      title: c.title,
-      kind: c.kind ?? "body",
-    })),
-  );
 
   // The Run page seeds these via URL params on the live NeedsMatch event;
   // a cold entry from /library carries no params and must re-probe via
@@ -49,6 +39,7 @@
   let hydrating = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
+  let strategy = $state<MismatchResponse>("split_proportional");
 
   // Project-scope settings (absorb policy) live here so the user can adjust
   // them before locking the mapping in. ProjectSettings owns the debounced
@@ -116,6 +107,10 @@
       return;
     }
     const project = loaded.data;
+    const resp = project.matcher_decision?.response;
+    if (resp === "split_proportional" || resp === "single_lesson") {
+      strategy = resp;
+    }
     receiptCount = project.receipts?.length ?? 0;
     const src = project.sources.audio ?? null;
     if (src === null) {
@@ -148,6 +143,7 @@
     options = ["cancel"];
     bucketPreview = null;
     selected = "cancel";
+    strategy = "split_proportional";
     hydrating = true;
     busy = false;
     error = null;
@@ -306,6 +302,14 @@
     // takes the user to /run.
     await mapping.load(projectKey);
     busy = false;
+  }
+
+  async function setStrategy(next: MismatchResponse) {
+    const pid = mapping.projectId;
+    if (!pid || next === strategy) return;
+    strategy = next;
+    const res = await commands.cmdMatcherResolve(pid, condition, next, chapters, tracks);
+    if (res.status === "ok") await mapping.load(projectKey);
   }
 
   const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
@@ -496,42 +500,34 @@
 </script>
 
 <div class="flex h-full min-h-screen">
-  <div class="w-72 shrink-0">
-    {#if mapping.status === "ready"}
-      <ChapterPicker
-        chapters={pickerRows}
-        skippedIds={mapping.skippedIds}
-        revertEpoch={mapping.revertEpoch}
-        onChange={(ids) => void mapping.setSkipped(ids)}
-        onFlush={() => mapping.flush()}
-      />
-    {:else}
-      <aside
-        class="border-r border-border bg-surface p-3 text-sm text-fg-muted"
-      >
-        Loading chapters…
-      </aside>
-    {/if}
-  </div>
-
   <section class="mx-auto max-w-3xl flex-1 space-y-6 px-8 pt-6">
     {#if mapping.mappingState}
       <header class="flex items-baseline justify-between gap-3">
         <h1 class="text-lg font-semibold text-fg">
           Confirm chapter ↔ track pairing
         </h1>
-        {#if projectIdValue}
-          <button
-            type="button"
-            class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg hover:bg-surface-sunken"
-            aria-expanded={settingsOpen}
-            aria-controls="project-settings-panel"
-            onclick={() => (settingsOpen = !settingsOpen)}
-            data-testid="project-settings-toggle"
-          >
-            Project settings {settingsOpen ? "▲" : "▼"}
-          </button>
-        {/if}
+        <div class="flex items-center gap-2">
+          <div data-testid="strategy-toggle" class="flex gap-1">
+            <button type="button" data-testid="strategy-split"
+                    class="rounded-sm border px-2 py-1 text-xs {strategy === 'split_proportional' ? 'border-accent bg-accent-soft text-accent' : 'border-border text-fg-muted'}"
+                    onclick={() => setStrategy('split_proportional')}>Split proportionally</button>
+            <button type="button" data-testid="strategy-single"
+                    class="rounded-sm border px-2 py-1 text-xs {strategy === 'single_lesson' ? 'border-accent bg-accent-soft text-accent' : 'border-border text-fg-muted'}"
+                    onclick={() => setStrategy('single_lesson')}>One lesson</button>
+          </div>
+          {#if projectIdValue}
+            <button
+              type="button"
+              class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg hover:bg-surface-sunken"
+              aria-expanded={settingsOpen}
+              aria-controls="project-settings-panel"
+              onclick={() => (settingsOpen = !settingsOpen)}
+              data-testid="project-settings-toggle"
+            >
+              Project settings {settingsOpen ? "▲" : "▼"}
+            </button>
+          {/if}
+        </div>
       </header>
       {#if settingsOpen && projectIdValue}
         <div id="project-settings-panel" data-testid="project-settings-panel">
