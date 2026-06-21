@@ -247,22 +247,6 @@
     return deviation > 0.3;
   }
 
-  // Track rows for MappingGrid. Derived from pair assignments + parking lot.
-  // Filename and duration default to the bare id until the audio pipeline
-  // threads real metadata through.
-  const trackRows = $derived.by(() => {
-    const ms = mapping.mappingState;
-    if (!ms) return [];
-    const ids = new Set<string>();
-    for (const p of ms.pairs) if (p.track_id) ids.add(p.track_id);
-    for (const t of ms.parking_lot ?? []) ids.add(t);
-    return Array.from(ids).map((id) => ({
-      id,
-      filename: id,
-      durationSec: null as number | null,
-    }));
-  });
-
   const mappingGateOk = $derived(mapping.gateContinue());
 
   // submitOp/confirmPair reject when their flush turn fails — that is the
@@ -556,13 +540,15 @@
       {/if}
       <MappingGrid
         chapters={mapping.chapters}
-        tracks={trackRows}
         mappingState={mapping.mappingState}
+        buckets={mapping.buckets}
+        skippedIds={mapping.skippedIds}
         lastSavedAt={mapping.lastSavedAt}
         saving={mapping.saving}
         canContinue={mappingGateOk}
         onOp={handleMappingOp}
         onConfirmPair={handleConfirmPair}
+        onRemove={(id) => mapping.removeChapter(id)}
         onContinue={handleMappingContinue}
       />
     {:else}

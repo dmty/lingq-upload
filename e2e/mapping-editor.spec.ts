@@ -114,45 +114,6 @@ test.describe("mapping editor", () => {
     await expect(cont).toBeEnabled({ timeout: 2_000 });
   });
 
-  test("keyboard: select a track and assign it to a chapter", async ({
-    page,
-  }) => {
-    await page.addInitScript(fixtureScript({ withRed: false }));
-    await page.goto(`/match/${PROJECT_KEY}`);
-
-    await expect(page.getByTestId("mapping-grid")).toBeVisible();
-
-    const trackRows = page.getByTestId("mapping-track-row");
-    await trackRows.nth(1).focus();
-    await page.keyboard.press("Enter");
-    await expect(trackRows.nth(1)).toHaveAttribute("aria-selected", "true");
-
-    // Enter on a chapter row assigns the selected track (Swap); the
-    // displaced track lands in the parking lot.
-    await page.getByTestId("mapping-chapter-row").nth(0).focus();
-    await page.keyboard.press("Enter");
-
-    await expect(page.getByTestId("parking-lot-count")).toHaveText("1", {
-      timeout: 3_000,
-    });
-  });
-
-  test("keyboard: park a selected track", async ({ page }) => {
-    await page.addInitScript(fixtureScript({ withRed: false }));
-    await page.goto(`/match/${PROJECT_KEY}`);
-
-    await expect(page.getByTestId("mapping-grid")).toBeVisible();
-
-    const trackRows = page.getByTestId("mapping-track-row");
-    await trackRows.nth(1).focus();
-    await page.keyboard.press("Enter");
-    await page.keyboard.press("p");
-
-    await expect(page.getByTestId("parking-lot-count")).toHaveText("1", {
-      timeout: 3_000,
-    });
-  });
-
   test("state rehydrates from project.json after reload", async ({ page }) => {
     await page.addInitScript(fixtureScript({ withRed: true }));
     await page.goto(`/match/${PROJECT_KEY}`);
