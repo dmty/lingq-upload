@@ -1,6 +1,7 @@
 import {
   commands,
   type AbsorbPolicy,
+  type BucketMeta,
   type ChapterId,
   type ChapterMeta,
   type MappingOp,
@@ -168,6 +169,12 @@ export const mapping = {
   get saving() {
     return state.pendingWrites > 0;
   },
+  get partitionLocked(): boolean {
+    return state.mappingState?.partition_locked ?? false;
+  },
+  get buckets(): BucketMeta[] {
+    return state.mappingState?.buckets ?? [];
+  },
 
   async load(key: string) {
     drainQueue();
@@ -297,6 +304,36 @@ export const mapping = {
       { kind: "swap", chapter_id: chapterId, track_id: trackId },
       cur,
     );
+  },
+
+  // Remove a chapter from the upload set.
+  //   pristine -> re-run the proportional split excluding this chapter
+  //   locked   -> drop in place (add to skip set; boundaries hold)
+  async removeChapter(chapterId: ChapterId): Promise<void> {
+    if (state.mappingState?.partition_locked) {
+      await this.setSkipped([...state.skippedIds, chapterId]);
+      return;
+    }
+    const pid = state.projectId;
+    if (!pid) return;
+    const res = await commands.cmdRecomputeSplit(pid, chapterId);
+    if (res.status === "ok") {
+      state.mappingState = res.data;
+    } else {
+      state.revertEpoch += 1;
+    }
+  },
+
+  // Discard manual edits and rebuild the proportional split over the current set.
+  async resetSplit(): Promise<void> {
+    const pid = state.projectId;
+    if (!pid) return;
+    const res = await commands.cmdRecomputeSplit(pid, null);
+    if (res.status === "ok") {
+      state.mappingState = res.data;
+    } else {
+      state.revertEpoch += 1;
+    }
   },
 
   gateContinue(): boolean {
