@@ -200,8 +200,7 @@
 </script>
 
 <div data-testid="mapping-grid" class="flex w-full flex-col gap-2">
-  {#each bands as band (band.trackId ?? "unpaired")}
-    <section data-testid="mapping-bucket-band" class="overflow-hidden rounded-md border border-border bg-surface">
+  {#each bands as band, i (`band-${i}-${band.trackId ?? "unpaired"}`)}    <section data-testid="mapping-bucket-band" class="overflow-hidden rounded-md border border-border bg-surface">
       {#if band.meta}
         <header
           data-testid="bucket-band-meta"
