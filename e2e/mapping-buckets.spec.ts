@@ -15,7 +15,7 @@ function fixtureScript(): string {
       { chapter_id: "idx:3", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
       { chapter_id: "idx:4", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
     ],
-    parking_lot: [], op_id: 0, partition_locked: false,
+    parking_lot: [], op_id: 0,
     buckets: [
       { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
       { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
@@ -54,7 +54,7 @@ function driftFixtureScript(): string {
       { chapter_id: "dr:1", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
       { chapter_id: "dr:2", track_id: "t2", confidence: 1, touched: false, original_confidence: 1 },
     ],
-    parking_lot: [], op_id: 0, partition_locked: false,
+    parking_lot: [], op_id: 0,
     buckets: [
       { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 300, charsPerSec: 5 },
       { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
@@ -91,7 +91,7 @@ function nonContiguousFixtureScript(): string {
       { chapter_id: "nc:1", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
       { chapter_id: "nc:2", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
     ],
-    parking_lot: [], op_id: 0, partition_locked: false,
+    parking_lot: [], op_id: 0,
     buckets: [
       { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
       { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },

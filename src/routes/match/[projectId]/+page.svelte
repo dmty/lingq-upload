@@ -575,13 +575,11 @@
         lastSavedAt={mapping.lastSavedAt}
         saving={mapping.saving}
         canContinue={mappingGateOk}
-        partitionLocked={mapping.partitionLocked}
         onOp={handleMappingOp}
         onConfirmPair={handleConfirmPair}
         onRemove={(id) => mapping.removeChapter(id)}
         onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
         onContinue={handleMappingContinue}
-        onResetSplit={() => mapping.resetSplit()}
       />
     {:else}
       <header>

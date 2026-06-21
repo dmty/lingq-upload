@@ -21,7 +21,6 @@ function fixtureScript(): string {
     ],
     parking_lot: [],
     op_id: 0,
-    partition_locked: false,
     buckets: [
       { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
       { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },

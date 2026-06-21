@@ -73,8 +73,6 @@ pub struct MappingState {
     #[serde(default)]
     pub op_id: u64,
     #[serde(default)]
-    pub partition_locked: bool,
-    #[serde(default)]
     pub buckets: Vec<BucketMeta>,
 }
 
@@ -104,7 +102,6 @@ pub fn apply(state: &MappingState, op: MappingOp) -> Result<MappingState, Mappin
         } => unpark(&mut next, track_id, chapter_id)?,
     }
     next.op_id = state.op_id.saturating_add(1);
-    next.partition_locked = true;
     Ok(next)
 }
 
@@ -245,23 +242,6 @@ mod tests {
 
     fn cid(s: &str) -> ChapterId {
         ChapterId(s.to_string())
-    }
-
-    #[test]
-    fn apply_locks_the_partition() {
-        let state = MappingState {
-            pairs: vec![MappingPair {
-                chapter_id: cid("c0"),
-                track_id: Some("t0".into()),
-                confidence: 1.0,
-                touched: false,
-                original_confidence: 1.0,
-            }],
-            partition_locked: false,
-            ..Default::default()
-        };
-        let next = apply(&state, MappingOp::Park { track_id: "t0".into() }).unwrap();
-        assert!(next.partition_locked, "any op must freeze the partition");
     }
 
     #[test]
