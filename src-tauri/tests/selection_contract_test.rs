@@ -469,6 +469,7 @@ async fn mapping_pairs_drive_upload_and_parked_tracks_are_excluded() {
         ],
         parking_lot: vec![track_id(1)],
         op_id: 1,
+        ..Default::default()
     });
     fixture.store.put(&project).unwrap();
 

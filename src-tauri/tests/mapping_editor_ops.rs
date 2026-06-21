@@ -31,6 +31,7 @@ fn seed_three_pairs() -> MappingState {
         ],
         parking_lot: vec![],
         op_id: 0,
+        ..Default::default()
     }
 }
 
@@ -43,6 +44,7 @@ fn swap_moves_old_pair_to_parking_lot() {
         ],
         parking_lot: vec!["t9".into()],
         op_id: 5,
+        ..Default::default()
     };
 
     let next = apply_mapping_op(
@@ -186,6 +188,7 @@ fn gate_continue_blocks_untouched_red() {
         ],
         parking_lot: vec![],
         op_id: 0,
+        ..Default::default()
     };
     assert!(!gate_continue(&state));
 }
@@ -196,6 +199,7 @@ fn gate_continue_clears_after_touch() {
         pairs: vec![pair("c1", Some("t1"), 0.4, true)],
         parking_lot: vec![],
         op_id: 0,
+        ..Default::default()
     };
     assert!(gate_continue(&state));
 }
@@ -209,6 +213,7 @@ fn gate_continue_allows_all_green() {
         ],
         parking_lot: vec![],
         op_id: 0,
+        ..Default::default()
     };
     assert!(gate_continue(&state));
 }
@@ -224,6 +229,7 @@ fn gate_continue_ignores_unpaired_chapters() {
         ],
         parking_lot: vec!["t1".into()],
         op_id: 0,
+        ..Default::default()
     };
     assert!(gate_continue(&state));
 }
