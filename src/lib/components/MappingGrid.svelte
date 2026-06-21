@@ -23,13 +23,11 @@
     lastSavedAt: number | null;
     saving: boolean;
     canContinue: boolean;
-    partitionLocked: boolean;
     onOp: (op: MappingOp) => void;
     onConfirmPair: (chapterId: string) => void;
     onRemove: (chapterId: string) => void;
     onUndoRemove: () => void;
     onContinue: () => void;
-    onResetSplit: () => void;
   };
 
   const {
@@ -40,13 +38,11 @@
     lastSavedAt,
     saving,
     canContinue,
-    partitionLocked,
     onOp,
     onConfirmPair,
     onRemove,
     onUndoRemove,
     onContinue,
-    onResetSplit,
   }: Props = $props();
 
   type ConfidenceBand = {
@@ -225,13 +221,8 @@
 </script>
 
 <div data-testid="mapping-grid" class="flex w-full flex-col gap-2">
-  {#if partitionLocked}
-    <div class="flex items-center gap-2">
-      <span data-testid="partition-manual" class="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">Manual</span>
-      <button type="button" data-testid="partition-reset" class="text-xs text-accent" onclick={onResetSplit}>Reset to proportional split</button>
-    </div>
-  {/if}
-  {#each bands as band, i (`band-${i}-${band.trackId ?? "unpaired"}`)}    <section data-testid="mapping-bucket-band" class="overflow-hidden rounded-md border border-border bg-surface">
+  {#each bands as band, i (`band-${i}-${band.trackId ?? "unpaired"}`)}
+    <section data-testid="mapping-bucket-band" class="overflow-hidden rounded-md border border-border bg-surface">
       {#if band.meta}
         <header
           data-testid="bucket-band-meta"
@@ -289,24 +280,17 @@
                   {confBand.label}
                 </span>
               {/if}
-              {#if touched}
-                <span
-                  class="rounded-sm border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted"
-                  data-testid="manual-badge"
+              {#if pair?.track_id && displayConf < 0.6 && !touched}
+                <button
+                  type="button"
+                  class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken"
+                  data-testid="confirm-pair"
+                  data-chapter-id={row.chapter.id}
+                  onclick={() => onConfirmPair(row.chapter.id)}
                 >
-                  Manual
-                </span>
+                  Confirm
+                </button>
               {/if}
-              <button
-                type="button"
-                class="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] hover:bg-surface-sunken disabled:opacity-50"
-                data-testid="confirm-pair"
-                data-chapter-id={row.chapter.id}
-                disabled={!pair?.track_id}
-                onclick={() => onConfirmPair(row.chapter.id)}
-              >
-                Confirm
-              </button>
               <button
                 type="button"
                 data-testid="chapter-remove"

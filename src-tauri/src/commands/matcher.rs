@@ -2,12 +2,9 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
-use crate::core::job::{
-    inspect_mismatch, seed_mapping_for_response, seed_split_excluding, MismatchInspection,
-};
-use crate::core::matcher::{allowed, MappingState, MismatchCondition, MismatchResponse};
+use crate::core::job::{inspect_mismatch, seed_mapping_for_response, MismatchInspection};
+use crate::core::matcher::{allowed, MismatchCondition, MismatchResponse};
 use crate::core::project::MatcherDecision;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
@@ -117,45 +114,6 @@ pub async fn cmd_matcher_inspect(
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     inspect_mismatch(&project).await
-}
-
-/// Re-run the proportional split over the remaining chapters (excluding
-/// `excluded_chapter_id`) and persist the new mapping with
-/// `partition_locked = false`. Adds the excluded chapter to the project's
-/// skip set so the run loop omits it.
-#[tauri::command]
-#[specta::specta]
-pub async fn cmd_recompute_split(
-    store: tauri::State<'_, Arc<dyn ProjectStore>>,
-    project_id: ProjectId,
-    excluded_chapter_id: Option<ChapterId>,
-) -> Result<MappingState, AppError> {
-    recompute_split_impl(store.inner().as_ref(), &project_id, excluded_chapter_id).await
-}
-
-/// Tauri-free body for `cmd_recompute_split`. Tested directly without
-/// spinning up a `tauri::State` harness.
-pub async fn recompute_split_impl(
-    store: &dyn ProjectStore,
-    project_id: &ProjectId,
-    excluded_chapter_id: Option<ChapterId>,
-) -> Result<MappingState, AppError> {
-    let project = store
-        .get(project_id)
-        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-        .ok_or_else(|| AppError::Other("project not found".into()))?;
-    let seeded = seed_split_excluding(&project, excluded_chapter_id.as_ref()).await?;
-    store
-        .update(project_id, &mut |p| {
-            if let Some(cid) = &excluded_chapter_id {
-                if !p.skipped_chapters.contains(cid) {
-                    p.skipped_chapters.push(cid.clone());
-                }
-            }
-            p.mapping = Some(seeded.clone());
-        })
-        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
-    Ok(seeded)
 }
 
 #[cfg(test)]
@@ -275,77 +233,5 @@ mod tests {
         let after = store.get(&id).unwrap().unwrap();
         assert!(after.matcher_decision.is_none());
         assert!(after.mapping.is_none());
-    }
-
-    fn ffprobe_available() -> bool {
-        std::process::Command::new("which")
-            .arg("ffprobe")
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .is_some()
-            && std::process::Command::new("which")
-                .arg("ffmpeg")
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .is_some()
-    }
-
-    fn make_silent_m4a(dir: &std::path::Path, name: &str, seconds: u32) -> PathBuf {
-        let p = dir.join(name);
-        let status = std::process::Command::new("ffmpeg")
-            .args([
-                "-y", "-hide_banner", "-v", "error",
-                "-f", "lavfi", "-i", "anullsrc=r=22050:cl=stereo",
-                "-t", &seconds.to_string(),
-                "-c:a", "aac", "-b:a", "32k",
-            ])
-            .arg(&p)
-            .status()
-            .expect("spawn ffmpeg");
-        assert!(status.success(), "ffmpeg failed for {}", p.display());
-        p
-    }
-
-    #[tokio::test]
-    async fn recompute_split_persists_skip_and_mapping() {
-        use crate::ingest::TextSource;
-
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
-        let dir = tempdir().unwrap();
-        let _a = make_silent_m4a(dir.path(), "a.m4a", 30);
-        let _b = make_silent_m4a(dir.path(), "b.m4a", 60);
-
-        let t0 = dir.path().join("00_ch0.txt");
-        let t1 = dir.path().join("01_ch1.txt");
-        let t2 = dir.path().join("02_ch2.txt");
-        std::fs::write(&t0, "a".repeat(100)).unwrap();
-        std::fs::write(&t1, "a".repeat(100)).unwrap();
-        std::fs::write(&t2, "a".repeat(200)).unwrap();
-
-        let store = InMemoryProjectStore::new();
-        let id = ProjectId::from_title_author("Split Book", "Author");
-        let mut p = Project::new_test(id.clone(), "Split Book");
-        p.sources.audio = Some(AudioSource::Folder(dir.path().to_path_buf()));
-        p.sources.text = TextSource::LooseFiles { paths: vec![t0, t1, t2] };
-        store.put(&p).unwrap();
-
-        let excluded = ChapterId::from_order(1);
-        let result = super::recompute_split_impl(&store, &id, Some(excluded.clone()))
-            .await
-            .unwrap();
-
-        assert!(!result.partition_locked);
-        assert!(result.pairs.iter().all(|pair| pair.chapter_id != excluded));
-
-        let persisted = store.get(&id).unwrap().unwrap();
-        assert!(persisted.skipped_chapters.contains(&excluded));
-        let m = persisted.mapping.unwrap();
-        assert!(!m.partition_locked);
-        assert!(m.pairs.iter().all(|pair| pair.chapter_id != excluded));
     }
 }

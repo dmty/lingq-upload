@@ -169,9 +169,6 @@ export const mapping = {
   get saving() {
     return state.pendingWrites > 0;
   },
-  get partitionLocked(): boolean {
-    return state.mappingState?.partition_locked ?? false;
-  },
   get buckets(): BucketMeta[] {
     return state.mappingState?.buckets ?? [];
   },
@@ -306,37 +303,12 @@ export const mapping = {
     );
   },
 
-  // Remove a chapter from the upload set.
-  //   pristine -> re-run the proportional split excluding this chapter
-  //   locked   -> drop in place (add to skip set; boundaries hold)
-  async removeChapter(chapterId: ChapterId): Promise<void> {
-    if (state.mappingState?.partition_locked) {
-      await this.setSkipped([...state.skippedIds, chapterId]);
-      return;
-    }
-    const pid = state.projectId;
-    if (!pid) return;
-    const prevSkipped = [...state.skippedIds];
-    state.skippedIds = [...state.skippedIds, chapterId];
-    const res = await commands.cmdRecomputeSplit(pid, chapterId);
-    if (res.status === "ok") {
-      state.mappingState = res.data;
-    } else {
-      state.skippedIds = prevSkipped;
-      state.revertEpoch += 1;
-    }
-  },
-
-  // Discard manual edits and rebuild the proportional split over the current set.
-  async resetSplit(): Promise<void> {
-    const pid = state.projectId;
-    if (!pid) return;
-    const res = await commands.cmdRecomputeSplit(pid, null);
-    if (res.status === "ok") {
-      state.mappingState = res.data;
-    } else {
-      state.revertEpoch += 1;
-    }
+  // Remove a chapter from the upload set: add it to the skip set. The upload
+  // plan already excludes skipped chapters (it re-packs over the eligible
+  // set), so a plain selection write is the whole operation — no re-split.
+  // Undone via the Removed strip (setSkipped without the chapter).
+  removeChapter(chapterId: ChapterId): Promise<void> {
+    return this.setSkipped([...state.skippedIds, chapterId]);
   },
 
   gateContinue(): boolean {

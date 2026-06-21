@@ -82,10 +82,12 @@ test.describe("mapping editor", () => {
     await expect(savedLabel).not.toContainText("never");
     await expect(savedLabel).not.toContainText("All changes saved");
 
-    // Confirm the red row — idx:1. The store sends a Swap(self) to mark the
+    // Confirm the red row — idx:1. Only low-confidence rows render a Confirm,
+    // so target it by chapter id. The store sends a Swap(self) to mark the
     // pair touched server-side; the gate re-evaluates from mappingState.
-    const confirmBtns = page.getByTestId("confirm-pair");
-    await confirmBtns.nth(1).click();
+    await page
+      .locator('[data-testid="confirm-pair"][data-chapter-id="idx:1"]')
+      .click();
 
     await expect(cont).toBeEnabled({ timeout: 2_000 });
 
@@ -110,7 +112,9 @@ test.describe("mapping editor", () => {
     const cont = page.getByTestId("mapping-continue");
     await expect(cont).toBeDisabled();
 
-    await page.getByTestId("confirm-pair").nth(1).click();
+    await page
+      .locator('[data-testid="confirm-pair"][data-chapter-id="idx:1"]')
+      .click();
     await expect(cont).toBeEnabled({ timeout: 2_000 });
   });
 
@@ -123,7 +127,9 @@ test.describe("mapping editor", () => {
 
     // Touch the red row so the gate clears; this flushes through the stub's
     // cmd_apply_mapping_op so it's persisted to sessionStorage.
-    await page.getByTestId("confirm-pair").nth(1).click();
+    await page
+      .locator('[data-testid="confirm-pair"][data-chapter-id="idx:1"]')
+      .click();
     await expect(page.getByTestId("mapping-continue")).toBeEnabled({
       timeout: 2_000,
     });

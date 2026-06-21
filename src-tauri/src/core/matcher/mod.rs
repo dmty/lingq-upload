@@ -65,7 +65,6 @@ pub fn seed_mapping_state(
             .collect(),
         parking_lot: Vec::new(),
         op_id: 0,
-        partition_locked: false,
         buckets: Vec::new(),
     }
 }
