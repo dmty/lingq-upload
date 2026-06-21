@@ -549,6 +549,7 @@
         onOp={handleMappingOp}
         onConfirmPair={handleConfirmPair}
         onRemove={(id) => mapping.removeChapter(id)}
+        onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
         onContinue={handleMappingContinue}
       />
     {:else}
