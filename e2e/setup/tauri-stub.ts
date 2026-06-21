@@ -181,6 +181,7 @@ export const tauriStubInitScript = `
                 next.pairs[idx].touched = true;
             }
             next.op_id = (current.op_id || 0) + 1;
+            next.partition_locked = true;
             mappings[key] = next;
             writeMappings(mappings);
             return next;
