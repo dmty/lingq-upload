@@ -40,6 +40,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::matcher::cmd_matcher_resolve,
             commands::matcher::cmd_matcher_inspect,
             commands::matcher::cmd_replace_audio_source,
+            commands::matcher::cmd_recompute_split,
             commands::mapping::cmd_apply_mapping_op,
             commands::project::cmd_project_load,
             commands::project::cmd_project_chapters,

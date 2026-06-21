@@ -2,9 +2,12 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
+use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
-use crate::core::job::{inspect_mismatch, seed_mapping_for_response, MismatchInspection};
-use crate::core::matcher::{allowed, MismatchCondition, MismatchResponse};
+use crate::core::job::{
+    inspect_mismatch, seed_mapping_for_response, seed_split_excluding, MismatchInspection,
+};
+use crate::core::matcher::{allowed, MappingState, MismatchCondition, MismatchResponse};
 use crate::core::project::MatcherDecision;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
@@ -114,6 +117,35 @@ pub async fn cmd_matcher_inspect(
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     inspect_mismatch(&project).await
+}
+
+/// Re-run the proportional split over the remaining chapters (excluding
+/// `excluded_chapter_id`) and persist the new mapping with
+/// `partition_locked = false`. Adds the excluded chapter to the project's
+/// skip set so the run loop omits it.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_recompute_split(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    excluded_chapter_id: Option<ChapterId>,
+) -> Result<MappingState, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    let seeded = seed_split_excluding(&project, excluded_chapter_id.as_ref()).await?;
+    store
+        .update(&project_id, &mut |p| {
+            if let Some(cid) = &excluded_chapter_id {
+                if !p.skipped_chapters.contains(cid) {
+                    p.skipped_chapters.push(cid.clone());
+                }
+            }
+            p.mapping = Some(seeded.clone());
+        })
+        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
+    Ok(seeded)
 }
 
 #[cfg(test)]
