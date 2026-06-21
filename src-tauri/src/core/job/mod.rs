@@ -637,36 +637,7 @@ pub async fn seed_mapping_for_response(
                 .collect()
         }
         MismatchResponse::SplitProportional => {
-            let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
-            let atoms: Vec<ChapterAtom> = tracks
-                .iter()
-                .map(|t| {
-                    let (start, end) = t
-                        .window
-                        .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
-                    ChapterAtom {
-                        start,
-                        end,
-                        title: t.title.clone(),
-                    }
-                })
-                .collect();
-            let buckets = proportional_pack(&atoms, &text_chars);
-            let mut pairs: Vec<MappingPair> = Vec::with_capacity(chapters.len());
-            for (bucket_idx, bucket) in buckets.iter().enumerate() {
-                let tid = track_id_for(&tracks[bucket_idx]);
-                for ci in bucket.text_range.clone() {
-                    pairs.push(new_pair(chapters[ci].id.clone(), Some(tid.clone())));
-                }
-            }
-            // Guard the rare degenerate case where ranges don't cover every
-            // chapter so the grid stays consistent with the chapter list.
-            for c in chapters.iter() {
-                if !pairs.iter().any(|p| p.chapter_id == c.id) {
-                    pairs.push(new_pair(c.id.clone(), None));
-                }
-            }
-            pairs
+            proportional_split_pairs(&chapters, &tracks)
         }
         MismatchResponse::PairAccept | MismatchResponse::PairDrop => {
             let n = chapters.len().min(tracks.len());
@@ -722,7 +693,23 @@ pub async fn seed_split_excluding(
         skipped.insert(cid.clone());
     }
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+    Ok(proportional_split_state(&chapters, &tracks))
+}
 
+fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {
+    MappingPair {
+        chapter_id,
+        track_id,
+        confidence: RECOMPUTED_CONFIDENCE,
+        touched: false,
+        original_confidence: RECOMPUTED_CONFIDENCE,
+    }
+}
+
+/// Assign chapters to tracks by proportional text-length packing and return
+/// the resulting pairs. Shared by `seed_mapping_for_response` (SplitProportional
+/// arm) and `proportional_split_state`.
+fn proportional_split_pairs(chapters: &[Chapter], tracks: &[AudioTrack]) -> Vec<MappingPair> {
     let text_chars: Vec<usize> = chapters.iter().map(|c| c.body.chars().count()).collect();
     let atoms: Vec<ChapterAtom> = tracks
         .iter()
@@ -741,12 +728,20 @@ pub async fn seed_split_excluding(
             pairs.push(new_pair(chapters[ci].id.clone(), Some(tid.clone())));
         }
     }
+    // Guard the rare degenerate case where ranges don't cover every
+    // chapter so the grid stays consistent with the chapter list.
     for c in chapters.iter() {
         if !pairs.iter().any(|p| p.chapter_id == c.id) {
             pairs.push(new_pair(c.id.clone(), None));
         }
     }
+    pairs
+}
 
+/// Build a complete [`MappingState`] from a proportional split. Used by
+/// `seed_split_excluding` after it has resolved and filtered the chapter list.
+fn proportional_split_state(chapters: &[Chapter], tracks: &[AudioTrack]) -> MappingState {
+    let pairs = proportional_split_pairs(chapters, tracks);
     let chars_by_chapter: std::collections::HashMap<_, _> =
         chapters.iter().map(|c| (c.id.clone(), c.body.chars().count())).collect();
     let track_meta: Vec<(_, Option<String>, f64)> = tracks
@@ -756,24 +751,13 @@ pub async fn seed_split_excluding(
             (track_id_for(t), t.title.clone(), dur)
         })
         .collect();
-    let bucket_meta = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
-
-    Ok(MappingState {
+    let buckets = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
+    MappingState {
         pairs,
         parking_lot: Vec::new(),
         op_id: 0,
         partition_locked: false,
-        buckets: bucket_meta,
-    })
-}
-
-fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {
-    MappingPair {
-        chapter_id,
-        track_id,
-        confidence: RECOMPUTED_CONFIDENCE,
-        touched: false,
-        original_confidence: RECOMPUTED_CONFIDENCE,
+        buckets,
     }
 }
 
