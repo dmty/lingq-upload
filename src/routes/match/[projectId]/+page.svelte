@@ -325,9 +325,14 @@
   async function setStrategy(next: MismatchResponse) {
     const pid = mapping.projectId;
     if (!pid || next === strategy) return;
+    const prev = strategy;
     strategy = next;
     const res = await commands.cmdMatcherResolve(pid, condition, next, chapters, tracks);
-    if (res.status === "ok") await mapping.load(projectKey);
+    if (res.status !== "ok") {
+      strategy = prev;
+      return;
+    }
+    await mapping.load(projectKey);
   }
 
   const AUDIO_EXTS = ["m4b", "m4a", "mp3"];
