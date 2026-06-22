@@ -1,5 +1,4 @@
 <script lang="ts">
-  import MismatchDiffInspector from "./MismatchDiffInspector.svelte";
   import ParkingLot from "./ParkingLot.svelte";
   import type {
     BucketMeta,
@@ -27,6 +26,7 @@
     onOp: (op: MappingOp) => void;
     onConfirmPair: (chapterId: string) => void;
     onRemove: (chapterId: string) => void;
+    onMove: (chapterId: string, trackId: string) => void;
     onUndoRemove: () => void;
     onContinue: () => void;
   };
@@ -42,6 +42,7 @@
     onOp,
     onConfirmPair,
     onRemove,
+    onMove,
     onUndoRemove,
     onContinue,
   }: Props = $props();
@@ -147,64 +148,11 @@
     Object.fromEntries(chapters.map((c) => [c.id, c.title])),
   );
 
-  // Per-row diff inspector reveal. Hover gated on 250ms debounce; focus immediate.
-  let revealedPairId = $state<string | null>(null);
-  let hoverPairId: string | null = null;
-  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  const HOVER_DEBOUNCE_MS = 250;
-  let chapterRowRefs: Record<string, HTMLElement | null> = $state({});
-
-  function clearHoverTimer() {
-    if (hoverTimer != null) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
-    }
-  }
-
-  function onChapterPointerEnter(chapterId: string) {
-    hoverPairId = chapterId;
-    clearHoverTimer();
-    hoverTimer = setTimeout(() => {
-      hoverTimer = null;
-      if (hoverPairId === chapterId) revealedPairId = chapterId;
-    }, HOVER_DEBOUNCE_MS);
-  }
-
-  function onChapterPointerLeave(chapterId: string) {
-    if (hoverPairId === chapterId) hoverPairId = null;
-    clearHoverTimer();
-    if (revealedPairId === chapterId) revealedPairId = null;
-  }
-
-  function onChapterFocus(chapterId: string) {
-    revealedPairId = chapterId;
-  }
-
-  function onChapterBlur(ev: FocusEvent, chapterId: string) {
-    if (revealedPairId !== chapterId) return;
-    const next = ev.relatedTarget;
-    const row = chapterRowRefs[chapterId];
-    if (row && next instanceof Node && row.contains(next)) return;
-    revealedPairId = null;
-  }
-
   function onChapterKeydown(ev: KeyboardEvent, chapterId: string) {
-    if (ev.key === "Escape") {
-      revealedPairId = null;
-      return;
-    }
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
-      const pair = mappingState?.pairs.find((p) => p.chapter_id === chapterId);
-      if (!pair?.track_id) return;
-      revealedPairId = revealedPairId === chapterId ? null : chapterId;
+      mapping.selectChapter(chapterId);
     }
-  }
-
-  function trackLabelFor(trackId: string | null | undefined): string {
-    if (!trackId) return "";
-    const b = buckets.find((b) => b.trackId === trackId);
-    return b?.atomTitle ?? trackId;
   }
 
   function median(xs: number[]): number {
@@ -242,17 +190,21 @@
         </header>
       {/if}
       <ul role="listbox" aria-label="Chapter rows">
-        {#each band.rows as row (row.chapter.id)}
+        {#each band.rows as row, rowIdx (row.chapter.id)}
           {@const pair = row.pair}
           {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
           {@const confBand = pair ? confidenceBand(displayConf) : null}
           {@const touched = pair?.touched ?? false}
-          {@const showInspector = revealedPairId === row.chapter.id && !!pair?.track_id}
           {@const isSingleton = band.rows.length === 1}
+          {@const upTrack =
+            rowIdx === 0 && i > 0 ? bands[i - 1].trackId : null}
+          {@const downTrack =
+            rowIdx === band.rows.length - 1 && i < bands.length - 1
+              ? bands[i + 1].trackId
+              : null}
           <li
             role="option"
-            aria-selected={showInspector}
-            bind:this={chapterRowRefs[row.chapter.id]}
+            aria-selected={mapping.selectedChapterId === row.chapter.id}
             data-testid="mapping-chapter-row"
             data-chapter-id={row.chapter.id}
             class="flex flex-col gap-1 px-3 py-1.5 text-sm {pair && confBand
@@ -262,10 +214,6 @@
             tabindex={0}
             onclick={() => mapping.selectChapter(row.chapter.id)}
             onkeydown={(ev) => onChapterKeydown(ev, row.chapter.id)}
-            onpointerenter={() => onChapterPointerEnter(row.chapter.id)}
-            onpointerleave={() => onChapterPointerLeave(row.chapter.id)}
-            onfocus={() => onChapterFocus(row.chapter.id)}
-            onblur={(ev) => onChapterBlur(ev, row.chapter.id)}
           >
             <div class="flex items-center gap-2">
               <span
@@ -294,6 +242,26 @@
                   Confirm
                 </button>
               {/if}
+              {#if band.trackId && upTrack}
+                <button
+                  type="button"
+                  data-testid="chapter-move-up"
+                  data-chapter-id={row.chapter.id}
+                  aria-label={`Move ${row.chapter.title} up to the previous audio`}
+                  class="leading-none text-fg-subtle transition hover:text-accent"
+                  onclick={() => onMove(row.chapter.id, upTrack!)}
+                >↑</button>
+              {/if}
+              {#if band.trackId && downTrack}
+                <button
+                  type="button"
+                  data-testid="chapter-move-down"
+                  data-chapter-id={row.chapter.id}
+                  aria-label={`Move ${row.chapter.title} down to the next audio`}
+                  class="leading-none text-fg-subtle transition hover:text-accent"
+                  onclick={() => onMove(row.chapter.id, downTrack!)}
+                >↓</button>
+              {/if}
               <button
                 type="button"
                 data-testid="chapter-remove"
@@ -302,12 +270,6 @@
                 onclick={() => onRemove(row.chapter.id)}
               >×</button>
             </div>
-            {#if showInspector}
-              <MismatchDiffInspector
-                chapterTitle={row.chapter.title}
-                trackLabel={trackLabelFor(pair?.track_id)}
-              />
-            {/if}
           </li>
         {/each}
       </ul>
