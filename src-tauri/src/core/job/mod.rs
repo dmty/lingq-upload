@@ -660,11 +660,12 @@ pub async fn seed_mapping_for_response(
         .iter()
         .map(|c| (c.id.clone(), c.body.chars().count()))
         .collect();
-    let track_meta: Vec<(_, Option<String>, f64)> = tracks
+    let track_meta: Vec<(_, Option<String>, f64, String, Option<(f64, f64)>)> = tracks
         .iter()
         .map(|t| {
             let dur = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
-            (track_id_for(t), t.title.clone(), dur)
+            let path = t.path.to_string_lossy().into_owned();
+            (track_id_for(t), t.title.clone(), dur, path, t.window)
         })
         .collect();
     let buckets = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
