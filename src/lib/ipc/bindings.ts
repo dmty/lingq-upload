@@ -423,7 +423,7 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
  * stays the same across debug/release.
  */
 export type BackendChoice = "file" | "keychain"
-export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number; audioPath: string; window: [number, number] | null }
+export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number; audioPath?: string; window?: [number, number] | null }
 /**
  * Read-only preview row for the Mismatch UI's `SplitProportional` card.
  * One row per audio atom: text-chapter index range that the proportional
@@ -495,7 +495,7 @@ export type LibraryStatus = "done" | "running" | "paused" | "needs_match" | "fai
 export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type MappingError = { kind: "UnknownChapter"; message: string } | { kind: "UnknownTrack"; message: string } | { kind: "Invalid"; message: string }
-export type MappingOp = { kind: "swap"; chapter_id: ChapterId; track_id: string } | { kind: "park"; track_id: string } | { kind: "unpark"; track_id: string; chapter_id: ChapterId }
+export type MappingOp = { kind: "swap"; chapter_id: ChapterId; track_id: string } | { kind: "park"; track_id: string } | { kind: "unpark"; track_id: string; chapter_id: ChapterId } | { kind: "reassign"; chapter_id: ChapterId; track_id: string }
 export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; confidence: number; touched?: boolean; 
 /**
  * Confidence at pair construction. The score gate blocks Continue when

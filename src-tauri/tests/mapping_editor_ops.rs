@@ -249,6 +249,35 @@ fn gate_continue_uses_original_confidence_not_recomputed() {
 }
 
 #[test]
+fn reassign_moves_chapter_without_unpairing_others_or_parking() {
+    // bucket t0 = {c0, c1}, t1 = {c2}. Move c1 -> t1.
+    let mut state = MappingState {
+        pairs: vec![
+            pair("c0", Some("t0"), 0.9, false),
+            pair("c1", Some("t0"), 0.8, false),
+            pair("c2", Some("t1"), 0.7, false),
+        ],
+        parking_lot: vec![],
+        op_id: 0,
+        ..Default::default()
+    };
+    state = apply_mapping_op(
+        &state,
+        MappingOp::Reassign {
+            chapter_id: ch("c1"),
+            track_id: "t1".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(state.pairs[1].track_id.as_deref(), Some("t1"));
+    assert!(state.pairs[1].touched);
+    // c0 still on t0, c2 still on t1, nothing parked.
+    assert_eq!(state.pairs[0].track_id.as_deref(), Some("t0"));
+    assert_eq!(state.pairs[2].track_id.as_deref(), Some("t1"));
+    assert!(state.parking_lot.is_empty());
+}
+
+#[test]
 fn swap_with_self_is_idempotent_touch() {
     let state = seed_three_pairs();
     let next = apply_mapping_op(
