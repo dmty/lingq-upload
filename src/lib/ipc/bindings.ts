@@ -305,6 +305,18 @@ async cmdProjectChapters(projectId: ProjectId) : Promise<Result<ChapterMeta[], A
 }
 },
 /**
+ * Return one chapter's body on demand. The list projection (`ChapterMeta`) is
+ * body-less; callers fetch full text only when they need to inspect it.
+ */
+async cmdChapterText(projectId: ProjectId, chapterId: ChapterId) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_chapter_text", { projectId, chapterId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Replace the project's skipped-chapter set wholesale.
  * 
  * The picker UI debounces user edits and flushes the resulting selection
