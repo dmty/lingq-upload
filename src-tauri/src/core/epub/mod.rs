@@ -74,6 +74,12 @@ impl ChapterId {
         Self(format!("idx:{order}"))
     }
 
+    /// Inverse of [`from_order`]: returns the embedded index for order-shaped
+    /// ids (`idx:{n}`), or `None` for any other form.
+    pub(crate) fn order_index(&self) -> Option<usize> {
+        self.0.strip_prefix("idx:").and_then(|s| s.parse().ok())
+    }
+
     /// Deterministic id derived from `(strategy, spine_key, title_norm)`.
     /// `spine_key` is a stable per-chapter anchor — typically the spine href
     /// — so dropping an empty chapter does not shift the ids of later ones.
