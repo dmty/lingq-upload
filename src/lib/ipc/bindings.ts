@@ -423,7 +423,7 @@ export type AudioSource = { kind: "single_file"; value: string } | { kind: "fold
  * stays the same across debug/release.
  */
 export type BackendChoice = "file" | "keychain"
-export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
+export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number; audioPath: string; window: [number, number] | null }
 /**
  * Read-only preview row for the Mismatch UI's `SplitProportional` card.
  * One row per audio atom: text-chapter index range that the proportional
