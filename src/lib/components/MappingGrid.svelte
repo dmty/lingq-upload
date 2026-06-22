@@ -367,3 +367,9 @@
     </span>
   </footer>
 </div>
+
+<style>
+  li.selected {
+    background-color: var(--color-accent-soft);
+  }
+</style>
