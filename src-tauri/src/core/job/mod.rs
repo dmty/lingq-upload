@@ -723,11 +723,14 @@ fn build_plan(
     tracks: &[AudioTrack],
     leftover_base: usize,
 ) -> PlanOrPause {
-    if let Some(decision) = &project.matcher_decision {
-        return plan_from_decision(decision, chapters, tracks, leftover_base);
-    }
+    // The mapping is the source of truth once one exists (it is seeded on
+    // resolve and then edited in the mapping screen). The decision is only a
+    // fallback for projects that resolved to no mapping (Cancel / legacy).
     if let Some(mapping) = &project.mapping {
         return plan_from_mapping(mapping, chapters, tracks);
+    }
+    if let Some(decision) = &project.matcher_decision {
+        return plan_from_decision(decision, chapters, tracks, leftover_base);
     }
     match auto_match(chapters, tracks) {
         MatchOutcome::Paired { pairs } => PlanOrPause::Plan(Plan {
@@ -1694,6 +1697,40 @@ mod tests {
             seeded.buckets.iter().all(|b| b.atom_duration_sec > 0.0),
             "every bucket must carry a positive duration"
         );
+    }
+
+    #[test]
+    fn build_plan_mapping_wins_over_decision_for_split() {
+        let chapters = vec![
+            chapter(0, "A", "aaa"), chapter(1, "B", "bbb"), chapter(2, "C", "ccc"),
+        ];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
+        let t0 = track_id_for(&tracks[0]);
+        let t1 = track_id_for(&tracks[1]);
+        let mut project = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"), "T");
+        // A decision is present (as in the real flow) AND an edited mapping that
+        // moved chapter C from t0's bucket to t1.
+        project.matcher_decision = Some(MatcherDecision {
+            condition: MismatchCondition::ManyToFew,
+            response: MismatchResponse::SplitProportional,
+            chapter_count: 3, track_count: 2, user_overrode: false, decided_at: Utc::now(),
+        });
+        project.mapping = Some(MappingState {
+            pairs: vec![pair(0, Some(t0.clone())), pair(1, Some(t1.clone())), pair(2, Some(t1.clone()))],
+            parking_lot: vec![], op_id: 1, buckets: Vec::new(),
+        });
+        let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        // Mapping wins: bucket t0={A}, t1={B,C}. Re-packing from the decision
+        // would have produced a different boundary.
+        assert_eq!(plan.steps.len(), 2);
+        assert_eq!(plan.steps[0].track_index, 0);
+        assert_eq!(plan.steps[0].text, single_lesson_concat(&chapters[0..1]));
+        assert_eq!(plan.steps[1].track_index, 1);
+        assert_eq!(plan.steps[1].text, single_lesson_concat(&chapters[1..3]));
     }
 
 }
