@@ -200,6 +200,7 @@ fn unpark(
 
 /// Set a chapter's track without exchanging or parking — the bucket-model
 /// move. The target must already be a referenced track (an existing bucket).
+// Contiguity invariant (edge-chapter → adjacent-bucket only) is enforced by the caller `adjacentTracksFor`; a second caller must uphold it too.
 fn reassign(
     state: &mut MappingState,
     chapter_id: ChapterId,
