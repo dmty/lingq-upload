@@ -387,7 +387,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-2xl space-y-6 pt-6">
+<section class="col-form space-y-6 pt-6">
   <header>
     <h1 class="text-lg font-semibold text-fg">Add Project</h1>
     <p class="mt-1 text-sm text-fg-muted">

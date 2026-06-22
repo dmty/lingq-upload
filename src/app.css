@@ -92,3 +92,16 @@
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Content-width tiers. `col-form` is a readable measure for single-column
+   forms; `col-wide` fills the window (capped on large monitors) for
+   data-dense and two-pane workspace screens. The shell `<main>` owns the
+   side padding, so these only set the measure. */
+.col-form {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+.col-wide {
+  max-width: 72rem;
+  margin-inline: auto;
+}
