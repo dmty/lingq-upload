@@ -15,7 +15,7 @@ use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
-use crate::core::matcher::ops::{build_bucket_meta, RECOMPUTED_CONFIDENCE};
+use crate::core::matcher::ops::{build_bucket_meta, TrackId, RECOMPUTED_CONFIDENCE};
 use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
@@ -756,24 +756,27 @@ fn build_plan(
     }
 }
 
-/// Plan from the user's (or seeded) mapping-editor state. Each eligible
-/// chapter uploads with the track its pair points at; chapters whose pair is
-/// unpaired and tracks sitting in the parking lot are excluded entirely.
+/// Plan from the (possibly edited) mapping-editor state — the source of truth
+/// for the upload. Contiguous chapters sharing a track become ONE lesson
+/// (split bucket). Tracks referenced by no pair and not parked ship as
+/// audio-only degraded lessons; parked tracks are excluded.
 fn plan_from_mapping(
     mapping: &MappingState,
     chapters: &[Chapter],
     tracks: &[AudioTrack],
 ) -> PlanOrPause {
-    let mut steps = Vec::with_capacity(chapters.len());
-    for chapter in chapters {
-        let Some(pair) = mapping.pairs.iter().find(|p| p.chapter_id == chapter.id) else {
-            // Sources changed on disk since the mapping was seeded.
+    let mut steps: Vec<Step> = Vec::new();
+    let mut used_tracks: std::collections::HashSet<TrackId> = std::collections::HashSet::new();
+    let mut i = 0;
+    while i < chapters.len() {
+        let Some(pair) = mapping.pairs.iter().find(|p| p.chapter_id == chapters[i].id) else {
             return PlanOrPause::Failed(format!(
                 "mapping has no entry for chapter '{}'; text source changed since matching",
-                chapter.title
+                chapters[i].title
             ));
         };
         let Some(track_id) = pair.track_id.as_ref() else {
+            i += 1; // unpaired chapter -> excluded
             continue;
         };
         let Some(track_index) = tracks.iter().position(|t| &track_id_for(t) == track_id) else {
@@ -781,7 +784,44 @@ fn plan_from_mapping(
                 "mapping references unknown track '{track_id}'; audio source changed since matching"
             ));
         };
-        steps.push(step_for_chapter(chapter, track_index));
+        // Extend the run while the next chapter points at the same track.
+        let run_start = i;
+        i += 1;
+        while i < chapters.len() {
+            let next = mapping.pairs.iter().find(|p| p.chapter_id == chapters[i].id);
+            if next.and_then(|p| p.track_id.as_ref()) == Some(track_id) {
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        let run = &chapters[run_start..i];
+        used_tracks.insert(track_id.clone());
+        if run.len() == 1 {
+            steps.push(step_for_chapter(&run[0], track_index));
+        } else {
+            steps.push(Step {
+                chapter_index: run[0].order,
+                track_index,
+                degraded: false,
+                title: run[0].title.clone(),
+                text: single_lesson_concat(run),
+            });
+        }
+    }
+    // Tracks referenced by nothing and not parked -> audio-only degraded.
+    for (k, track) in tracks.iter().enumerate() {
+        let tid = track_id_for(track);
+        if used_tracks.contains(&tid) || mapping.parking_lot.contains(&tid) {
+            continue;
+        }
+        steps.push(Step {
+            chapter_index: chapters.len() + k,
+            track_index: k,
+            degraded: true,
+            title: audio_only_title(track, k),
+            text: " ".to_string(),
+        });
     }
     PlanOrPause::Plan(Plan { steps })
 }
@@ -1242,6 +1282,58 @@ mod tests {
             plan_from_mapping(&mapping, &chapters, &tracks),
             PlanOrPause::Failed(_)
         ));
+    }
+
+    #[test]
+    fn plan_from_mapping_groups_contiguous_same_track_into_one_lesson() {
+        let chapters = vec![
+            chapter(0, "A", "aaa"), chapter(1, "B", "bbb"),
+            chapter(2, "C", "ccc"), chapter(3, "D", "ddd"), chapter(4, "E", "eee"),
+        ];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
+        let t0 = track_id_for(&tracks[0]);
+        let t1 = track_id_for(&tracks[1]);
+        let mapping = MappingState {
+            pairs: vec![
+                pair(0, Some(t0.clone())), pair(1, Some(t0.clone())), pair(2, Some(t0.clone())),
+                pair(3, Some(t1.clone())), pair(4, Some(t1.clone())),
+            ],
+            parking_lot: vec![], op_id: 0, buckets: Vec::new(),
+        };
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        assert_eq!(plan.steps.len(), 2, "two buckets -> two lessons");
+        assert_eq!(plan.steps[0].track_index, 0);
+        assert_eq!(plan.steps[0].text, single_lesson_concat(&chapters[0..3]));
+        assert_eq!(plan.steps[1].track_index, 1);
+        assert_eq!(plan.steps[1].text, single_lesson_concat(&chapters[3..5]));
+    }
+
+    #[test]
+    fn plan_from_mapping_orphan_track_is_audio_only_parked_excluded() {
+        let chapters = vec![chapter(0, "A", "aaa")];
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let t0 = track_id_for(&tracks[0]);
+        let t2 = track_id_for(&tracks[2]);
+        // chapter -> t0; t1 unreferenced+unparked (audio-only); t2 parked (excluded).
+        let mapping = MappingState {
+            pairs: vec![pair(0, Some(t0.clone()))],
+            parking_lot: vec![t2.clone()], op_id: 0, buckets: Vec::new(),
+        };
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        // one real lesson (t0) + one audio-only degraded (t1). t2 parked -> absent.
+        assert_eq!(plan.steps.len(), 2);
+        assert!(!plan.steps[0].degraded);
+        assert_eq!(plan.steps[0].track_index, 0);
+        let audio_only = &plan.steps[1];
+        assert!(audio_only.degraded);
+        assert_eq!(audio_only.track_index, 1);
+        assert_eq!(audio_only.text, " ");
     }
 
     #[test]
