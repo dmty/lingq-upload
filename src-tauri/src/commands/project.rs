@@ -141,12 +141,8 @@ pub async fn cmd_chapter_text(
                 .ok_or_else(|| AppError::Other(format!("chapter '{chapter_id}' not found")))
         }
         TextSource::LooseFiles { paths } => {
-            // Order-indexed ids encode the index as "idx:{n}"; parse it back
-            // rather than adding an accessor to ChapterId.
             let idx = chapter_id
-                .0
-                .strip_prefix("idx:")
-                .and_then(|s| s.parse::<usize>().ok())
+                .order_index()
                 .ok_or_else(|| {
                     AppError::Other(format!(
                         "chapter id '{chapter_id}' is not order-indexed"
