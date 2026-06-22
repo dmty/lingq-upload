@@ -19,6 +19,7 @@
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
   import MappingGrid from "$lib/components/MappingGrid.svelte";
+  import ChapterInspector from "$lib/components/ChapterInspector.svelte";
   import ProjectSettings from "$lib/components/ProjectSettings.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
@@ -567,20 +568,23 @@
           <ProjectSettings projectId={projectIdValue} bind:absorbPolicy />
         </div>
       {/if}
-      <MappingGrid
-        chapters={mapping.chapters}
-        mappingState={mapping.mappingState}
-        buckets={mapping.buckets}
-        skippedIds={mapping.skippedIds}
-        lastSavedAt={mapping.lastSavedAt}
-        saving={mapping.saving}
-        canContinue={mappingGateOk}
-        onOp={handleMappingOp}
-        onConfirmPair={handleConfirmPair}
-        onRemove={(id) => mapping.removeChapter(id)}
-        onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
-        onContinue={handleMappingContinue}
-      />
+      <div class="match-body">
+        <MappingGrid
+          chapters={mapping.chapters}
+          mappingState={mapping.mappingState}
+          buckets={mapping.buckets}
+          skippedIds={mapping.skippedIds}
+          lastSavedAt={mapping.lastSavedAt}
+          saving={mapping.saving}
+          canContinue={mappingGateOk}
+          onOp={handleMappingOp}
+          onConfirmPair={handleConfirmPair}
+          onRemove={(id) => mapping.removeChapter(id)}
+          onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
+          onContinue={handleMappingContinue}
+        />
+        <ChapterInspector />
+      </div>
     {:else}
       <header>
         <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
@@ -714,3 +718,11 @@
     {/if}
   </section>
 </div>
+
+<style>
+  .match-body {
+    display: flex;
+    align-items: stretch;
+    min-height: 0;
+  }
+</style>

@@ -26,6 +26,8 @@ type State = {
   lastSavedAt: number | null;
   // Writes queued or in flight. Footer renders "Saving…" while > 0.
   pendingWrites: number;
+  selectedChapterId: ChapterId | null;
+  chapterTextCache: Record<string, string>;
 };
 
 const state = $state<State>({
@@ -39,6 +41,8 @@ const state = $state<State>({
   revertEpoch: 0,
   lastSavedAt: null,
   pendingWrites: 0,
+  selectedChapterId: null,
+  chapterTextCache: {},
 });
 
 // Serialise concurrent setSkipped/submitOp calls so the backend always sees
@@ -187,6 +191,8 @@ export const mapping = {
     state.mappingState = null;
     state.absorbPolicy = "forward";
     state.revertEpoch = 0;
+    state.selectedChapterId = null;
+    state.chapterTextCache = {};
     state.lastSavedAt = null;
     const loaded = await commands.cmdProjectLoad(key);
     if (loaded.status === "error") {
@@ -311,6 +317,21 @@ export const mapping = {
     return this.setSkipped([...state.skippedIds, chapterId]);
   },
 
+  get selectedChapterId() {
+    return state.selectedChapterId;
+  },
+  selectChapter(id: ChapterId) {
+    state.selectedChapterId = id;
+    if (state.chapterTextCache[id] === undefined) {
+      void commands.cmdChapterText(state.projectId!, id).then((res) => {
+        if (res.status === "ok") state.chapterTextCache = { ...state.chapterTextCache, [id]: res.data };
+      });
+    }
+  },
+  chapterTextFor(id: ChapterId): string | null {
+    return state.chapterTextCache[id] ?? null;
+  },
+
   gateContinue(): boolean {
     return scoreGate(state.mappingState);
   },
@@ -336,6 +357,8 @@ export const mapping = {
     state.error = null;
     state.revertEpoch = 0;
     state.lastSavedAt = null;
+    state.selectedChapterId = null;
+    state.chapterTextCache = {};
     drainQueue();
     state.pendingWrites = 0;
   },

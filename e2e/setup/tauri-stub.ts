@@ -132,9 +132,9 @@ export const tauriStubInitScript = `
         cmd_chapter_text: (args) => {
             const pid = args && args.projectId;
             const key = (pid && pid.content_hash) || "stub-project";
-            const { chapter_id } = args as { chapter_id: string };
+            const chapterId = args && args.chapterId;
             const chapters = window.__pickerState__.chaptersByProject[key] ?? [];
-            const found = chapters.find((c: { id: string; body?: string }) => c.id === chapter_id);
+            const found = chapters.find((c) => c.id === chapterId);
             return found?.body ?? "";
         },
         cmd_set_selection: (args) => {
