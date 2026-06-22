@@ -84,11 +84,6 @@ function drainQueue() {
   for (const q of pendingOps.splice(0)) settle(q);
 }
 
-function labelForTrack(m: MappingState, trackId: string): string {
-  const idx = (m.buckets ?? []).findIndex((b) => b.trackId === trackId);
-  return `Audio ${idx >= 0 ? idx + 1 : "?"}`;
-}
-
 function scoreGate(s: MappingState | null): boolean {
   if (!s) return true;
   // Track-less pairs are excluded: there is no persistable op to confirm
@@ -323,30 +318,10 @@ export const mapping = {
     return this.setSkipped([...state.skippedIds, chapterId]);
   },
 
+  // Edge-only/adjacent enforcement lives in MappingGrid, which derives the
+  // valid ↑/↓ targets directly from the (skipped-excluded) band layout.
   moveChapter(chapterId: ChapterId, trackId: string): Promise<void> {
     return this.submitOp({ kind: "reassign", chapter_id: chapterId, track_id: trackId });
-  },
-
-  // An edge chapter of its bucket can move to the neighbouring bucket only,
-  // preserving the contiguous-bucket invariant.
-  adjacentTracksFor(chapterId: ChapterId): { trackId: string; label: string }[] {
-    const m = state.mappingState;
-    if (!m) return [];
-    const ordered = state.chapters
-      .filter((c) => !state.skippedIds.includes(c.id))
-      .map((c) => m.pairs.find((p) => p.chapter_id === c.id))
-      .filter((p): p is NonNullable<typeof p> => !!p && !!p.track_id);
-    const i = ordered.findIndex((p) => p.chapter_id === chapterId);
-    if (i < 0) return [];
-    const self = ordered[i].track_id;
-    const out: { trackId: string; label: string }[] = [];
-    const prev = ordered[i - 1];
-    const next = ordered[i + 1];
-    // first-of-bucket: prev belongs to a different (earlier) bucket
-    if (prev && prev.track_id !== self) out.push({ trackId: prev.track_id!, label: labelForTrack(m, prev.track_id!) });
-    // last-of-bucket: next belongs to a different (later) bucket
-    if (next && next.track_id !== self) out.push({ trackId: next.track_id!, label: labelForTrack(m, next.track_id!) });
-    return out;
   },
 
   get selectedChapterId() {

@@ -65,33 +65,30 @@ test.describe("chapter inspector", () => {
     await expect(page.getByTestId("inspector-play")).toBeVisible();
   });
 
-  test("move reassigns an edge chapter to the adjacent bucket", async ({ page }) => {
+  test("the ↓ arrow on a bucket's last row moves it to the next bucket", async ({ page }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    // select the last chapter of bucket t0 (row index 2)
-    await page.getByTestId("mapping-chapter-row").nth(2).click();
-    await expect(page.getByTestId("chapter-inspector")).toBeVisible();
-    // move it to the adjacent audio (t1)
-    await page.getByTestId("inspector-move").click();
-    await page.getByTestId("inspector-move-option").first().click();
-    // band t0 now has 2 rows, band t1 has 3 — bands still 2, but boundary moved
+    // band t0={0,1,2}, t1={3,4}. Only t0's last row (idx:2) shows a ↓ arrow.
+    await page.getByTestId("chapter-move-down").click();
+    // boundary shifts: t0 now has 2 rows, t1 has 3 — still 2 bands.
     await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
-    // the moved row is now under the second band
     const secondBand = page.getByTestId("mapping-bucket-band").nth(1);
     await expect(secondBand.getByTestId("mapping-chapter-row")).toHaveCount(3);
   });
 
-  test("move reassigns the first chapter of a bucket to the previous bucket", async ({ page }) => {
+  test("the ↑ arrow on a bucket's first row moves it to the previous bucket", async ({ page }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    // select the first chapter of bucket t1 (row index 3)
-    await page.getByTestId("mapping-chapter-row").nth(3).click();
-    await expect(page.getByTestId("chapter-inspector")).toBeVisible();
-    // move it to the adjacent audio (t0)
-    await page.getByTestId("inspector-move").click();
-    await page.getByTestId("inspector-move-option").first().click();
-    // band t0 now has 4 rows, band t1 has 1
+    // Only t1's first row (idx:3) shows a ↑ arrow.
+    await page.getByTestId("chapter-move-up").click();
     await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
     const firstBand = page.getByTestId("mapping-bucket-band").nth(0);
     await expect(firstBand.getByTestId("mapping-chapter-row")).toHaveCount(4);
+  });
+
+  test("interior chapters show no move arrows", async ({ page }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    // 2 bands → exactly one ↓ (t0 last) and one ↑ (t1 first); interior rows have none.
+    await expect(page.getByTestId("chapter-move-down")).toHaveCount(1);
+    await expect(page.getByTestId("chapter-move-up")).toHaveCount(1);
   });
 
   test("remove from the inspector drops the chapter", async ({ page }) => {

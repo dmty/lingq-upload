@@ -7,8 +7,6 @@
   );
   let body = $derived(id ? mapping.chapterTextFor(id) : null);
   let audio = $derived(mapping.selectedBucketAudio());
-  let moves = $derived(id ? mapping.adjacentTracksFor(id) : []);
-  let menuOpen = $state(false);
 
   // The parent bucket this chapter's text rides — the eyebrow connects the
   // text being previewed to the audio segment it will ship with.
@@ -163,34 +161,7 @@
       {/if}
     </div>
 
-    <div class="relative flex items-center gap-2 border-t border-border px-5 py-3">
-      {#if moves.length}
-        <button
-          type="button"
-          data-testid="inspector-move"
-          onclick={() => (menuOpen = !menuOpen)}
-          class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:border-border-strong hover:text-fg"
-        >Move to ▾</button>
-        {#if menuOpen}
-          <ul
-            class="absolute bottom-full left-5 z-10 mb-1 min-w-[140px] overflow-hidden rounded-md border border-border bg-surface py-1 shadow-card"
-          >
-            {#each moves as mv}
-              <li>
-                <button
-                  type="button"
-                  data-testid="inspector-move-option"
-                  onclick={() => {
-                    mapping.moveChapter(id!, mv.trackId);
-                    menuOpen = false;
-                  }}
-                  class="block w-full px-3 py-1.5 text-left text-xs text-fg transition hover:bg-accent-soft"
-                >{mv.label}</button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      {/if}
+    <div class="flex items-center border-t border-border px-5 py-3">
       <button
         type="button"
         data-testid="inspector-remove"
