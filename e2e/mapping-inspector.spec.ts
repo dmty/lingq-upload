@@ -79,6 +79,20 @@ test.describe("chapter inspector", () => {
     await expect(secondBand.getByTestId("mapping-chapter-row")).toHaveCount(3);
   });
 
+  test("move reassigns the first chapter of a bucket to the previous bucket", async ({ page }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    // select the first chapter of bucket t1 (row index 3)
+    await page.getByTestId("mapping-chapter-row").nth(3).click();
+    await expect(page.getByTestId("chapter-inspector")).toBeVisible();
+    // move it to the adjacent audio (t0)
+    await page.getByTestId("inspector-move").click();
+    await page.getByTestId("inspector-move-option").first().click();
+    // band t0 now has 4 rows, band t1 has 1
+    await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
+    const firstBand = page.getByTestId("mapping-bucket-band").nth(0);
+    await expect(firstBand.getByTestId("mapping-chapter-row")).toHaveCount(4);
+  });
+
   test("remove from the inspector drops the chapter", async ({ page }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
     await page.getByTestId("mapping-chapter-row").nth(0).click();
