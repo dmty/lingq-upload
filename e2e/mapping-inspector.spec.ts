@@ -63,4 +63,27 @@ test.describe("chapter inspector", () => {
     await expect(audio).toHaveAttribute("data-window-start", /\d/);
     await expect(audio).toHaveAttribute("data-window-end", /\d/);
   });
+
+  test("move reassigns an edge chapter to the adjacent bucket", async ({ page }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    // select the last chapter of bucket t0 (row index 2)
+    await page.getByTestId("mapping-chapter-row").nth(2).click();
+    await expect(page.getByTestId("chapter-inspector")).toBeVisible();
+    // move it to the adjacent audio (t1)
+    await page.getByTestId("inspector-move").click();
+    await page.getByTestId("inspector-move-option").first().click();
+    // band t0 now has 2 rows, band t1 has 3 — bands still 2, but boundary moved
+    await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
+    // the moved row is now under the second band
+    const secondBand = page.getByTestId("mapping-bucket-band").nth(1);
+    await expect(secondBand.getByTestId("mapping-chapter-row")).toHaveCount(3);
+  });
+
+  test("remove from the inspector drops the chapter", async ({ page }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    await page.getByTestId("mapping-chapter-row").nth(0).click();
+    await page.getByTestId("inspector-remove").click();
+    await expect(page.getByTestId("mapping-chapter-row")).toHaveCount(4);
+    await expect(page.getByTestId("removed-strip")).toContainText("1");
+  });
 });
