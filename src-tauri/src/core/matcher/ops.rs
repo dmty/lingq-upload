@@ -1,8 +1,8 @@
 //! Pure state transitions for the two-column mapping editor.
 //!
 //! The mapping editor lets the user re-confirm the matcher's chapter ↔ track
-//! pairings. This module owns the data model and the three mutating ops:
-//! `Swap`, `Park`, and `Unpark`. All ops are pure functions over
+//! pairings. This module owns the data model and the four mutating ops:
+//! `Swap`, `Park`, `Unpark`, and `Reassign`. All ops are pure functions over
 //! [`MappingState`] — no I/O, no async, no DOM. Persistence lives in the
 //! caller (`commands::mapping::cmd_apply_mapping_op`).
 //!
@@ -38,6 +38,10 @@ pub enum MappingOp {
     Unpark {
         track_id: TrackId,
         chapter_id: ChapterId,
+    },
+    Reassign {
+        chapter_id: ChapterId,
+        track_id: TrackId,
     },
 }
 
@@ -104,6 +108,10 @@ pub fn apply(state: &MappingState, op: MappingOp) -> Result<MappingState, Mappin
             track_id,
             chapter_id,
         } => unpark(&mut next, track_id, chapter_id)?,
+        MappingOp::Reassign {
+            chapter_id,
+            track_id,
+        } => reassign(&mut next, chapter_id, track_id)?,
     }
     next.op_id = state.op_id.saturating_add(1);
     Ok(next)
@@ -187,6 +195,25 @@ fn unpark(
     state.pairs[target].track_id = Some(track_id);
     state.pairs[target].confidence = RECOMPUTED_CONFIDENCE;
     state.pairs[target].touched = true;
+    Ok(())
+}
+
+/// Set a chapter's track without exchanging or parking — the bucket-model
+/// move. The target must already be a referenced track (an existing bucket).
+fn reassign(
+    state: &mut MappingState,
+    chapter_id: ChapterId,
+    track_id: TrackId,
+) -> Result<(), MappingError> {
+    let idx = pair_idx(state, &chapter_id)?;
+    let known = state.pairs.iter().any(|p| p.track_id.as_ref() == Some(&track_id))
+        || state.buckets.iter().any(|b| b.track_id == track_id);
+    if !known {
+        return Err(MappingError::UnknownTrack(track_id));
+    }
+    state.pairs[idx].track_id = Some(track_id);
+    state.pairs[idx].confidence = RECOMPUTED_CONFIDENCE;
+    state.pairs[idx].touched = true;
     Ok(())
 }
 

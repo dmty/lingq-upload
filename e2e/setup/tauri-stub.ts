@@ -187,6 +187,12 @@ export const tauriStubInitScript = `
                 next.parking_lot.splice(lotIdx, 1);
                 next.pairs[idx].track_id = op.track_id;
                 next.pairs[idx].touched = true;
+            } else if (op.kind === "reassign") {
+                const idx = next.pairs.findIndex((p) => p.chapter_id === op.chapter_id);
+                if (idx < 0) throw new Error("unknown chapter");
+                next.pairs[idx].track_id = op.track_id;
+                next.pairs[idx].confidence = 1.0;
+                next.pairs[idx].touched = true;
             }
             next.op_id = (current.op_id || 0) + 1;
             mappings[key] = next;
