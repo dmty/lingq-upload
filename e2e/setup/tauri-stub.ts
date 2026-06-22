@@ -129,6 +129,14 @@ export const tauriStubInitScript = `
             const key = (pid && pid.content_hash) || "stub-project";
             return window.__pickerState__.chaptersByProject[key] || [];
         },
+        cmd_chapter_text: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const { chapter_id } = args as { chapter_id: string };
+            const chapters = window.__pickerState__.chaptersByProject[key] ?? [];
+            const found = chapters.find((c: { id: string; body?: string }) => c.id === chapter_id);
+            return found?.body ?? "";
+        },
         cmd_set_selection: (args) => {
             const pid = args && args.projectId;
             const key = (pid && pid.content_hash) || "stub-project";

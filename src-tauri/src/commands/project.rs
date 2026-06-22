@@ -8,6 +8,7 @@ use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
 use crate::core::project::Project;
 use crate::core::store::{ProjectStore, StoreError};
+use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
 use crate::ingest::TextSource;
 
@@ -116,6 +117,50 @@ pub async fn cmd_project_chapters(
     }
 }
 
+/// Return one chapter's body on demand. The list projection (`ChapterMeta`) is
+/// body-less; callers fetch full text only when they need to inspect it.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_chapter_text(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    chapter_id: ChapterId,
+) -> Result<String, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    match &project.sources.text {
+        TextSource::Epub(path) => {
+            let chapters =
+                parse_epub(path).map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
+            chapters
+                .into_iter()
+                .find(|c| c.id == chapter_id)
+                .map(|c| c.body)
+                .ok_or_else(|| AppError::Other(format!("chapter '{chapter_id}' not found")))
+        }
+        TextSource::LooseFiles { paths } => {
+            // Order-indexed ids encode the index as "idx:{n}"; parse it back
+            // rather than adding an accessor to ChapterId.
+            let idx = chapter_id
+                .0
+                .strip_prefix("idx:")
+                .and_then(|s| s.parse::<usize>().ok())
+                .ok_or_else(|| {
+                    AppError::Other(format!(
+                        "chapter id '{chapter_id}' is not order-indexed"
+                    ))
+                })?;
+            let path = paths
+                .get(idx)
+                .ok_or_else(|| AppError::Other(format!("chapter index {idx} out of range")))?;
+            read_text_for_upload(path).map_err(|e| AppError::Other(format!("read: {e}")))
+        }
+        TextSource::Missing => Err(AppError::Other("project has no text source".into())),
+    }
+}
+
 /// Persist the chapter-divider absorb policy for a project.
 #[tauri::command]
 #[specta::specta]
@@ -132,3 +177,4 @@ pub async fn cmd_set_absorb_policy(
         })?;
     Ok(())
 }
+
