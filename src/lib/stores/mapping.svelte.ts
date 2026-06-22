@@ -333,6 +333,7 @@ export const mapping = {
     const m = state.mappingState;
     if (!m) return [];
     const ordered = state.chapters
+      .filter((c) => !state.skippedIds.includes(c.id))
       .map((c) => m.pairs.find((p) => p.chapter_id === c.id))
       .filter((p): p is NonNullable<typeof p> => !!p && !!p.track_id);
     const i = ordered.findIndex((p) => p.chapter_id === chapterId);
