@@ -63,7 +63,9 @@ pub struct BucketMeta {
     pub atom_title: Option<String>,
     pub atom_duration_sec: f64,
     pub chars_per_sec: f64,
+    #[serde(default)]
     pub audio_path: String,
+    #[serde(default)]
     pub window: Option<(f64, f64)>,
 }
 
@@ -244,6 +246,19 @@ mod tests {
 
     fn cid(s: &str) -> ChapterId {
         ChapterId(s.to_string())
+    }
+
+    #[test]
+    fn mapping_state_deserializes_legacy_buckets_without_audio_fields() {
+        let json = r#"{
+            "pairs": [],
+            "buckets": [
+                { "trackId": "t0", "atomTitle": "Audio 1", "atomDurationSec": 600.0, "charsPerSec": 5.0 }
+            ]
+        }"#;
+        let state: MappingState = serde_json::from_str(json).expect("legacy bucket deserialization failed");
+        assert_eq!(state.buckets[0].audio_path, "");
+        assert_eq!(state.buckets[0].window, None);
     }
 
     #[test]
