@@ -8,6 +8,7 @@ import {
   type MappingState,
   type ProjectId,
 } from "$lib/ipc/bindings";
+import { assetUrl } from "$lib/audio";
 
 type State = {
   projectId: ProjectId | null;
@@ -330,6 +331,19 @@ export const mapping = {
   },
   chapterTextFor(id: ChapterId): string | null {
     return state.chapterTextCache[id] ?? null;
+  },
+
+  selectedBucketAudio(): { src: string; start: number; end: number } | null {
+    const id = state.selectedChapterId;
+    if (!id || !state.mappingState) return null;
+    const pair = state.mappingState.pairs.find((p) => p.chapter_id === id);
+    if (!pair?.track_id) return null;
+    const bucket = (state.mappingState.buckets ?? []).find(
+      (b) => b.trackId === pair.track_id,
+    );
+    if (!bucket?.audioPath) return null;
+    const [start, end] = bucket.window ?? [0, bucket.atomDurationSec];
+    return { src: assetUrl(bucket.audioPath), start, end };
   },
 
   gateContinue(): boolean {

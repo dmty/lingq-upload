@@ -17,8 +17,8 @@ function fixtureScript(): string {
     ],
     parking_lot: [], op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/audio/t0.m4a", window: [0, 600] },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/audio/t1.m4a", window: [0, 300] },
     ],
   };
   // Set a non-null inspection so hydrateFromBackend doesn't redirect to /run.
@@ -56,9 +56,9 @@ function driftFixtureScript(): string {
     ],
     parking_lot: [], op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 300, charsPerSec: 5 },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
-      { trackId: "t2", atomTitle: "Audio 3", atomDurationSec: 300, charsPerSec: 12 },
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 300, charsPerSec: 5, audioPath: "/audio/t0.m4a", window: [0, 300] },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/audio/t1.m4a", window: [0, 300] },
+      { trackId: "t2", atomTitle: "Audio 3", atomDurationSec: 300, charsPerSec: 12, audioPath: "/audio/t2.m4a", window: [0, 300] },
     ],
   };
   const inspection = {
@@ -93,8 +93,8 @@ function nonContiguousFixtureScript(): string {
     ],
     parking_lot: [], op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/audio/t0.m4a", window: [0, 600] },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/audio/t1.m4a", window: [0, 300] },
     ],
   };
   const inspection = {
