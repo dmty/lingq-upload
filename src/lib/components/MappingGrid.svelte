@@ -7,6 +7,7 @@
     MappingOp,
     MappingState,
   } from "$lib/ipc/bindings";
+  import { mapping } from "$lib/stores/mapping.svelte";
 
   /**
    * Banded bucket list. Included chapters (non-skipped) are numbered 1..N and
@@ -257,7 +258,9 @@
             class="flex flex-col gap-1 px-3 py-1.5 text-sm {pair && confBand
               ? confBand.borderClass
               : 'border-l-4 border-l-transparent'}"
+            class:selected={mapping.selectedChapterId === row.chapter.id}
             tabindex={0}
+            onclick={() => mapping.selectChapter(row.chapter.id)}
             onkeydown={(ev) => onChapterKeydown(ev, row.chapter.id)}
             onpointerenter={() => onChapterPointerEnter(row.chapter.id)}
             onpointerleave={() => onChapterPointerLeave(row.chapter.id)}
