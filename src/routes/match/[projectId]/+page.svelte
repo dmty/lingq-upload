@@ -569,6 +569,7 @@
         </div>
       {/if}
       <div class="match-body">
+        <div class="min-w-0 flex-1">
         <MappingGrid
           chapters={mapping.chapters}
           mappingState={mapping.mappingState}
@@ -583,6 +584,7 @@
           onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
           onContinue={handleMappingContinue}
         />
+        </div>
         <ChapterInspector />
       </div>
     {:else}
@@ -722,7 +724,7 @@
 <style>
   .match-body {
     display: flex;
-    align-items: stretch;
+    align-items: flex-start;
     min-height: 0;
   }
 </style>

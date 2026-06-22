@@ -57,11 +57,12 @@ test.describe("chapter inspector", () => {
   test("inspector renders a windowed audio element for the bucket", async ({ page }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
     await page.getByTestId("mapping-chapter-row").nth(0).click();
+    // The native <audio> is driven by a custom transport, so it is hidden;
+    // assert it carries the window bounds and that the play control shows.
     const audio = page.getByTestId("inspector-audio");
-    await expect(audio).toBeVisible();
-    // window for Audio 1 in the fixture is the whole atom (0..600) -> data attrs present
     await expect(audio).toHaveAttribute("data-window-start", /\d/);
     await expect(audio).toHaveAttribute("data-window-end", /\d/);
+    await expect(page.getByTestId("inspector-play")).toBeVisible();
   });
 
   test("move reassigns an edge chapter to the adjacent bucket", async ({ page }) => {
