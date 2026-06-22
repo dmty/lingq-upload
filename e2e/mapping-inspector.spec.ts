@@ -17,8 +17,8 @@ function fixtureScript(): string {
     ],
     parking_lot: [], op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5 },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5 },
+      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/audio/t0.m4a", window: [0, 600] },
+      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/audio/t1.m4a", window: [0, 300] },
     ],
   };
   const inspection = {
@@ -52,5 +52,15 @@ test.describe("chapter inspector", () => {
     await page.getByTestId("mapping-chapter-row").nth(0).click();
     await expect(page.getByTestId("chapter-inspector")).toBeVisible();
     await expect(page.getByTestId("inspector-text")).toContainText("x"); // body is "x".repeat(100)
+  });
+
+  test("inspector renders a windowed audio element for the bucket", async ({ page }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    await page.getByTestId("mapping-chapter-row").nth(0).click();
+    const audio = page.getByTestId("inspector-audio");
+    await expect(audio).toBeVisible();
+    // window for Audio 1 in the fixture is the whole atom (0..600) -> data attrs present
+    await expect(audio).toHaveAttribute("data-window-start", /\d/);
+    await expect(audio).toHaveAttribute("data-window-end", /\d/);
   });
 });

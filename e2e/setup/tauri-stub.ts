@@ -287,6 +287,7 @@ export const tauriStubInitScript = `
             window['_' + id] = cb;
             return id;
         },
+        convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
     };
 })();
 `;

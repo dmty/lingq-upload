@@ -6,11 +6,32 @@
     id ? (mapping.chapters.find((c) => c.id === id)?.title ?? "") : "",
   );
   let body = $derived(id ? mapping.chapterTextFor(id) : null);
+  let audio = $derived(mapping.selectedBucketAudio());
+  let el: HTMLAudioElement | undefined = $state();
+
+  function onPlay() {
+    if (el && audio) el.currentTime = audio.start;
+  }
+  function onTimeUpdate() {
+    if (el && audio && el.currentTime >= audio.end) el.pause();
+  }
 </script>
 
 {#if id}
   <aside data-testid="chapter-inspector" class="inspector">
     <header class="inspector__title">{title}</header>
+    {#if audio}
+      <audio
+        bind:this={el}
+        data-testid="inspector-audio"
+        data-window-start={audio.start}
+        data-window-end={audio.end}
+        src={audio.src}
+        controls
+        onplay={onPlay}
+        ontimeupdate={onTimeUpdate}
+      ></audio>
+    {/if}
     <div data-testid="inspector-text" class="inspector__text">
       {#if body === null}
         <span class="inspector__loading">Loading…</span>
