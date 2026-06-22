@@ -180,7 +180,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-140 pt-12">
+<section class="col-form pt-12">
   <h1 class="text-xl font-semibold text-fg">Settings</h1>
   <p class="mt-2 text-base text-fg-muted">
     Where this app keeps your keys and preferences.

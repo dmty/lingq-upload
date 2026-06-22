@@ -179,7 +179,7 @@
   onDestroy(() => unlisten?.());
 </script>
 
-<section class="mx-auto max-w-3xl space-y-4 pt-6">
+<section class="col-wide space-y-4 pt-6">
   <header class="flex items-center justify-between">
     <div>
       <h1 class="text-lg font-semibold text-fg">

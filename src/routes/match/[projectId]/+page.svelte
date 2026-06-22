@@ -524,7 +524,7 @@
 </script>
 
 <div class="flex h-full min-h-screen">
-  <section class="mx-auto max-w-3xl flex-1 space-y-6 px-8 pt-6">
+  <section class="col-wide flex-1 space-y-6 pt-6">
     {#if mapping.mappingState}
       <header class="flex items-baseline justify-between gap-3">
         <h1 class="text-lg font-semibold text-fg">
