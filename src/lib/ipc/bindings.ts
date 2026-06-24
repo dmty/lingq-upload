@@ -342,6 +342,19 @@ async cmdSetAbsorbPolicy(projectId: ProjectId, policy: AbsorbPolicy) : Promise<R
 }
 },
 /**
+ * Persist a user-chosen cover image path for a project. Display only — the
+ * cover is never uploaded to LingQ. The frontend renders it via
+ * `convertFileSrc(cover_path)`.
+ */
+async cmdSetCover(projectId: ProjectId, coverPath: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_cover", { projectId, coverPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Start an end-to-end project job. Returns immediately with the new job id;
  * the actual work runs on the tokio runtime and streams `JobEvent`s.
  */
