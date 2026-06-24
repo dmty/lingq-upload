@@ -52,6 +52,7 @@ fn make_loose_project(dir: &std::path::Path, chapter_count: usize) -> Project {
         skipped_chapters: vec![],
         absorb_policy: Default::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 

@@ -46,6 +46,7 @@ fn make_project_with_mapping(state: MappingState) -> Project {
         skipped_chapters: vec![],
         absorb_policy: Default::default(),
         mapping: Some(state),
+        confirmed_at: None,
     }
 }
 

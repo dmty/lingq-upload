@@ -53,6 +53,7 @@ fn sample_with(id: ProjectId, title: &str) -> Project {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 
