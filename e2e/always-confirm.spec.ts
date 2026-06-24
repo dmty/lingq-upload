@@ -136,8 +136,7 @@ test.describe("always-confirm flow", () => {
     })();`);
 
     await page.goto("/match/proj-seeded");
-    await expect(
-      page.getByRole("heading", { name: "Confirm chapter ↔ track pairing" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("match-title")).toBeVisible();
+    await expect(page.getByText("Resolve mismatch")).toHaveCount(0);
   });
 });
