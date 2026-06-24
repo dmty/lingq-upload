@@ -121,14 +121,22 @@ pub async fn cmd_matcher_inspect(
 
 /// Seed the mapping-grid state for a count-match project that has not run a
 /// job yet. Idempotent — no-op when `matcher_decision` or `mapping` is already
-/// set. Called from the /match page on cold entry before `mapping.load`.
+/// set. Accepts a join-key so the /match page can call it without a prior
+/// `cmd_project_load` round-trip.
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_seed_mapping(
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
-    project_id: ProjectId,
+    key: String,
 ) -> Result<(), AppError> {
-    seed_mapping_if_count_matches(store.inner().as_ref(), &project_id)
+    let summaries = store
+        .list()
+        .map_err(|e| AppError::Other(format!("store.list: {e}")))?;
+    let summary = summaries
+        .into_iter()
+        .find(|s| s.id.join_key() == key)
+        .ok_or_else(|| AppError::Other(format!("project not found: {key}")))?;
+    seed_mapping_if_count_matches(store.inner().as_ref(), &summary.id)
 }
 
 #[cfg(test)]

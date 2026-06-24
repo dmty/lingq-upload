@@ -623,10 +623,8 @@ pub fn seed_mapping_if_count_matches(
     let skipped: std::collections::HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
-    // resolve_audio_tracks is async but only calls ffprobe for real files;
-    // for count-match projects the tracks must be pre-probed already. We need
-    // a synchronous path here — re-use the AudioSource paths directly so we
-    // can stay sync. Fallback: if no audio source, nothing to seed.
+    // auto_match only needs the track count and order; duration_sec stays None
+    // here so we skip the async ffprobe path. No audio source = nothing to seed.
     let audio_paths = match &project.sources.audio {
         Some(src) => match audio_source_paths(src) {
             Ok(paths) => paths,
