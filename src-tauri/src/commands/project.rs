@@ -211,18 +211,23 @@ pub fn confirm_mapping_impl(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
 ) -> Result<(), AppError> {
-    let project = store
-        .get(project_id)
-        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-        .ok_or_else(|| AppError::Other("project not found".into()))?;
-    if project.mapping.is_none() {
-        return Err(AppError::Other("mapping not set".into()));
-    }
+    // Gate inside the update closure so the mapping check and the stamp share
+    // the store's per-project lock (no TOCTOU with concurrent mapping ops).
+    let mut had_mapping = false;
     store
         .update(project_id, &mut |p| {
-            p.confirmed_at = Some(chrono::Utc::now());
+            if p.mapping.is_some() {
+                had_mapping = true;
+                p.confirmed_at = Some(chrono::Utc::now());
+            }
         })
-        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
+        .map_err(|e| match e {
+            StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+            other => AppError::Other(format!("store.update: {other}")),
+        })?;
+    if !had_mapping {
+        return Err(AppError::Other("mapping not set".into()));
+    }
     Ok(())
 }
 
