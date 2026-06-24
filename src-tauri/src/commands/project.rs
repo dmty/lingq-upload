@@ -195,3 +195,82 @@ pub async fn cmd_set_cover(
     Ok(())
 }
 
+/// Mark the chapter↔track mapping as user-confirmed. Sets
+/// `confirmed_at = Some(Utc::now())`. Idempotent — re-confirming
+/// overwrites the timestamp.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_confirm_mapping(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<(), AppError> {
+    confirm_mapping_impl(store.inner().as_ref(), &project_id)
+}
+
+pub fn confirm_mapping_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<(), AppError> {
+    let project = store
+        .get(project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    if project.mapping.is_none() {
+        return Err(AppError::Other("mapping not set".into()));
+    }
+    store
+        .update(project_id, &mut |p| {
+            p.confirmed_at = Some(chrono::Utc::now());
+        })
+        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod confirm_mapping_tests {
+    use super::*;
+    use crate::core::matcher::MappingState;
+    use crate::core::project::Project;
+    use crate::core::store::{InMemoryProjectStore, ProjectStore};
+    use crate::core::identity::ProjectId;
+
+    fn seed(store: &dyn ProjectStore, mapping: Option<MappingState>) -> ProjectId {
+        let id = ProjectId::from_title_author("Book", "Author");
+        let mut p = Project::new_test(id.clone(), "Book");
+        p.mapping = mapping;
+        store.put(&p).unwrap();
+        id
+    }
+
+    #[test]
+    fn sets_confirmed_at_when_mapping_present() {
+        let store = InMemoryProjectStore::default();
+        let mapping = MappingState::default();
+        let id = seed(&store, Some(mapping));
+        confirm_mapping_impl(&store, &id).unwrap();
+        let p = store.get(&id).unwrap().unwrap();
+        assert!(p.confirmed_at.is_some());
+    }
+
+    #[test]
+    fn errors_when_mapping_missing() {
+        let store = InMemoryProjectStore::default();
+        let id = seed(&store, None);
+        let res = confirm_mapping_impl(&store, &id);
+        assert!(res.is_err());
+        let p = store.get(&id).unwrap().unwrap();
+        assert!(p.confirmed_at.is_none());
+    }
+
+    #[test]
+    fn idempotent_overwrite() {
+        let store = InMemoryProjectStore::default();
+        let id = seed(&store, Some(MappingState::default()));
+        confirm_mapping_impl(&store, &id).unwrap();
+        let first = store.get(&id).unwrap().unwrap().confirmed_at.unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        confirm_mapping_impl(&store, &id).unwrap();
+        let second = store.get(&id).unwrap().unwrap().confirmed_at.unwrap();
+        assert!(second >= first);
+    }
+}

@@ -47,6 +47,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::project::cmd_set_selection,
             commands::project::cmd_set_absorb_policy,
             commands::project::cmd_set_cover,
+            commands::project::cmd_confirm_mapping,
             commands::jobs::cmd_start_project_job,
             commands::jobs::cmd_cancel_job,
             commands::jobs::cmd_project_cancel,
