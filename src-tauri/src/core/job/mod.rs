@@ -1810,7 +1810,11 @@ mod tests {
     }
 
     #[test]
-    fn seed_mapping_if_count_matches_seeds_on_paired_outcome() {
+    fn seed_mapping_if_count_matches_errors_when_text_source_missing() {
+        // The Paired-outcome happy path (mapping seeded after a clean auto_match)
+        // is exercised end-to-end via the e2e flow; the count-match seed lives on
+        // the cold cmd_seed_mapping entry point, not here. This test verifies
+        // the early-error path: missing epub file is handled without panic.
         use crate::core::store::InMemoryProjectStore;
         use crate::ingest::{AudioSource, TextSource};
 
