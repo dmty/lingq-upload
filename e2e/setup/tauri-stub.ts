@@ -10,10 +10,7 @@
 // stubbed. Add more entries as the smoke surface grows.
 
 export function tauriStubInitScriptFor(workerIndex: number): string {
-  return tauriStubInitScript.replace(
-    "__WORKER_INDEX__",
-    String(workerIndex),
-  );
+  return tauriStubInitScript.replace("__WORKER_INDEX__", String(workerIndex));
 }
 
 export const tauriStubInitScript = `
@@ -75,11 +72,12 @@ export const tauriStubInitScript = `
     };
 
     const handlers = {
-        // Library list returns an empty index so the empty-state CTA renders.
+        // Library list returns entries from window.__libraryEntries__ if set,
+        // else empty index so the empty-state CTA renders.
         cmd_library_list: () => ({
             schema_version: 1,
             generated_at: new Date().toISOString(),
-            entries: [],
+            entries: window.__libraryEntries__ || [],
         }),
         // Account/profile probe — empty placeholder keeps the layout calm.
         cmd_account_profile: () => ({ username: null, known_words: {} }),
@@ -92,6 +90,9 @@ export const tauriStubInitScript = `
         // forbidden-word filter on /run).
         cmd_project_load: (args) => {
             const key = (args && args.key) || "stub-project";
+            if (window.__projectByKey__ && key in window.__projectByKey__) {
+                return window.__projectByKey__[key];
+            }
             const skipped = readSkipped()[key] || [];
             const mapping = readMappings()[key] || null;
             const meta = (window.__projectMeta__ && window.__projectMeta__[key]) || {};
@@ -268,6 +269,8 @@ export const tauriStubInitScript = `
             writeMappings(mappings);
             return null;
         },
+        cmd_confirm_mapping: () => null,
+        cmd_seed_mapping: () => null,
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Event plugin: register a listener, return a numeric id. We don't
