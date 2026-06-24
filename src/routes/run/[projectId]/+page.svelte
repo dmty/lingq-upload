@@ -174,6 +174,12 @@
         await reloadProject();
       }
     });
+
+    const auto = page.url.searchParams.get("autostart") === "1";
+    if (auto && !running && !hasReceipts && project) {
+      history.replaceState(null, "", `/run/${projectKey}`);
+      await start();
+    }
   });
 
   onDestroy(() => unlisten?.());
@@ -203,7 +209,7 @@
         >
           Cancel
         </button>
-      {:else if project}
+      {:else if project && (project.confirmed_at != null || hasReceipts)}
         <button
           type="button"
           onclick={start}
