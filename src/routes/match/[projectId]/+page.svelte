@@ -58,6 +58,7 @@
   let receiptCount = $state(0);
   let expandOpen = $state(false);
   let busyReplace = $state(false);
+  let coverBusy = $state(false);
   let replaceError = $state<string | null>(null);
   let audioDropEl = $state<HTMLButtonElement | null>(null);
   let localHover = $state(false);
@@ -450,17 +451,23 @@
   }
 
   async function replaceCover() {
-    const picked = await open({
-      multiple: false,
-      filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] }],
-    });
-    if (typeof picked !== "string") return; // cancelled
-    const res = await commands.cmdSetCover(projectIdValue!, picked);
-    if (res.status === "error") {
-      error = appErrorMessage(res.error);
-      return;
+    if (coverBusy || !projectIdValue) return;
+    coverBusy = true;
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] }],
+      });
+      if (typeof picked !== "string") return; // cancelled
+      const res = await commands.cmdSetCover(projectIdValue, picked);
+      if (res.status === "error") {
+        error = appErrorMessage(res.error);
+        return;
+      }
+      coverPath = picked;
+    } finally {
+      coverBusy = false;
     }
-    coverPath = picked;
   }
 
   async function expandFolderDrop(path: string): Promise<boolean> {
