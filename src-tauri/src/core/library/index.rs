@@ -155,8 +155,7 @@ pub fn derive_status(
     if running {
         return (LibraryStatus::Running, None);
     }
-    let has_audio = project.sources.audio.is_some();
-    if project.matcher_decision.is_none() && has_audio {
+    if project.confirmed_at.is_none() && project.receipts.is_empty() {
         return (LibraryStatus::NeedsMatch, None);
     }
     let tail = project.receipts.last();
@@ -307,8 +306,43 @@ mod tests {
 
     #[test]
     fn status_idle_when_no_receipts_and_no_audio() {
-        let p = base();
+        let mut p = base();
+        p.confirmed_at = Some(Utc::now());
         let (s, _) = derive_status(&p, false, 0);
         assert_eq!(s, LibraryStatus::Idle);
+    }
+
+    #[test]
+    fn unconfirmed_empty_project_is_needs_match() {
+        let id = ProjectId::from_title_author("T", "A");
+        let p = Project::new_test(id, "T");
+        let (status, _) = derive_status(&p, false, 0);
+        assert_eq!(status, LibraryStatus::NeedsMatch);
+    }
+
+    #[test]
+    fn confirmed_empty_project_is_idle() {
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id, "T");
+        p.confirmed_at = Some(chrono::Utc::now());
+        let (status, _) = derive_status(&p, false, 0);
+        assert_eq!(status, LibraryStatus::Idle);
+    }
+
+    #[test]
+    fn legacy_project_with_receipts_treated_as_confirmed() {
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id, "T");
+        // confirmed_at intentionally None — legacy data
+        p.receipts = vec![ChapterReceipt {
+            chapter_index: 0,
+            track_index: None,
+            lesson_id: Some(1),
+            degraded: false,
+            uploaded_at: None,
+        }];
+        p.queue_cursor = 1;
+        let (status, _) = derive_status(&p, false, 1);
+        assert_eq!(status, LibraryStatus::Done);
     }
 }
