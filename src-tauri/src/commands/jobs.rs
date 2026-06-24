@@ -83,6 +83,22 @@ pub(crate) fn lock_cancels(map: &JobCancelMap) -> MutexGuard<'_, HashMap<Uuid, J
     map.lock().expect("job cancel map mutex poisoned")
 }
 
+/// Verify project is startable: confirmed or has receipts. Returns error if
+/// unconfirmed and no prior uploads.
+pub fn ensure_startable(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<(), AppError> {
+    let project = store
+        .get(project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    if project.confirmed_at.is_none() && project.receipts.is_empty() {
+        return Err(AppError::Other("project mapping not confirmed".into()));
+    }
+    Ok(())
+}
+
 fn is_project_active(map: &HashMap<Uuid, JobCancelEntry>, project_id: &ProjectId) -> bool {
     map.values().any(|(pid, _)| pid == project_id)
 }
@@ -124,6 +140,7 @@ pub async fn cmd_start_project_job(
         .get(&project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
+    ensure_startable(store.inner().as_ref(), &project_id)?;
     let lang = parse_lang(&project.settings.language)?;
     let client = Arc::new(LingqClient::new(SecretString::from(key), lang));
 
@@ -254,5 +271,52 @@ impl<'a, 'b> JobSink for EmitterSink<'a, 'b> {
             preselect,
             bucket_preview,
         );
+    }
+}
+
+#[cfg(test)]
+mod start_guard_tests {
+    use super::*;
+    use crate::core::project::{ChapterReceipt, Project};
+    use crate::core::store::{InMemoryProjectStore, ProjectStore};
+    use crate::core::identity::ProjectId;
+
+    fn project_with(receipts: Vec<ChapterReceipt>, confirmed: bool) -> (InMemoryProjectStore, ProjectId) {
+        let store = InMemoryProjectStore::default();
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id.clone(), "T");
+        p.receipts = receipts;
+        if confirmed {
+            p.confirmed_at = Some(chrono::Utc::now());
+        }
+        store.put(&p).unwrap();
+        (store, id)
+    }
+
+    #[test]
+    fn rejects_when_unconfirmed_and_no_receipts() {
+        let (store, id) = project_with(vec![], false);
+        let err = ensure_startable(&store, &id).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("not confirmed"), "got {msg}");
+    }
+
+    #[test]
+    fn accepts_when_confirmed() {
+        let (store, id) = project_with(vec![], true);
+        ensure_startable(&store, &id).unwrap();
+    }
+
+    #[test]
+    fn accepts_when_receipts_present_resume() {
+        let receipt = ChapterReceipt {
+            chapter_index: 0,
+            track_index: None,
+            lesson_id: None,
+            degraded: false,
+            uploaded_at: None,
+        };
+        let (store, id) = project_with(vec![receipt], false);
+        ensure_startable(&store, &id).unwrap();
     }
 }
