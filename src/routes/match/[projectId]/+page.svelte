@@ -23,6 +23,7 @@
   import ProjectSettings from "$lib/components/ProjectSettings.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
+  import CoverThumb from "$lib/components/CoverThumb.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -60,6 +61,9 @@
   let replaceError = $state<string | null>(null);
   let audioDropEl = $state<HTMLButtonElement | null>(null);
   let localHover = $state(false);
+  let coverPath = $state<string | null>(null);
+  let authors = $state<string[]>([]);
+  let bookTitle = $state<string>("");
 
   // Single load path: the store does the one cmd_project_load round trip and
   // exposes everything the page needs (id, absorb policy, mapping, chapters).
@@ -108,6 +112,9 @@
       return;
     }
     const project = loaded.data;
+    coverPath = project.cover_path ?? null;
+    authors = project.authors ?? [];
+    bookTitle = project.settings.collection_title;
     const resp = project.matcher_decision?.response;
     if (resp === "split_proportional" || resp === "single_lesson") {
       strategy = resp;
@@ -158,6 +165,9 @@
     busyReplace = false;
     replaceError = null;
     localHover = false;
+    coverPath = null;
+    authors = [];
+    bookTitle = "";
   }
 
   function applyParams(): boolean {
@@ -439,6 +449,20 @@
     await replaceAudio([], null);
   }
 
+  async function replaceCover() {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] }],
+    });
+    if (typeof picked !== "string") return; // cancelled
+    const res = await commands.cmdSetCover(projectIdValue!, picked);
+    if (res.status === "error") {
+      error = appErrorMessage(res.error);
+      return;
+    }
+    coverPath = picked;
+  }
+
   async function expandFolderDrop(path: string): Promise<boolean> {
     const ext = extOf(path);
     if (ext) return false;
@@ -526,10 +550,34 @@
 <div class="flex h-full min-h-screen">
   <section class="col-wide flex-1 space-y-6 pt-6">
     {#if mapping.mappingState}
-      <header class="flex items-baseline justify-between gap-3">
-        <h1 class="text-lg font-semibold text-fg">
-          Confirm chapter ↔ track pairing
-        </h1>
+      <header class="flex items-start justify-between gap-3">
+        <div class="flex items-start gap-3">
+          <div data-testid="match-cover">
+            <CoverThumb coverPath={coverPath} title={bookTitle} />
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs text-fg-muted">Confirm pairing</p>
+            <h1 data-testid="match-title" class="truncate text-lg font-semibold text-fg">
+              {bookTitle}
+            </h1>
+            {#if authors.length > 0}
+              <p data-testid="match-author" class="truncate text-sm text-fg-muted">
+                {authors.join(", ")}
+              </p>
+            {/if}
+            <p class="mt-0.5 text-xs text-fg-muted tabular">
+              {chapters} → {tracks}
+              <button
+                type="button"
+                data-testid="cover-replace"
+                class="ml-2 text-accent hover:underline"
+                onclick={replaceCover}
+              >
+                {coverPath ? "Replace cover" : "Add cover"}
+              </button>
+            </p>
+          </div>
+        </div>
         <div class="flex items-center gap-2">
           <div data-testid="strategy-toggle" class="flex gap-1">
             <button type="button" data-testid="strategy-split"
