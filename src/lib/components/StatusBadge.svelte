@@ -39,9 +39,9 @@
     },
     needs_match: {
       icon: "⚠",
-      label: "needs match",
+      label: "Needs review",
       classes: "bg-warning/10 text-warning",
-      tooltip: "Chapters and tracks don't line up — pick a strategy",
+      tooltip: "Mapping not confirmed — review and confirm before uploading",
     },
     failed: {
       icon: "✕",

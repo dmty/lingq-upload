@@ -83,7 +83,7 @@
       case "paused":
         return "paused";
       case "needs_match":
-        return "needs match";
+        return "Needs review";
       case "failed":
         return "failed";
       case "idle":
