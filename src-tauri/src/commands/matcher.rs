@@ -93,6 +93,7 @@ pub fn replace_audio_source_impl(
             p.sources.audio = Some(audio_source.clone());
             p.matcher_decision = None;
             p.mapping = None;
+            p.confirmed_at = None;
         })
         .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
     Ok(())
@@ -233,5 +234,23 @@ mod tests {
         let after = store.get(&id).unwrap().unwrap();
         assert!(after.matcher_decision.is_none());
         assert!(after.mapping.is_none());
+    }
+
+    #[test]
+    fn replace_audio_clears_confirmed_at() {
+        let dir = tempdir().unwrap();
+        let a = write_m4b(dir.path(), "01.m4b");
+        let store = InMemoryProjectStore::default();
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id.clone(), "T");
+        p.sources.audio = Some(AudioSource::SingleFile(a.clone()));
+        p.confirmed_at = Some(chrono::Utc::now());
+        store.put(&p).unwrap();
+
+        let b = write_m4b(dir.path(), "02.m4b");
+        replace_audio_source_impl(&store, &id, AudioSource::SingleFile(b)).unwrap();
+
+        let loaded = store.get(&id).unwrap().unwrap();
+        assert!(loaded.confirmed_at.is_none());
     }
 }
