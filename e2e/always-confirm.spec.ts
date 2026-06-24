@@ -34,9 +34,19 @@ test.describe("always-confirm flow", () => {
   }, testInfo) => {
     const baseProject = {
       schema_version: 1,
-      id: { content_hash: "proj-guard", audible_asin: null, isbn13: null, calibre_uuid: null },
+      id: {
+        content_hash: "proj-guard",
+        audible_asin: null,
+        isbn13: null,
+        calibre_uuid: null,
+      },
       sources: { text: null, audio: null },
-      settings: { language: "en", collection_title: "Guard Book", level: 1, tags: [] },
+      settings: {
+        language: "en",
+        collection_title: "Guard Book",
+        level: 1,
+        tags: [],
+      },
       receipts: [],
       queue_cursor: 0,
       completed_lesson_ids: [],
@@ -70,5 +80,64 @@ test.describe("always-confirm flow", () => {
     })();`);
     await page.goto("/run/proj-guard");
     await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
+  });
+
+  test("/match renders mapping grid for a count-match seeded project", async ({
+    page,
+  }, testInfo) => {
+    const seededProject = {
+      schema_version: 1,
+      id: {
+        content_hash: "proj-seeded",
+        audible_asin: null,
+        isbn13: null,
+        calibre_uuid: null,
+      },
+      sources: { text: null, audio: null },
+      settings: {
+        language: "en",
+        collection_title: "Seeded Book",
+        level: 1,
+        tags: [],
+      },
+      receipts: [],
+      queue_cursor: 0,
+      completed_lesson_ids: [],
+      matcher_decision: null,
+      cover_path: null,
+      authors: [],
+      series: null,
+      lingq_collection_id: null,
+      last_activity_at: null,
+      stage: "mapped",
+      last_transition_at: null,
+      skipped_chapters: [],
+      mapping: {
+        pairs: [
+          {
+            chapter_id: "ch-1",
+            track_id: "tr-1",
+            confidence: 1.0,
+            touched: false,
+          },
+        ],
+        parking_lot: [],
+        op_id: 0,
+        buckets: [],
+      },
+      confirmed_at: null,
+    };
+
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+    await page.addInitScript(`;(() => {
+      window.__projectByKey__ = {
+        "proj-seeded": ${JSON.stringify(seededProject)},
+      };
+    })();`);
+
+    await page.goto("/match/proj-seeded");
+    await expect(
+      page.getByRole("heading", { name: "Confirm chapter ↔ track pairing" }),
+    ).toBeVisible();
   });
 });

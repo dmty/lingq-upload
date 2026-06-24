@@ -80,17 +80,12 @@
     }
     let cancelled = false;
     void (async () => {
-      // Load project first to obtain the typed ProjectId needed for seeding.
-      const loaded = await commands.cmdProjectLoad(key);
+      const seedRes = await commands.cmdSeedMapping(key);
       if (cancelled || projectKey !== key) return;
-      if (loaded.status === "ok") {
-        const seedRes = await commands.cmdSeedMapping(loaded.data.id);
-        if (cancelled || projectKey !== key) return;
-        if (seedRes.status === "error") {
-          error = appErrorMessage(seedRes.error);
-          hydrating = false;
-          return;
-        }
+      if (seedRes.status === "error") {
+        error = appErrorMessage(seedRes.error);
+        hydrating = false;
+        return;
       }
       await mapping.load(key);
       if (cancelled || projectKey !== key) return;
