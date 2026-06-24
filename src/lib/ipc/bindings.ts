@@ -355,6 +355,19 @@ async cmdSetCover(projectId: ProjectId, coverPath: string) : Promise<Result<null
 }
 },
 /**
+ * Mark the chapter↔track mapping as user-confirmed. Sets
+ * `confirmed_at = Some(Utc::now())`. Idempotent — re-confirming
+ * overwrites the timestamp.
+ */
+async cmdConfirmMapping(projectId: ProjectId) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_confirm_mapping", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Start an end-to-end project job. Returns immediately with the new job id;
  * the actual work runs on the tokio runtime and streams `JobEvent`s.
  */
@@ -548,7 +561,7 @@ absorb_policy?: AbsorbPolicy;
  * (`MappingStaleOp`), so a reloaded or duplicated submission re-syncs
  * from this state instead of double-applying.
  */
-mapping?: MappingState | null }
+mapping?: MappingState | null; confirmed_at?: string | null }
 /**
  * Canonical project identity (AD-021).
  * 
@@ -573,7 +586,7 @@ export type ProjectStage = "new" | "parsed" | "mapped" |
  * distinct pre-upload transcode pass.
  */
 "transcoded" | "uploaded" | "done"
-export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null }
+export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null; confirmed_at?: string | null }
 /**
  * Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
  * rehydration. Includes only the fields the Run screen needs to render chips.
