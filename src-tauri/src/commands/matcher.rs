@@ -3,7 +3,9 @@ use std::sync::Arc;
 use chrono::Utc;
 
 use crate::core::identity::ProjectId;
-use crate::core::job::{inspect_mismatch, seed_mapping_for_response, MismatchInspection};
+use crate::core::job::{
+    inspect_mismatch, seed_mapping_for_response, seed_mapping_if_count_matches, MismatchInspection,
+};
 use crate::core::matcher::{allowed, MismatchCondition, MismatchResponse};
 use crate::core::project::MatcherDecision;
 use crate::core::store::ProjectStore;
@@ -115,6 +117,18 @@ pub async fn cmd_matcher_inspect(
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     inspect_mismatch(&project).await
+}
+
+/// Seed the mapping-grid state for a count-match project that has not run a
+/// job yet. Idempotent — no-op when `matcher_decision` or `mapping` is already
+/// set. Called from the /match page on cold entry before `mapping.load`.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_seed_mapping(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<(), AppError> {
+    seed_mapping_if_count_matches(store.inner().as_ref(), &project_id)
 }
 
 #[cfg(test)]

@@ -258,6 +258,19 @@ async cmdReplaceAudioSource(projectId: ProjectId, audioSource: AudioSource) : Pr
 }
 },
 /**
+ * Seed the mapping-grid state for a count-match project that has not run a
+ * job yet. Idempotent — no-op when `matcher_decision` or `mapping` is already
+ * set. Called from the /match page on cold entry before `mapping.load`.
+ */
+async cmdSeedMapping(projectId: ProjectId) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_seed_mapping", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Apply a single mapping-editor op to a project and persist the new state.
  * 
  * The store performs the load → gate → apply → put cycle under its
