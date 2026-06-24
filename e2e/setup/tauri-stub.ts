@@ -94,6 +94,7 @@ export const tauriStubInitScript = `
             const key = (args && args.key) || "stub-project";
             const skipped = readSkipped()[key] || [];
             const mapping = readMappings()[key] || null;
+            const meta = (window.__projectMeta__ && window.__projectMeta__[key]) || {};
             return {
                 schema_version: 1,
                 id: {
@@ -105,7 +106,7 @@ export const tauriStubInitScript = `
                 sources: { text: null, audio: null },
                 settings: {
                     language: "en",
-                    collection_title: "Stub Project",
+                    collection_title: meta.title || "Stub Project",
                     level: 1,
                     tags: [],
                 },
@@ -113,8 +114,8 @@ export const tauriStubInitScript = `
                 queue_cursor: 0,
                 completed_lesson_ids: [],
                 matcher_decision: null,
-                cover_path: null,
-                authors: [],
+                cover_path: meta.cover_path ?? null,
+                authors: meta.authors || [],
                 series: null,
                 lingq_collection_id: null,
                 last_activity_at: null,
@@ -145,6 +146,8 @@ export const tauriStubInitScript = `
             writeSkipped(map);
             return null;
         },
+        cmd_set_cover: () => null,
+        "plugin:dialog|open": () => window.__dialogPickPath__ ?? null,
         cmd_apply_mapping_op: (args) => {
             const pid = args && args.projectId;
             const key = (pid && pid.content_hash) || "stub-project";
