@@ -80,6 +80,18 @@
     }
     let cancelled = false;
     void (async () => {
+      // Load project first to obtain the typed ProjectId needed for seeding.
+      const loaded = await commands.cmdProjectLoad(key);
+      if (cancelled || projectKey !== key) return;
+      if (loaded.status === "ok") {
+        const seedRes = await commands.cmdSeedMapping(loaded.data.id);
+        if (cancelled || projectKey !== key) return;
+        if (seedRes.status === "error") {
+          error = appErrorMessage(seedRes.error);
+          hydrating = false;
+          return;
+        }
+      }
       await mapping.load(key);
       if (cancelled || projectKey !== key) return;
       if (mapping.status === "error") {
@@ -211,7 +223,7 @@
       return;
     }
     if (inspected.data == null) {
-      goto(`/run/${key}`);
+      hydrating = false;
       return;
     }
     const data = inspected.data;
@@ -296,7 +308,14 @@
     // A revert during the final flush means the save failed — stay on the
     // page and let the reverted row colour speak (AD-025: no banner).
     if (mapping.revertEpoch !== epoch || !mapping.gateContinue()) return;
-    goto(`/run/${projectKey}`);
+    const pid = mapping.projectId;
+    if (!pid) return;
+    const res = await commands.cmdConfirmMapping(pid);
+    if (res.status === "error") {
+      error = appErrorMessage(res.error);
+      return;
+    }
+    goto(`/run/${projectKey}?autostart=1`);
   }
 
   async function confirm() {
@@ -339,7 +358,13 @@
     if (!pid || next === strategy) return;
     const prev = strategy;
     strategy = next;
-    const res = await commands.cmdMatcherResolve(pid, condition, next, chapters, tracks);
+    const res = await commands.cmdMatcherResolve(
+      pid,
+      condition,
+      next,
+      chapters,
+      tracks,
+    );
     if (res.status !== "ok") {
       strategy = prev;
       return;
@@ -408,7 +433,6 @@
       if (inspected.status === "ok") {
         if (inspected.data == null) {
           busyReplace = false;
-          goto(`/run/${encodeURIComponent(key)}`);
           return;
         }
         const data = inspected.data;
@@ -587,12 +611,25 @@
         </div>
         <div class="flex items-center gap-2">
           <div data-testid="strategy-toggle" class="flex gap-1">
-            <button type="button" data-testid="strategy-split"
-                    class="rounded-sm border px-2 py-1 text-xs {strategy === 'split_proportional' ? 'border-accent bg-accent-soft text-accent' : 'border-border text-fg-muted'}"
-                    onclick={() => setStrategy('split_proportional')}>Split proportionally</button>
-            <button type="button" data-testid="strategy-single"
-                    class="rounded-sm border px-2 py-1 text-xs {strategy === 'single_lesson' ? 'border-accent bg-accent-soft text-accent' : 'border-border text-fg-muted'}"
-                    onclick={() => setStrategy('single_lesson')}>One lesson</button>
+            <button
+              type="button"
+              data-testid="strategy-split"
+              class="rounded-sm border px-2 py-1 text-xs {strategy ===
+              'split_proportional'
+                ? 'border-accent bg-accent-soft text-accent'
+                : 'border-border text-fg-muted'}"
+              onclick={() => setStrategy("split_proportional")}
+              >Split proportionally</button
+            >
+            <button
+              type="button"
+              data-testid="strategy-single"
+              class="rounded-sm border px-2 py-1 text-xs {strategy ===
+              'single_lesson'
+                ? 'border-accent bg-accent-soft text-accent'
+                : 'border-border text-fg-muted'}"
+              onclick={() => setStrategy("single_lesson")}>One lesson</button
+            >
           </div>
           {#if matterIds.length > 0}
             <button
@@ -601,7 +638,9 @@
               class="rounded-sm border border-border bg-surface px-2 py-1 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
               onclick={toggleMatter}
             >
-              {allMatterSkipped ? "Restore front & back matter" : "Remove front & back matter"}
+              {allMatterSkipped
+                ? "Restore front & back matter"
+                : "Remove front & back matter"}
             </button>
           {/if}
           {#if projectIdValue}
@@ -625,21 +664,22 @@
       {/if}
       <div class="match-body">
         <div class="min-w-0 flex-1">
-        <MappingGrid
-          chapters={mapping.chapters}
-          mappingState={mapping.mappingState}
-          buckets={mapping.buckets}
-          skippedIds={mapping.skippedIds}
-          lastSavedAt={mapping.lastSavedAt}
-          saving={mapping.saving}
-          canContinue={mappingGateOk}
-          onOp={handleMappingOp}
-          onConfirmPair={handleConfirmPair}
-          onRemove={(id) => mapping.removeChapter(id)}
-          onMove={(id, trackId) => mapping.moveChapter(id, trackId)}
-          onUndoRemove={() => mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
-          onContinue={handleMappingContinue}
-        />
+          <MappingGrid
+            chapters={mapping.chapters}
+            mappingState={mapping.mappingState}
+            buckets={mapping.buckets}
+            skippedIds={mapping.skippedIds}
+            lastSavedAt={mapping.lastSavedAt}
+            saving={mapping.saving}
+            canContinue={mappingGateOk}
+            onOp={handleMappingOp}
+            onConfirmPair={handleConfirmPair}
+            onRemove={(id) => mapping.removeChapter(id)}
+            onMove={(id, trackId) => mapping.moveChapter(id, trackId)}
+            onUndoRemove={() =>
+              mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
+            onContinue={handleMappingContinue}
+          />
         </div>
         <ChapterInspector />
       </div>
