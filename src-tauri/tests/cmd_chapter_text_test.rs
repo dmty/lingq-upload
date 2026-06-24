@@ -40,6 +40,7 @@ fn make_loose_project(text_dir: &std::path::Path) -> Project {
         skipped_chapters: vec![],
         absorb_policy: Default::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 

@@ -65,6 +65,7 @@ fn sample(title: &str, n_receipts: usize) -> Project {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 
@@ -311,6 +312,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     };
     store.put(&project).unwrap();
 

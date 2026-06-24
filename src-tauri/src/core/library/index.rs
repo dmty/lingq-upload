@@ -241,6 +241,7 @@ mod tests {
             skipped_chapters: vec![],
             absorb_policy: AbsorbPolicy::default(),
             mapping: None,
+            confirmed_at: None,
         }
     }
 

@@ -237,6 +237,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     };
     store.put(&project).unwrap();
 
@@ -460,6 +461,7 @@ fn cmd_replay_receipts_returns_persisted_state() {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     };
     store.put(&project).unwrap();
 

@@ -270,6 +270,7 @@ async fn run_project_job_cancel_unlinks_partial_dst_and_holds_stage() {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     };
     store.put(&project).unwrap();
 

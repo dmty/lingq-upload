@@ -41,6 +41,7 @@ fn project(title: &str, receipts: Vec<ChapterReceipt>) -> Project {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 

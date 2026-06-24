@@ -135,6 +135,7 @@ pub fn candidate_to_project(c: &Candidate) -> Project {
         skipped_chapters: vec![],
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
+        confirmed_at: None,
     }
 }
 
