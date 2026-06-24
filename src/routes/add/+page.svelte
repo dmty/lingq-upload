@@ -349,7 +349,7 @@
       return;
     }
     if (res.data.status === "created") {
-      goto(`/run/${encodeURIComponent(joinKey(res.data.id))}`);
+      goto(`/match/${encodeURIComponent(joinKey(res.data.id))}`);
       return;
     }
     // status === "conflict"
@@ -366,7 +366,13 @@
     if (r === "skip") {
       const id = conflict.existing;
       conflict = null;
-      goto(`/run/${encodeURIComponent(joinKey(id))}`);
+      const key = joinKey(id);
+      const loaded = await commands.cmdProjectLoad(key);
+      if (loaded.status === "ok" && loaded.data.confirmed_at != null) {
+        goto(`/run/${encodeURIComponent(key)}`);
+      } else {
+        goto(`/match/${encodeURIComponent(key)}`);
+      }
       return;
     }
     busy = true;
@@ -383,7 +389,7 @@
       return;
     }
     conflict = null;
-    goto(`/run/${encodeURIComponent(joinKey(res.data))}`);
+    goto(`/match/${encodeURIComponent(joinKey(res.data))}`);
   }
 </script>
 
