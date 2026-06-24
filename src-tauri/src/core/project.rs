@@ -140,6 +140,8 @@ pub struct Project {
     /// from this state instead of double-applying.
     #[serde(default)]
     pub mapping: Option<MappingState>,
+    #[serde(default)]
+    pub confirmed_at: Option<DateTime<Utc>>,
 }
 
 impl Project {
@@ -177,6 +179,7 @@ impl Project {
             skipped_chapters: vec![],
             absorb_policy: AbsorbPolicy::default(),
             mapping: None,
+            confirmed_at: None,
         }
     }
 
@@ -229,6 +232,8 @@ pub struct ProjectSummary {
     pub last_receipt_degraded: bool,
     #[serde(default)]
     pub chapter_manifest_len: Option<usize>,
+    #[serde(default)]
+    pub confirmed_at: Option<DateTime<Utc>>,
 }
 
 impl From<&Project> for ProjectSummary {
@@ -253,6 +258,53 @@ impl From<&Project> for ProjectSummary {
                 .chapter_manifest
                 .as_ref()
                 .map(|m| m.chapters.len()),
+            confirmed_at: p.confirmed_at,
         }
+    }
+}
+
+#[cfg(test)]
+mod confirmed_at_tests {
+    use super::*;
+    use crate::core::identity::ProjectId;
+
+    #[test]
+    fn new_test_defaults_confirmed_at_to_none() {
+        let id = ProjectId::from_title_author("T", "A");
+        let p = Project::new_test(id, "T");
+        assert!(p.confirmed_at.is_none());
+    }
+
+    #[test]
+    fn confirmed_at_round_trips_through_json() {
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id, "T");
+        let now = chrono::Utc::now();
+        p.confirmed_at = Some(now);
+        let json = serde_json::to_string(&p).unwrap();
+        let back: Project = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.confirmed_at, Some(now));
+    }
+
+    #[test]
+    fn deserialize_legacy_json_without_confirmed_at_defaults_to_none() {
+        let json = r#"{
+          "schema_version": 1,
+          "id": {"content_hash": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"},
+          "sources": {"text": {"kind": "epub", "value": "/tmp/x.epub"}},
+          "settings": {"language": "ja", "collection_title": "T", "level": 1, "tags": []}
+        }"#;
+        let p: Project = serde_json::from_str(json).unwrap();
+        assert!(p.confirmed_at.is_none());
+    }
+
+    #[test]
+    fn summary_carries_confirmed_at() {
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id, "T");
+        let now = chrono::Utc::now();
+        p.confirmed_at = Some(now);
+        let s: ProjectSummary = (&p).into();
+        assert_eq!(s.confirmed_at, Some(now));
     }
 }
