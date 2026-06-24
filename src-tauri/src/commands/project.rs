@@ -184,9 +184,10 @@ pub async fn cmd_set_cover(
     project_id: ProjectId,
     cover_path: String,
 ) -> Result<(), AppError> {
-    let cover = std::path::PathBuf::from(cover_path);
     store
-        .update(&project_id, &mut |p| p.cover_path = Some(cover.clone()))
+        .update(&project_id, &mut |p| {
+            p.cover_path = Some(std::path::PathBuf::from(&cover_path))
+        })
         .map_err(|e| match e {
             StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
             other => AppError::Other(format!("store.update: {other}")),
