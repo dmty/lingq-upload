@@ -22,7 +22,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux Tauri system deps
         if: runner.os == 'Linux'
@@ -57,12 +57,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Cache Bun store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -118,7 +118,7 @@ jobs:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux Tauri system deps
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -151,10 +151,10 @@ jobs:
         run: cargo clippy --locked -- -D warnings
 
   linux-smoke:
-    name: linux smoke (bindings + tauri build)
+    name: linux smoke (bindings + cargo build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux Tauri system deps
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -174,27 +174,11 @@ jobs:
       - name: Set up Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun store
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: Linux-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            Linux-bun-
-
       - name: Cache Rust target
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           shared-key: build
-
-      - name: bun install
-        run: bun install --frozen-lockfile
 
       # Regenerate first so the diff catches present-tense drift, not just
       # whatever was committed. `gen_bindings` is a bin defined in
@@ -208,23 +192,26 @@ jobs:
           git diff --exit-code src/lib/ipc/bindings.ts \
             || (echo "bindings.ts drifted from Rust signatures — rebuild and commit" && exit 1)
 
-      - name: bun tauri build --debug (smoke)
-        run: bun tauri build --debug
+      # Skip `bun tauri build --debug`: the AppImage/deb bundler adds 5+ min
+      # without catching anything `cargo build` doesn't already catch.
+      - name: cargo build (smoke)
+        working-directory: src-tauri
+        run: cargo build --locked
 
   playwright:
     name: e2e (macos)
     runs-on: macos-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Cache Bun store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -232,7 +219,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/Library/Caches/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
@@ -253,7 +240,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux Tauri system deps
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -307,7 +294,7 @@ jobs:
     name: cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: src-tauri/Cargo.toml
@@ -316,7 +303,7 @@ jobs:
     name: lang-segment-grep
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install ripgrep
         run: |
           sudo apt-get update -qq
@@ -338,7 +325,7 @@ jobs:
     name: unwrap-grep
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Disallow unwrap() outside #[cfg(test)]
         shell: bash
         run: |
