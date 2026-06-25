@@ -28,7 +28,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg mold clang
           version: 1.0
 
       - name: Install ffmpeg (macOS)
@@ -43,10 +43,18 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y --no-install-recommends libblas3 liblapack3
 
+      - name: Configure mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml <<'EOF'
+          [target.x86_64-unknown-linux-gnu]
+          linker = "clang"
+          rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+          EOF
+
       - name: Set up Rust (stable)
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
@@ -65,6 +73,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          shared-key: build
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
 
       - name: bun install
         run: bun install --frozen-lockfile
@@ -79,48 +93,122 @@ jobs:
         shell: bash
         run: scripts/fixtures/synth_m4b_chapters.sh
 
-      - name: cargo build (locked)
-        working-directory: src-tauri
-        run: cargo build --locked
-
       # `kafka_snapshot_test` prints "skipping kafka snapshot ..." on every
       # platform — fixture is a personal Kindle decrypt that cannot ship.
       # The noise is harmless; left as-is until the fixture is seeded in CI.
-      - name: cargo test (locked)
+      - name: cargo nextest run (locked)
         working-directory: src-tauri
-        run: cargo test --locked
+        run: cargo nextest run --locked
+
+      - name: cargo test --doc (locked)
+        working-directory: src-tauri
+        run: cargo test --locked --doc
 
       # The ffmpeg-backed silence-detection paths in `carver_absorb_test` are
       # `#[ignore]`-flagged so devs without ffmpeg on PATH can run the default
       # suite. CI has ffmpeg installed above, so opt in to the golden-offset
-      # gate explicitly; `--ignored` runs only the ffmpeg-backed tests — the
-      # pure-function ones already ran in `cargo test --locked`. Windows ffmpeg
-      # is flaky in `silencedetect` parsing under choco — skip there.
+      # gate explicitly. Windows ffmpeg is flaky in `silencedetect` parsing
+      # under choco — skip there.
       - name: carver golden-offset gate
         if: runner.os != 'Windows'
         working-directory: src-tauri
-        run: cargo test --locked --test carver_absorb_test -- --ignored
+        run: cargo nextest run --locked --test carver_absorb_test --run-ignored only
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system deps
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg mold clang
+          version: 1.0
+
+      - name: Configure mold linker
+        run: |
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml <<'EOF'
+          [target.x86_64-unknown-linux-gnu]
+          linker = "clang"
+          rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+          EOF
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: build
 
       - name: cargo clippy
         working-directory: src-tauri
         run: cargo clippy --locked -- -D warnings
 
+  linux-smoke:
+    name: linux smoke (bindings + tauri build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system deps
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev ffmpeg mold clang
+          version: 1.0
+
+      - name: Configure mold linker
+        run: |
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml <<'EOF'
+          [target.x86_64-unknown-linux-gnu]
+          linker = "clang"
+          rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+          EOF
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: Linux-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            Linux-bun-
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: build
+
+      - name: bun install
+        run: bun install --frozen-lockfile
+
       # Regenerate first so the diff catches present-tense drift, not just
       # whatever was committed. `gen_bindings` is a bin defined in
       # `src-tauri/src/bin/gen_bindings.rs`.
       - name: regenerate Tauri bindings
-        if: runner.os == 'Linux'
         working-directory: src-tauri
         run: cargo run --locked --bin gen_bindings
 
       - name: bindings.ts drift check
-        if: runner.os == 'Linux'
         run: |
           git diff --exit-code src/lib/ipc/bindings.ts \
             || (echo "bindings.ts drifted from Rust signatures — rebuild and commit" && exit 1)
 
       - name: bun tauri build --debug (smoke)
-        if: runner.os == 'Linux'
         run: bun tauri build --debug
 
   playwright:
