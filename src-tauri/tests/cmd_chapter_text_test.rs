@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
-use lingq_upload_lib::commands::project::cmd_chapter_text;
+use lingq_upload_lib::commands::project::chapter_text;
 use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
 use lingq_upload_lib::core::store::{JsonProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::TextSource;
-use tauri::Manager;
 use tempfile::TempDir;
 
 fn make_loose_project(text_dir: &std::path::Path) -> Project {
@@ -48,23 +45,12 @@ fn make_loose_project(text_dir: &std::path::Path) -> Project {
 async fn cmd_chapter_text_returns_one_chapter_body() {
     let store_dir = TempDir::new().unwrap();
     let text_dir = TempDir::new().unwrap();
-    let store: Arc<dyn ProjectStore> = Arc::new(JsonProjectStore::new(store_dir.path()));
+    let store = JsonProjectStore::new(store_dir.path());
     let project = make_loose_project(text_dir.path());
     let project_id = project.id.clone();
     store.put(&project).unwrap();
 
-    // mock_builder + manage wires tauri::State without a real webview.
-    let app = tauri::test::mock_builder()
-        .manage(store)
-        .build(tauri::test::mock_context(tauri::test::noop_assets()))
-        .expect("mock app");
     let chapter_id = ChapterId::from_order(0);
-    let result = cmd_chapter_text(
-        app.state::<Arc<dyn ProjectStore>>(),
-        project_id,
-        chapter_id,
-    )
-    .await
-    .unwrap();
+    let result = chapter_text(&store, &project_id, &chapter_id).await.unwrap();
     assert!(!result.trim().is_empty(), "chapter body must be non-empty");
 }
