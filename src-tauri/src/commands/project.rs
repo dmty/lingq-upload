@@ -126,8 +126,19 @@ pub async fn cmd_chapter_text(
     project_id: ProjectId,
     chapter_id: ChapterId,
 ) -> Result<String, AppError> {
+    chapter_text(&**store, &project_id, &chapter_id).await
+}
+
+/// Tauri-agnostic core: takes a store reference directly so integration tests
+/// can exercise the logic without constructing a Tauri runtime (which fails to
+/// load on the GitHub Windows runner).
+pub async fn chapter_text(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    chapter_id: &ChapterId,
+) -> Result<String, AppError> {
     let project = store
-        .get(&project_id)
+        .get(project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     match &project.sources.text {
@@ -136,7 +147,7 @@ pub async fn cmd_chapter_text(
                 parse_epub(path).map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
             chapters
                 .into_iter()
-                .find(|c| c.id == chapter_id)
+                .find(|c| &c.id == chapter_id)
                 .map(|c| c.body)
                 .ok_or_else(|| AppError::Other(format!("chapter '{chapter_id}' not found")))
         }
