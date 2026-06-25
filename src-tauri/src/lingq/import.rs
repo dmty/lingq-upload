@@ -20,8 +20,8 @@ pub enum LessonStatus {
 impl LessonStatus {
     fn as_form_str(self) -> &'static str {
         match self {
-            LessonStatus::Private => "0",
-            LessonStatus::Public => "1",
+            LessonStatus::Private => "private",
+            LessonStatus::Public => "public",
         }
     }
 }
