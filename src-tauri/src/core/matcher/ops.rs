@@ -19,6 +19,15 @@ use crate::core::epub::ChapterId;
 
 pub type TrackId = String;
 
+#[derive(Debug, Clone)]
+pub struct TrackMeta {
+    pub track_id: TrackId,
+    pub title: Option<String>,
+    pub duration_sec: f64,
+    pub audio_path: String,
+    pub window: Option<(f64, f64)>,
+}
+
 /// Recomputed confidence for a freshly-(re)paired chapter/track. The current
 /// matcher is count-based so we have nothing better than a constant; once the
 /// matcher learns to score (title similarity, duration ratio, etc) this
@@ -227,11 +236,10 @@ fn pair_idx(state: &MappingState, chapter_id: &ChapterId) -> Result<usize, Mappi
 }
 
 /// Group contiguous pairs by shared `track_id` into per-bucket audio metadata.
-/// `track_meta` is (track_id, title, duration_sec, audio_path, window);
-/// chapters without a track (parking-lot remnants) start no bucket.
+/// Chapters without a track (parking-lot remnants) start no bucket.
 pub fn build_bucket_meta(
     pairs: &[MappingPair],
-    track_meta: &[(TrackId, Option<String>, f64, String, Option<(f64, f64)>)],
+    track_meta: &[TrackMeta],
     chars_by_chapter: &std::collections::HashMap<ChapterId, usize>,
 ) -> Vec<BucketMeta> {
     let mut out = Vec::new();
@@ -248,8 +256,8 @@ pub fn build_bucket_meta(
             .sum();
         let (title, dur, audio_path, window) = track_meta
             .iter()
-            .find(|(t, _, _, _, _)| *t == tid)
-            .map(|(_, ti, d, p, w)| (ti.clone(), *d, p.clone(), *w))
+            .find(|t| t.track_id == tid)
+            .map(|t| (t.title.clone(), t.duration_sec, t.audio_path.clone(), t.window))
             .unwrap_or((None, 0.0, String::new(), None));
         let chars_per_sec = if dur > 0.0 { chars as f64 / dur } else { 0.0 };
         out.push(BucketMeta { track_id: tid, atom_title: title, atom_duration_sec: dur, chars_per_sec, audio_path, window });
@@ -298,8 +306,34 @@ mod tests {
             MappingPair { chapter_id: cid("c2"), track_id: Some("t1".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
         ];
         let track_meta = vec![
-            ("t0".to_string(), Some("Audio 1".to_string()), 100.0, "/a/t0.m4a".to_string(), None),
-            ("t1".to_string(), Some("Audio 2".to_string()), 50.0, "/a/t1.m4a".to_string(), None),
+            TrackMeta {
+                track_id: "t0".into(),
+                title: Some("Audio 1".into()),
+                duration_sec: 100.0,
+                audio_path: "/a/t0.m4a".into(),
+                window: None,
+            },
+            TrackMeta {
+                track_id: "t1".into(),
+                title: Some("Audio 2".into()),
+                duration_sec: 50.0,
+                audio_path: "/a/t1.m4a".into(),
+                window: None,
+            },
+            TrackMeta {
+                track_id: "t0".into(),
+                title: Some("Audio 1".into()),
+                duration_sec: 100.0,
+                audio_path: "/a/t0.m4a".into(),
+                window: None,
+            },
+            TrackMeta {
+                track_id: "t1".into(),
+                title: Some("Audio 2".into()),
+                duration_sec: 50.0,
+                audio_path: "/a/t1.m4a".into(),
+                window: None,
+            },
         ];
         let chars: HashMap<ChapterId, usize> =
             [(cid("c0"), 300), (cid("c1"), 200), (cid("c2"), 100)].into();

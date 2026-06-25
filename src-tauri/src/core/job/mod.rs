@@ -15,7 +15,7 @@ use crate::core::audio::{self, AudioTrack, ChapterAtom, EncoderSettings};
 use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
-use crate::core::matcher::ops::{build_bucket_meta, TrackId, RECOMPUTED_CONFIDENCE};
+use crate::core::matcher::ops::{build_bucket_meta, TrackId, TrackMeta, RECOMPUTED_CONFIDENCE};
 use crate::core::matcher::pack::{build_preview, proportional_pack};
 use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
@@ -710,12 +710,17 @@ pub async fn seed_mapping_for_response(
         .iter()
         .map(|c| (c.id.clone(), c.body.chars().count()))
         .collect();
-    let track_meta: Vec<(_, Option<String>, f64, String, Option<(f64, f64)>)> = tracks
+    let track_meta: Vec<TrackMeta> = tracks
         .iter()
         .map(|t| {
-            let dur = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
-            let path = t.path.to_string_lossy().into_owned();
-            (track_id_for(t), t.title.clone(), dur, path, t.window)
+            let duration_sec = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
+            TrackMeta {
+                track_id: track_id_for(t),
+                title: t.title.clone(),
+                duration_sec,
+                audio_path: t.path.to_string_lossy().into_owned(),
+                window: t.window,
+            }
         })
         .collect();
     let buckets = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
