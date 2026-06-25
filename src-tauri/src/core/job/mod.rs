@@ -308,7 +308,7 @@ pub async fn run_project_job(
             audio: Some(&dst),
             level: project.settings.level,
             status: LessonStatus::Private,
-            tags: &[],
+            tags: &["books"],
             save: true,
         };
 
