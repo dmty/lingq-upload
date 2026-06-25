@@ -60,7 +60,11 @@ impl LingqClient {
         }
 
         let create_url = format!("{}/api/v3/{}/collections/", self.base_url(), self.lang());
-        let body = serde_json::json!({ "title": title, "description": description });
+        let body = serde_json::json!({
+            "title": title,
+            "description": description,
+            "tags": ["books"],
+        });
         let resp = self
             .http()
             .post(&create_url)
