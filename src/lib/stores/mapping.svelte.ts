@@ -119,7 +119,11 @@ async function flushPendingOps(): Promise<void> {
       return;
     }
     const expected = (current.op_id ?? 0) + 1;
-    const result = await commands.cmdApplyMappingOp(projectId, queued.op, expected);
+    const result = await commands.cmdApplyMappingOp(
+      projectId,
+      queued.op,
+      expected,
+    );
     const stillCurrent = state.projectId === projectId;
     if (result.status === "error") {
       if (stillCurrent) {
@@ -315,13 +319,38 @@ export const mapping = {
   // set), so a plain selection write is the whole operation — no re-split.
   // Undone via the Removed strip (setSkipped without the chapter).
   removeChapter(chapterId: ChapterId): Promise<void> {
+    if (state.selectedChapterId === chapterId) {
+      const skipped = new Set([...state.skippedIds, chapterId]);
+      const idx = state.chapters.findIndex((c) => c.id === chapterId);
+      let next: ChapterId | null = null;
+      for (let i = idx + 1; i < state.chapters.length; i++) {
+        if (!skipped.has(state.chapters[i].id)) {
+          next = state.chapters[i].id;
+          break;
+        }
+      }
+      if (!next) {
+        for (let i = idx - 1; i >= 0; i--) {
+          if (!skipped.has(state.chapters[i].id)) {
+            next = state.chapters[i].id;
+            break;
+          }
+        }
+      }
+      if (next) this.selectChapter(next);
+      else state.selectedChapterId = null;
+    }
     return this.setSkipped([...state.skippedIds, chapterId]);
   },
 
   // Edge-only/adjacent enforcement lives in MappingGrid, which derives the
   // valid ↑/↓ targets directly from the (skipped-excluded) band layout.
   moveChapter(chapterId: ChapterId, trackId: string): Promise<void> {
-    return this.submitOp({ kind: "reassign", chapter_id: chapterId, track_id: trackId });
+    return this.submitOp({
+      kind: "reassign",
+      chapter_id: chapterId,
+      track_id: trackId,
+    });
   },
 
   get selectedChapterId() {
@@ -331,7 +360,11 @@ export const mapping = {
     state.selectedChapterId = id;
     if (state.chapterTextCache[id] === undefined) {
       void commands.cmdChapterText(state.projectId!, id).then((res) => {
-        if (res.status === "ok") state.chapterTextCache = { ...state.chapterTextCache, [id]: res.data };
+        if (res.status === "ok")
+          state.chapterTextCache = {
+            ...state.chapterTextCache,
+            [id]: res.data,
+          };
       });
     }
   },
