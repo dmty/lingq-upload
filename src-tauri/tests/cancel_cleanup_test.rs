@@ -57,7 +57,14 @@ impl Drop for SlowFfmpegGuard<'_> {
 }
 
 fn process_matches(name_lc: &str) -> bool {
-    name_lc.contains("ffmpeg") || name_lc.contains("slow_transcode") || name_lc.contains("sleep")
+    // On Unix the .sh shim `exec`s `sleep`, so the direct child is `sleep`.
+    // On Windows the .bat shim is hosted by `cmd.exe` which spawns `powershell`
+    // for Start-Sleep — the direct child of the test pid is `cmd`.
+    name_lc.contains("ffmpeg")
+        || name_lc.contains("slow_transcode")
+        || name_lc.contains("sleep")
+        || name_lc.contains("cmd")
+        || name_lc.contains("powershell")
 }
 
 fn list_orphan_names(parent_pid: u32) -> Vec<(u32, String)> {
