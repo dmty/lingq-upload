@@ -9,6 +9,23 @@ Desktop app that imports audiobooks (EPUB + audio folder + cover) into [LingQ](h
 - **Diagrams:** [`docs/architecture/diagrams/`](./docs/architecture/diagrams/) — component / sequence / state.
 - **Specs:** [`docs/specs/`](./docs/specs/) — LingQ API surface, EPUB subset, glossary.
 
+## Install (macOS)
+
+1. Download the latest `lingq-upload_<version>_universal.dmg` from
+   [Releases](https://github.com/dmty/lingq-upload/releases).
+2. Open the `.dmg` and drag `lingq-upload.app` to `Applications`.
+3. The build is currently **unsigned**, so macOS quarantines it on
+   first launch. Strip the quarantine attribute once:
+
+   ```sh
+   xattr -d com.apple.quarantine /Applications/lingq-upload.app
+   ```
+
+4. Launch from Applications. Future updates install in-place via
+   the in-app updater.
+
+Windows and Linux builds are not yet shipped.
+
 ## Dev quickstart
 
 ```sh
