@@ -23,7 +23,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },
@@ -40,8 +42,7 @@
   },
   "plugins": {
     "updater": {
-      "_note": "placeholder until the updater key is generated and pasted in",
-      "pubkey": "REPLACE_BEFORE_FIRST_RELEASE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQwMkI2NTkwNDRENDFBMjcKUldRbkd0UkVrR1VyMENpMldsUWdyQnlZQkh5VGdIR3VUdEkzd0dzMFJPNGRrVEsvVlloRTJBYUsK",
       "endpoints": [
         "https://github.com/dmty/lingq-upload/releases/latest/download/latest.json"
       ]
