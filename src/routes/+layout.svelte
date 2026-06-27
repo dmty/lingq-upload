@@ -11,7 +11,7 @@
   // ponytail: confirm() prompt is the minimum viable update UX;
   // upgrade to an in-app modal when releases have real users.
   $effect(() => {
-    if (import.meta.env.DEV) return;
+    if (!import.meta.env.PROD) return;
     void (async () => {
       try {
         const update = await check();
