@@ -23,6 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Guard signing key + pubkey configured
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is unset. Run 'bun tauri signer generate' locally and 'gh secret set TAURI_SIGNING_PRIVATE_KEY' before cutting a release."
+            exit 1
+          fi
+          if grep -q 'REPLACE_BEFORE_FIRST_RELEASE' src-tauri/tauri.conf.json; then
+            echo "::error::src-tauri/tauri.conf.json still contains the placeholder pubkey 'REPLACE_BEFORE_FIRST_RELEASE'. Replace it with the real updater pubkey before publishing."
+            exit 1
+          fi
+
       - name: Set up Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
