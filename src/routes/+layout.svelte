@@ -1,10 +1,32 @@
 <script lang="ts">
   import "../app.css";
   import { page } from "$app/state";
+  import { check } from "@tauri-apps/plugin-updater";
+  import { relaunch } from "@tauri-apps/plugin-process";
 
   let { children } = $props();
 
   const isActive = (path: string) => page.url.pathname.startsWith(path);
+
+  // ponytail: confirm() prompt is the minimum viable update UX;
+  // upgrade to an in-app modal when releases have real users.
+  $effect(() => {
+    if (import.meta.env.DEV) return;
+    void (async () => {
+      try {
+        const update = await check();
+        if (!update) return;
+        const accept = confirm(
+          `Update ${update.version} available. Install and restart?`,
+        );
+        if (!accept) return;
+        await update.downloadAndInstall();
+        await relaunch();
+      } catch (err) {
+        console.error("updater check failed", err);
+      }
+    })();
+  });
 </script>
 
 <header class="sticky top-0 z-10 flex h-13 items-center gap-4 bg-canvas px-8">
