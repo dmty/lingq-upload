@@ -11,17 +11,25 @@ Desktop app that imports audiobooks (EPUB + audio folder + cover) into [LingQ](h
 
 ## Install (macOS)
 
-1. Download the latest `lingq-upload_<version>_universal.dmg` from
+1. Install `ffmpeg` first — the app shells out to `ffmpeg` / `ffprobe`
+   for chapter carving and MP3 transcode. Until the bundling story
+   ships, the app finds them via `PATH`:
+
+   ```sh
+   brew install ffmpeg
+   ```
+
+2. Download the latest `lingq-upload_<version>_universal.dmg` from
    [Releases](https://github.com/dmty/lingq-upload/releases).
-2. Open the `.dmg` and drag `lingq-upload.app` to `Applications`.
-3. The build is currently **unsigned**, so macOS quarantines it on
+3. Open the `.dmg` and drag `lingq-upload.app` to `Applications`.
+4. The build is currently **unsigned**, so macOS quarantines it on
    first launch. Strip the quarantine attribute once:
 
    ```sh
    xattr -d com.apple.quarantine /Applications/lingq-upload.app
    ```
 
-4. Launch from Applications. Future updates install in-place via
+5. Launch from Applications. Future updates install in-place via
    the in-app updater.
 
 Windows and Linux builds are not yet shipped.

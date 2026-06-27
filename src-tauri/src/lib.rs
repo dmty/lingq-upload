@@ -174,5 +174,12 @@ fn register_bundled_audio_binaries(app: &tauri::App) {
         ("ffmpeg", "ffprobe")
     };
     let base = resource_dir.join("ffmpeg").join(platform);
-    core::audio::set_bundled_binaries(base.join(ffmpeg_name), base.join(ffprobe_name));
+    let ffmpeg = base.join(ffmpeg_name);
+    let ffprobe = base.join(ffprobe_name);
+    // Only register bundled paths when both files actually exist. Otherwise the
+    // resolver falls through to FFMPEG_BIN / PATH so a system-installed ffmpeg
+    // is usable until the bundling story (AD-008) lands.
+    if ffmpeg.is_file() && ffprobe.is_file() {
+        core::audio::set_bundled_binaries(ffmpeg, ffprobe);
+    }
 }
