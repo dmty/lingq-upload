@@ -1,3 +1,8 @@
+# Requires a repo secret `RELEASE_PLEASE_TOKEN` — a fine-grained PAT or
+# GitHub App token with `contents: write` + `pull-requests: write`.
+# Reason: events fired by the default GITHUB_TOKEN do not trigger other
+# workflows, so without this PAT the release publish won't fan out to
+# .github/workflows/release.yml.
 name: release-please
 
 on:
@@ -8,11 +13,16 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
