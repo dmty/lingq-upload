@@ -29,8 +29,31 @@ jobs:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 
-      - uses: googleapis/release-please-action@v5
+      - id: release
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # release-please bumps Cargo.toml but not Cargo.lock, so `cargo build
+      # --locked` fails on the Release PR. Patch the matching `[[package]]`
+      # block and push back to the PR branch; the push re-triggers PR CI.
+      - name: Sync Cargo.lock on Release PR
+        if: steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "lingq-upload-release-please[bot]"
+          git config --global user.email "297390800+lingq-upload-release-please[bot]@users.noreply.github.com"
+          git clone --branch "$BRANCH" --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pr-branch
+          cd pr-branch
+          NEW_VERSION=$(awk -F'"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)
+          sed -i '/^name = "lingq-upload"$/{N;s/version = "[^"]*"/version = "'"$NEW_VERSION"'"/}' src-tauri/Cargo.lock
+          if ! git diff --quiet src-tauri/Cargo.lock; then
+            git commit -m "chore: sync Cargo.lock for release" src-tauri/Cargo.lock
+            git push
+          fi
