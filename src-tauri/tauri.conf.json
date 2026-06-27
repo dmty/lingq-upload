@@ -37,5 +37,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "_note": "pubkey is a placeholder until the updater key is generated; see _bmad-output/plans/2026-06-27-release-automation.md task 1",
+      "pubkey": "REPLACE_BEFORE_FIRST_RELEASE",
+      "endpoints": [
+        "https://github.com/dmty/lingq-upload/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
