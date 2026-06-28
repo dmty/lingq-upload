@@ -185,7 +185,7 @@ jobs:
       # `src-tauri/src/bin/gen_bindings.rs`.
       - name: regenerate Tauri bindings
         working-directory: src-tauri
-        run: cargo run --locked --bin gen_bindings
+        run: cargo run --locked --example gen_bindings
 
       - name: bindings.ts drift check
         run: |
