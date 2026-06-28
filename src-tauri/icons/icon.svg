@@ -6,8 +6,8 @@
       <stop offset="1" stop-color="#0d9488"/>
     </linearGradient>
   </defs>
-  <!-- Full-bleed background; Tauri's per-platform generator will mask -->
-  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- Rounded-square background (Tauri CLI does not mask; corners are baked in here) -->
+  <rect width="1024" height="1024" rx="225" ry="225" fill="url(#bg)"/>
   <!-- Speech bubble outline (200-grid path × 5.12) -->
   <path d="M282 256
            H742
