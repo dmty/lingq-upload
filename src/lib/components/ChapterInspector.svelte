@@ -10,36 +10,27 @@
   let body = $derived(id ? mapping.chapterTextFor(id) : null);
   let audio = $derived(mapping.selectedBucketAudio());
 
-  // Backend transcodes the window to a temp MP3 and returns its path.
-  // We then play that via the asset protocol — WebKit on macOS refuses
-  // `<audio>` over asset:// when the source MIME is unknown (e.g. .m4b).
+  // Backend hands back a path the asset protocol will serve with a known
+  // audio MIME. For `.m4b` it returns a cached `.m4a` symlink so
+  // mime_guess returns `audio/mp4` and WebKit accepts the stream. Cheap
+  // (no transcode); the browser plays the source file in place.
   let previewSrc = $state<string | null>(null);
-  let preparing = $state(false);
   let prepareError = $state<string | null>(null);
   $effect(() => {
     previewSrc = null;
     prepareError = null;
     const w = audio;
-    if (!w) {
-      preparing = false;
-      return;
-    }
-    preparing = true;
-    const { audioPath, start, end } = w;
-    commands
-      .cmdPrepareAudioPreview(audioPath, start, end)
-      .then((res) => {
-        if (audio?.audioPath !== audioPath) return; // selection moved on
-        if (res.status === "ok") {
-          previewSrc = assetUrl(res.data);
-        } else {
-          prepareError = "preview failed: " + JSON.stringify(res.error);
-          console.warn("inspector preview failed:", res.error);
-        }
-      })
-      .finally(() => {
-        if (audio?.audioPath === audioPath) preparing = false;
-      });
+    if (!w) return;
+    const { audioPath } = w;
+    commands.cmdPrepareAudioPreview(audioPath).then((res) => {
+      if (audio?.audioPath !== audioPath) return; // selection moved on
+      if (res.status === "ok") {
+        previewSrc = assetUrl(res.data);
+      } else {
+        prepareError = "preview failed: " + JSON.stringify(res.error);
+        console.warn("inspector preview failed:", res.error);
+      }
+    });
   });
 
   // The parent bucket this chapter's text rides — the eyebrow connects the
@@ -82,9 +73,14 @@
     });
   }
   function toggle() {
-    if (!el) return;
+    if (!el || !audio) return;
     snap("toggle pre");
     if (el.paused) {
+      // Seek into the window BEFORE play(); mutating currentTime mid-play
+      // aborts the play() promise with AbortError on WebKit.
+      if (el.currentTime < audio.start || el.currentTime >= audio.end) {
+        el.currentTime = audio.start;
+      }
       el.play().catch((err) => {
         console.warn("inspector audio play() rejected:", err);
       });
@@ -109,29 +105,29 @@
   }
   function onTimeUpdate() {
     if (!el || !audio) return;
-    if (el.currentTime >= dur) {
+    if (el.currentTime >= audio.end) {
       el.pause();
       cur = dur;
       return;
     }
-    cur = Math.max(0, el.currentTime);
+    cur = Math.max(0, el.currentTime - audio.start);
   }
   function seek(e: MouseEvent) {
     if (!el || !audio) return;
     const track = e.currentTarget as HTMLElement;
     const ratio = Math.min(1, Math.max(0, e.offsetX / track.clientWidth));
-    el.currentTime = ratio * dur;
+    el.currentTime = audio.start + ratio * dur;
     cur = ratio * dur;
   }
   function nudge(e: KeyboardEvent) {
     if (!el || !audio) return;
     if (e.key === "ArrowRight")
-      el.currentTime = Math.min(dur, el.currentTime + 5);
+      el.currentTime = Math.min(audio.end, el.currentTime + 5);
     else if (e.key === "ArrowLeft")
-      el.currentTime = Math.max(0, el.currentTime - 5);
+      el.currentTime = Math.max(audio.start, el.currentTime - 5);
     else return;
     e.preventDefault();
-    cur = Math.max(0, el.currentTime);
+    cur = Math.max(0, el.currentTime - audio.start);
   }
   function fmt(s: number): string {
     const m = Math.floor(s / 60);
@@ -238,11 +234,6 @@
             onwaiting={() => snap("waiting")}
             onseeked={() => snap("seeked")}
           ></audio>
-        {/if}
-        {#if preparing && !previewSrc}
-          <div class="px-1 pt-1 text-[11px] text-fg-subtle">
-            Preparing audio…
-          </div>
         {/if}
         {#if prepareError}
           <div class="px-1 pt-1 text-[11px] text-danger">{prepareError}</div>

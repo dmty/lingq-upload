@@ -289,17 +289,19 @@ async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: numbe
 }
 },
 /**
- * Transcode a windowed slice of an audio file to a deterministic temp MP3
- * and return its absolute path. Caches by (audio_path, start_sec, end_sec).
+ * Return a path the frontend can hand to `convertFileSrc` for playback.
  * 
- * Why: WebKit on macOS refuses `<audio>` playback over the `asset://`
- * protocol when the source has no canonical audio MIME (notably `.m4b`,
- * which `mime_guess` does not map). Serving a transcoded `.mp3` from the
- * app cache dir sidesteps the MIME / scheme constraint.
+ * Tauri's asset protocol derives Content-Type via `mime_guess`. `.m4b` is
+ * not in its table — WebKit on macOS refuses `<audio>` over `asset://`
+ * when Content-Type ends up `application/octet-stream`. We sidestep that
+ * by exposing the original bytes under an `.m4a` symlink in the app
+ * cache dir; `.m4a` maps to `audio/mp4`, which WebKit accepts. The
+ * browser plays the full file in place and we seek into the window on
+ * the client.
  */
-async cmdPrepareAudioPreview(audioPath: string, startSec: number, endSec: number) : Promise<Result<string, AppError>> {
+async cmdPrepareAudioPreview(audioPath: string) : Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_prepare_audio_preview", { audioPath, startSec, endSec }) };
+    return { status: "ok", data: await TAURI_INVOKE("cmd_prepare_audio_preview", { audioPath }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
