@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+  <!-- Full-bleed background; Tauri's per-platform generator will mask -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- Speech bubble outline (200-grid path × 5.12) -->
+  <path d="M282 256
+           H742
+           A102 102 0 0 1 844 358
+           V614
+           A102 102 0 0 1 742 716
+           H563
+           L435 845
+           V716
+           H282
+           A102 102 0 0 1 180 614
+           V358
+           A102 102 0 0 1 282 256 Z"
+        fill="none" stroke="white" stroke-width="56"
+        stroke-linejoin="round"/>
+  <!-- Book spine -->
+  <rect x="333" y="553" width="358" height="72" rx="15"
+        fill="none" stroke="white" stroke-width="36"/>
+  <!-- Upload arrow rising out of the spine -->
+  <path d="M512 512 V358
+           M420 450 L512 358 L604 450"
+        fill="none" stroke="white" stroke-width="46"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
