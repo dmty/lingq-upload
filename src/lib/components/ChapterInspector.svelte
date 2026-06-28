@@ -37,6 +37,14 @@
   function toggle() {
     if (!el) return;
     if (el.paused) {
+      // Seek into the window BEFORE play(); mutating currentTime mid-play
+      // aborts the play() promise with AbortError on WebKit.
+      if (
+        audio &&
+        (el.currentTime < audio.start || el.currentTime >= audio.end)
+      ) {
+        el.currentTime = audio.start;
+      }
       el.play().catch((err) => {
         console.warn("inspector audio play() rejected:", err);
       });
@@ -54,12 +62,6 @@
     });
   }
   function onPlay() {
-    if (
-      el &&
-      audio &&
-      (el.currentTime < audio.start || el.currentTime >= audio.end)
-    )
-      el.currentTime = audio.start;
     playing = true;
   }
   function onPause() {
