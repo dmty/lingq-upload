@@ -21,12 +21,12 @@ pub fn read_chapters(path: &Path) -> Result<Vec<ChapterAtom>, AudioError> {
     let total = mp4.duration().as_secs_f64();
 
     // mp4 0.14 UdtaBox skips chpl — parse it from the raw file.
-    // ponytail: scan raw bytes; chpl boxes are ≤ a few KB, always in moov/udta.
+    // SIMPLIFY: scan raw bytes; chpl boxes are ≤ a few KB, always in moov/udta.
     let mut raw = File::open(path).map_err(|e| AudioError::Io(e.to_string()))?;
     if let Some(chpl) = read_nero_chpl(&mut raw, size, total)? {
         return Ok(chpl);
     }
-    // ponytail: QT chap-track stub — all encountered audiobooks use Nero chpl.
+    // SIMPLIFY: QT chap-track stub — all encountered audiobooks use Nero chpl.
     Ok(Vec::new())
 }
 
