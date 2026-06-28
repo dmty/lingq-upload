@@ -55,6 +55,6 @@ jobs:
           NEW_VERSION=$(awk -F'"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)
           sed -i '/^name = "lingq-upload"$/{N;s/version = "[^"]*"/version = "'"$NEW_VERSION"'"/}' src-tauri/Cargo.lock
           if ! git diff --quiet src-tauri/Cargo.lock; then
-            git commit -m "chore: sync Cargo.lock for release" src-tauri/Cargo.lock
-            git push
+            git commit --amend --no-edit src-tauri/Cargo.lock
+            git push --force-with-lease
           fi
