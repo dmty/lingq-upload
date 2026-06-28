@@ -74,3 +74,8 @@ sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 hound = "3.5"
 md5 = "0.7"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "audio"
+harness = false
