@@ -8,7 +8,6 @@ import {
   type MappingState,
   type ProjectId,
 } from "$lib/ipc/bindings";
-import { assetUrl, audioMime } from "$lib/audio";
 
 type State = {
   projectId: ProjectId | null;
@@ -373,8 +372,7 @@ export const mapping = {
   },
 
   selectedBucketAudio(): {
-    src: string;
-    type: string;
+    audioPath: string;
     start: number;
     end: number;
   } | null {
@@ -387,12 +385,7 @@ export const mapping = {
     );
     if (!bucket?.audioPath) return null;
     const [start, end] = bucket.window ?? [0, bucket.atomDurationSec];
-    return {
-      src: assetUrl(bucket.audioPath),
-      type: audioMime(bucket.audioPath),
-      start,
-      end,
-    };
+    return { audioPath: bucket.audioPath, start, end };
   },
 
   gateContinue(): boolean {

@@ -45,6 +45,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::matcher::cmd_replace_audio_source,
             commands::matcher::cmd_seed_mapping,
             commands::mapping::cmd_apply_mapping_op,
+            commands::mapping::cmd_prepare_audio_preview,
             commands::project::cmd_project_load,
             commands::project::cmd_project_chapters,
             commands::project::cmd_chapter_text,

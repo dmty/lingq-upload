@@ -289,6 +289,23 @@ async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: numbe
 }
 },
 /**
+ * Transcode a windowed slice of an audio file to a deterministic temp MP3
+ * and return its absolute path. Caches by (audio_path, start_sec, end_sec).
+ * 
+ * Why: WebKit on macOS refuses `<audio>` playback over the `asset://`
+ * protocol when the source has no canonical audio MIME (notably `.m4b`,
+ * which `mime_guess` does not map). Serving a transcoded `.mp3` from the
+ * app cache dir sidesteps the MIME / scheme constraint.
+ */
+async cmdPrepareAudioPreview(audioPath: string, startSec: number, endSec: number) : Promise<Result<string, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_prepare_audio_preview", { audioPath, startSec, endSec }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Load a persisted project by its `join_key`.
  * 
  * The frontend reaches Match and Run routes with a stringified key in the URL
