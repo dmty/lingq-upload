@@ -27,6 +27,7 @@ fn write_sine(path: &std::path::Path, seconds: u32, sr: u32) {
 fn bench_decode_encode(c: &mut Criterion) {
     let dir = tempfile::tempdir().expect("tmp");
     let src: PathBuf = dir.path().join("sine_60s.wav");
+    let dst: PathBuf = dir.path().join("sine_60s.mp3");
     write_sine(&src, 60, 44_100);
     let enc = EncoderSettings::default();
 
@@ -38,7 +39,6 @@ fn bench_decode_encode(c: &mut Criterion) {
             while let Some(f) = dec.next_frame().expect("frame") {
                 frames.push(f);
             }
-            let dst = dir.path().join("sine_60s.mp3");
             encode_mp3(frames.into_iter(), &info, &dst, &enc).expect("encode");
         });
     });
