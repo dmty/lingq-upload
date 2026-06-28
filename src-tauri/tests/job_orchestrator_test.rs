@@ -529,9 +529,9 @@ async fn done_project_short_circuits_with_skipped_payload() {
 
 /// Done short-circuit fires before `resolve_audio_tracks`, so a project
 /// pointing at a missing audio source still completes successfully when the
-/// stage is `Done` — confirming ffmpeg/audio probing is never reached.
+/// stage is `Done` — confirming the audio decode path is never reached.
 #[tokio::test]
-async fn done_project_does_not_spawn_ffmpeg_even_when_audio_missing() {
+async fn done_project_skips_audio_decode_even_when_audio_missing() {
     let fixture = make_fixture(3).await;
 
     let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();

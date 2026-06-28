@@ -406,8 +406,8 @@ async fn windowed_transcode_catches_duration_mismatch() {
     let tmp = tempfile::tempdir().unwrap();
     let enc = audio::EncoderSettings::default();
 
-    // Honest window: 0..10 of a 60 s source. ffmpeg slices to ~10 s; the
-    // duration verify in `transcode` must accept it within 1.0 s.
+    // Honest window: 0..10 of a 60 s source. The transcoder slices to ~10 s;
+    // the duration verify must accept it within 1.0 s.
     let dst_ok = tmp.path().join("slice_ok.mp3");
     let report = audio::transcode(&src, &dst_ok, &enc, Some((0.0, 10.0)))
         .await
@@ -418,9 +418,9 @@ async fn windowed_transcode_catches_duration_mismatch() {
         report.dst_duration_sec,
     );
 
-    // Bogus window: claims 999 s of audio against a 60 s source. ffmpeg's
-    // actual output is bounded by the source (~60 s) so the verify step
-    // must reject it as DurationMismatch.
+    // Bogus window: claims 999 s of audio against a 60 s source. The actual
+    // output is bounded by the source (~60 s) so the verify step must reject
+    // it as DurationMismatch.
     let dst_bad = tmp.path().join("slice_bad.mp3");
     let err = audio::transcode(&src, &dst_bad, &enc, Some((0.0, 999.0)))
         .await
