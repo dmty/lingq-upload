@@ -1,7 +1,6 @@
 <script lang="ts">
   import { mapping } from "$lib/stores/mapping.svelte";
-  import { assetUrl } from "$lib/audio";
-  import { commands } from "$lib/ipc/bindings";
+  import { audioUrl } from "$lib/audio";
 
   let id = $derived(mapping.selectedChapterId);
   let title = $derived(
@@ -9,29 +8,7 @@
   );
   let body = $derived(id ? mapping.chapterTextFor(id) : null);
   let audio = $derived(mapping.selectedBucketAudio());
-
-  // Backend hands back a path the asset protocol will serve with a known
-  // audio MIME. For `.m4b` it returns a cached `.m4a` symlink so
-  // mime_guess returns `audio/mp4` and WebKit accepts the stream. Cheap
-  // (no transcode); the browser plays the source file in place.
-  let previewSrc = $state<string | null>(null);
-  let prepareError = $state<string | null>(null);
-  $effect(() => {
-    previewSrc = null;
-    prepareError = null;
-    const w = audio;
-    if (!w) return;
-    const { audioPath } = w;
-    commands.cmdPrepareAudioPreview(audioPath).then((res) => {
-      if (audio?.audioPath !== audioPath) return; // selection moved on
-      if (res.status === "ok") {
-        previewSrc = assetUrl(res.data);
-      } else {
-        prepareError = "preview failed: " + JSON.stringify(res.error);
-        console.warn("inspector preview failed:", res.error);
-      }
-    });
-  });
+  let previewSrc = $derived(audio ? audioUrl(audio.audioPath) : null);
 
   // The parent bucket this chapter's text rides — the eyebrow connects the
   // text being previewed to the audio segment it will ship with.
@@ -234,9 +211,6 @@
             onwaiting={() => snap("waiting")}
             onseeked={() => snap("seeked")}
           ></audio>
-        {/if}
-        {#if prepareError}
-          <div class="px-1 pt-1 text-[11px] text-danger">{prepareError}</div>
         {/if}
       </div>
     {/if}

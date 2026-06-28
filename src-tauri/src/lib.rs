@@ -1,3 +1,4 @@
+mod audio_scheme;
 pub mod codecs;
 pub mod commands;
 pub mod core;
@@ -45,7 +46,6 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::matcher::cmd_replace_audio_source,
             commands::matcher::cmd_seed_mapping,
             commands::mapping::cmd_apply_mapping_op,
-            commands::mapping::cmd_prepare_audio_preview,
             commands::project::cmd_project_load,
             commands::project::cmd_project_chapters,
             commands::project::cmd_chapter_text,
@@ -131,6 +131,7 @@ pub fn run() {
     let builder = specta_builder();
 
     tauri::Builder::default()
+        .register_uri_scheme_protocol("audio", audio_scheme::handler)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
