@@ -1,3 +1,4 @@
+pub mod codecs;
 pub mod commands;
 pub mod core;
 mod error;
@@ -5,6 +6,8 @@ pub mod events;
 pub mod ingest;
 pub mod lingq;
 mod secrets;
+
+pub use codecs::{AudioDecoder, AudioMetadata, PcmFrame, StreamInfo};
 
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri_specta::{collect_commands, Builder};
