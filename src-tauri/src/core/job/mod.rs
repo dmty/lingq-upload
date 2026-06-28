@@ -618,8 +618,7 @@ pub fn seed_mapping_if_count_matches(
         return Ok(());
     }
     let (epub_bytes, strategy) = epub_inputs(&project);
-    let all_chapters =
-        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
     let skipped: std::collections::HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
@@ -686,9 +685,7 @@ pub async fn seed_mapping_for_response(
                 .map(|c| new_pair(c.id.clone(), Some(tid.clone())))
                 .collect()
         }
-        MismatchResponse::SplitProportional => {
-            proportional_split_pairs(&chapters, &tracks)
-        }
+        MismatchResponse::SplitProportional => proportional_split_pairs(&chapters, &tracks),
         MismatchResponse::PairAccept | MismatchResponse::PairDrop => {
             let n = chapters.len().min(tracks.len());
             chapters
@@ -713,7 +710,11 @@ pub async fn seed_mapping_for_response(
     let track_meta: Vec<TrackMeta> = tracks
         .iter()
         .map(|t| {
-            let duration_sec = t.window.map(|(s, e)| e - s).or(t.duration_sec).unwrap_or(0.0);
+            let duration_sec = t
+                .window
+                .map(|(s, e)| e - s)
+                .or(t.duration_sec)
+                .unwrap_or(0.0);
             TrackMeta {
                 track_id: track_id_for(t),
                 title: t.title.clone(),
@@ -752,7 +753,11 @@ fn proportional_split_pairs(chapters: &[Chapter], tracks: &[AudioTrack]) -> Vec<
             let (start, end) = t
                 .window
                 .unwrap_or_else(|| (0.0, t.duration_sec.unwrap_or(1.0)));
-            ChapterAtom { start, end, title: t.title.clone() }
+            ChapterAtom {
+                start,
+                end,
+                title: t.title.clone(),
+            }
         })
         .collect();
     let buckets = proportional_pack(&atoms, &text_chars);
@@ -828,7 +833,11 @@ fn plan_from_mapping(
     let mut used_tracks: std::collections::HashSet<TrackId> = std::collections::HashSet::new();
     let mut i = 0;
     while i < chapters.len() {
-        let Some(pair) = mapping.pairs.iter().find(|p| p.chapter_id == chapters[i].id) else {
+        let Some(pair) = mapping
+            .pairs
+            .iter()
+            .find(|p| p.chapter_id == chapters[i].id)
+        else {
             return PlanOrPause::Failed(format!(
                 "mapping has no entry for chapter '{}'; text source changed since matching",
                 chapters[i].title
@@ -847,7 +856,10 @@ fn plan_from_mapping(
         let run_start = i;
         i += 1;
         while i < chapters.len() {
-            let next = mapping.pairs.iter().find(|p| p.chapter_id == chapters[i].id);
+            let next = mapping
+                .pairs
+                .iter()
+                .find(|p| p.chapter_id == chapters[i].id);
             if next.and_then(|p| p.track_id.as_ref()) == Some(track_id) {
                 i += 1;
             } else {
@@ -1346,18 +1358,26 @@ mod tests {
     #[test]
     fn plan_from_mapping_groups_contiguous_same_track_into_one_lesson() {
         let chapters = vec![
-            chapter(0, "A", "aaa"), chapter(1, "B", "bbb"),
-            chapter(2, "C", "ccc"), chapter(3, "D", "ddd"), chapter(4, "E", "eee"),
+            chapter(0, "A", "aaa"),
+            chapter(1, "B", "bbb"),
+            chapter(2, "C", "ccc"),
+            chapter(3, "D", "ddd"),
+            chapter(4, "E", "eee"),
         ];
         let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
         let t0 = track_id_for(&tracks[0]);
         let t1 = track_id_for(&tracks[1]);
         let mapping = MappingState {
             pairs: vec![
-                pair(0, Some(t0.clone())), pair(1, Some(t0.clone())), pair(2, Some(t0.clone())),
-                pair(3, Some(t1.clone())), pair(4, Some(t1.clone())),
+                pair(0, Some(t0.clone())),
+                pair(1, Some(t0.clone())),
+                pair(2, Some(t0.clone())),
+                pair(3, Some(t1.clone())),
+                pair(4, Some(t1.clone())),
             ],
-            parking_lot: vec![], op_id: 0, buckets: Vec::new(),
+            parking_lot: vec![],
+            op_id: 0,
+            buckets: Vec::new(),
         };
         let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
             PlanOrPause::Plan(p) => p,
@@ -1373,13 +1393,19 @@ mod tests {
     #[test]
     fn plan_from_mapping_orphan_track_is_audio_only_parked_excluded() {
         let chapters = vec![chapter(0, "A", "aaa")];
-        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3"), track(2, "/x/c.mp3")];
+        let tracks = vec![
+            track(0, "/x/a.mp3"),
+            track(1, "/x/b.mp3"),
+            track(2, "/x/c.mp3"),
+        ];
         let t0 = track_id_for(&tracks[0]);
         let t2 = track_id_for(&tracks[2]);
         // chapter -> t0; t1 unreferenced+unparked (audio-only); t2 parked (excluded).
         let mapping = MappingState {
             pairs: vec![pair(0, Some(t0.clone()))],
-            parking_lot: vec![t2.clone()], op_id: 0, buckets: Vec::new(),
+            parking_lot: vec![t2.clone()],
+            op_id: 0,
+            buckets: Vec::new(),
         };
         let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
             PlanOrPause::Plan(p) => p,
@@ -1483,23 +1509,7 @@ mod tests {
     // exhaustively (no `_ =>` arm) — the compiler enforces that on any
     // future variant; that contract is documented in AD-018.
     //
-    // The probe needs ffmpeg + ffprobe on PATH; tests skip cleanly when
-    // those aren't installed, same convention as the m4b integration tests.
-
-    fn ffprobe_available() -> bool {
-        std::process::Command::new("which")
-            .arg("ffprobe")
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .is_some()
-            && std::process::Command::new("which")
-                .arg("ffmpeg")
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .is_some()
-    }
+    // Uses hound-generated silent WAV fixtures; no external dependencies.
 
     fn fixture_audio(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1507,29 +1517,19 @@ mod tests {
             .join(name)
     }
 
-    fn make_silent_m4a(dir: &Path, name: &str, seconds: u32) -> PathBuf {
+    fn make_silent_wav(dir: &Path, name: &str, seconds: u32) -> PathBuf {
         let p = dir.join(name);
-        let status = std::process::Command::new("ffmpeg")
-            .args([
-                "-y",
-                "-hide_banner",
-                "-v",
-                "error",
-                "-f",
-                "lavfi",
-                "-i",
-                "anullsrc=r=22050:cl=stereo",
-                "-t",
-                &seconds.to_string(),
-                "-c:a",
-                "aac",
-                "-b:a",
-                "32k",
-            ])
-            .arg(&p)
-            .status()
-            .expect("spawn ffmpeg");
-        assert!(status.success(), "ffmpeg failed for {}", p.display());
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 22_050,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&p, spec).expect("wav writer");
+        for _ in 0..seconds * 22_050 * 2 {
+            w.write_sample(0_i16).expect("write");
+        }
+        w.finalize().expect("finalize");
         p
     }
 
@@ -1544,14 +1544,10 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_multiple_files_atomless_yields_one_track_per_file() {
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
         let dir = tempfile::tempdir().unwrap();
-        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
-        let b = make_silent_m4a(dir.path(), "b.m4a", 1);
-        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+        let a = make_silent_wav(dir.path(), "a.wav", 1);
+        let b = make_silent_wav(dir.path(), "b.wav", 1);
+        let c = make_silent_wav(dir.path(), "c.wav", 1);
         let project = project_with_audio(AudioSource::MultipleFiles(vec![
             a.clone(),
             b.clone(),
@@ -1569,10 +1565,6 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_multiple_files_single_atomful_matches_single_file_expansion() {
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
         let m4b = fixture_audio("synth_chapters_generic.m4b");
         if !m4b.exists() {
             eprintln!("fixture missing — skipping");
@@ -1600,18 +1592,14 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_multiple_files_mixed_atoms_uses_running_order() {
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
         let m4b = fixture_audio("synth_chapters_generic.m4b");
         if !m4b.exists() {
             eprintln!("fixture missing — skipping");
             return;
         }
         let dir = tempfile::tempdir().unwrap();
-        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
-        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+        let a = make_silent_wav(dir.path(), "a.wav", 1);
+        let c = make_silent_wav(dir.path(), "c.wav", 1);
 
         let project = project_with_audio(AudioSource::MultipleFiles(vec![
             a.clone(),
@@ -1637,13 +1625,9 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_multiple_files_skips_invalid_entries() {
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
         let dir = tempfile::tempdir().unwrap();
-        let a = make_silent_m4a(dir.path(), "a.m4a", 1);
-        let c = make_silent_m4a(dir.path(), "c.m4a", 1);
+        let a = make_silent_wav(dir.path(), "a.wav", 1);
+        let c = make_silent_wav(dir.path(), "c.wav", 1);
         let missing = PathBuf::from("/definitely/not/a/real/audio.m4a");
 
         let project = project_with_audio(AudioSource::MultipleFiles(vec![
@@ -1720,14 +1704,10 @@ mod tests {
 
     #[tokio::test]
     async fn split_seed_populates_buckets() {
-        if !ffprobe_available() {
-            eprintln!("ffmpeg/ffprobe missing — skipping");
-            return;
-        }
         let dir = tempfile::tempdir().unwrap();
         // Two audio tracks of known length: 30 s and 60 s.
-        let _a = make_silent_m4a(dir.path(), "a.m4a", 30);
-        let _b = make_silent_m4a(dir.path(), "b.m4a", 60);
+        let _a = make_silent_wav(dir.path(), "a.wav", 30);
+        let _b = make_silent_wav(dir.path(), "b.wav", 60);
 
         // Three text files: first two map to track a, third to track b.
         let t0 = dir.path().join("00_ch0.txt");
@@ -1748,7 +1728,11 @@ mod tests {
             .unwrap();
 
         // Two tracks → two buckets.
-        assert_eq!(seeded.buckets.len(), 2, "expected one bucket per atom/track");
+        assert_eq!(
+            seeded.buckets.len(),
+            2,
+            "expected one bucket per atom/track"
+        );
         assert!(
             seeded.buckets.iter().all(|b| b.atom_duration_sec > 0.0),
             "every bucket must carry a positive duration"
@@ -1758,23 +1742,36 @@ mod tests {
     #[test]
     fn build_plan_mapping_wins_over_decision_for_split() {
         let chapters = vec![
-            chapter(0, "A", "aaa"), chapter(1, "B", "bbb"), chapter(2, "C", "ccc"),
+            chapter(0, "A", "aaa"),
+            chapter(1, "B", "bbb"),
+            chapter(2, "C", "ccc"),
         ];
         let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
         let t0 = track_id_for(&tracks[0]);
         let t1 = track_id_for(&tracks[1]);
         let mut project = Project::new_test(
-            crate::core::identity::ProjectId::from_title_author("T", "A"), "T");
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
         // A decision is present (as in the real flow) AND an edited mapping that
         // moved chapter C from t0's bucket to t1.
         project.matcher_decision = Some(MatcherDecision {
             condition: MismatchCondition::ManyToFew,
             response: MismatchResponse::SplitProportional,
-            chapter_count: 3, track_count: 2, user_overrode: false, decided_at: Utc::now(),
+            chapter_count: 3,
+            track_count: 2,
+            user_overrode: false,
+            decided_at: Utc::now(),
         });
         project.mapping = Some(MappingState {
-            pairs: vec![pair(0, Some(t0.clone())), pair(1, Some(t1.clone())), pair(2, Some(t1.clone()))],
-            parking_lot: vec![], op_id: 1, buckets: Vec::new(),
+            pairs: vec![
+                pair(0, Some(t0.clone())),
+                pair(1, Some(t1.clone())),
+                pair(2, Some(t1.clone())),
+            ],
+            parking_lot: vec![],
+            op_id: 1,
+            buckets: Vec::new(),
         });
         let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {
             PlanOrPause::Plan(p) => p,
@@ -1852,5 +1849,4 @@ mod tests {
         // or Err — either way must not panic.
         let _ = seed_mapping_if_count_matches(&store, &id);
     }
-
 }
