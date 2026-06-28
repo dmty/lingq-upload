@@ -6,19 +6,16 @@
 //! NeedsMatch signal, and the windowed-transcode duration check in
 //! `core::audio::transcode`.
 //!
-//! Skips early when `ffmpeg` / `ffprobe` are missing from PATH so devs
-//! without ffmpeg installed don't see red — same convention as
-//! `audio_golden.rs` and `job_orchestrator_test.rs`.
-//!
 //! Manual smoke items NOT covered here:
 //!   * LingQ collection contains the expected number of lessons after a
 //!     real ManyToFew/SplitProportional run (requires the live LingQ API).
 //!   * Drift indicator render + tooltip on the Mismatch UI's bucket
 //!     preview rows (requires a browser).
 
+mod support;
+
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
-use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
 
 use secrecy::SecretString;
@@ -34,55 +31,12 @@ use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
 use mockito::Server;
 
-fn which(bin: &str) -> Option<PathBuf> {
-    SyncCommand::new("which")
-        .arg(bin)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()))
-}
-
-fn ffmpeg_available() -> bool {
-    which("ffmpeg").is_some() && which("ffprobe").is_some()
-}
-
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn fixture_path(name: &str) -> PathBuf {
     manifest_dir().join("tests/fixtures/audio").join(name)
-}
-
-/// Generates a short atomless m4a in `path` if it's missing. Mirrors the
-/// `ensure_silence_fixture` helper used by `audio_golden.rs`.
-fn ensure_silence_fixture(path: &Path) {
-    if path.exists() {
-        return;
-    }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("create fixtures dir");
-    }
-    let status = SyncCommand::new("ffmpeg")
-        .args([
-            "-y",
-            "-hide_banner",
-            "-v",
-            "error",
-            "-f",
-            "lavfi",
-            "-i",
-            "anullsrc=r=44100:cl=stereo",
-            "-t",
-            "5",
-            "-c:a",
-            "aac",
-        ])
-        .arg(path)
-        .status()
-        .expect("spawn ffmpeg for silence fixture");
-    assert!(status.success(), "ffmpeg silence-fixture generation failed");
 }
 
 #[derive(Debug, Clone)]
@@ -204,10 +158,6 @@ fn build_project(
 
 #[tokio::test]
 async fn chaptered_m4b_routes_to_many_to_few_with_preview() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping chaptered_m4b_routes_to_many_to_few_with_preview");
-        return;
-    }
     // synth_chapters_generic.m4b carries 3 atoms (~20 s each, 60 s total).
     // classify(7, 3): delta=4 skips CountOff; 2*7=14 > 3*3=9 → ManyToFew.
     let m4b = fixture_path("synth_chapters_generic.m4b");
@@ -303,12 +253,6 @@ async fn chaptered_m4b_routes_to_many_to_few_with_preview() {
 
 #[tokio::test]
 async fn libation_folder_does_not_invoke_atom_probe() {
-    if !ffmpeg_available() {
-        eprintln!(
-            "ffmpeg/ffprobe not on PATH — skipping libation_folder_does_not_invoke_atom_probe"
-        );
-        return;
-    }
     // Folder source = per-track delivery (population A in the spec): probe
     // never runs. Equal counts (3 vs 3) take the clean Paired path; the
     // orchestrator never emits NeedsMatch, so no bucket_preview is ever
@@ -390,17 +334,11 @@ async fn libation_folder_does_not_invoke_atom_probe() {
 
 #[tokio::test]
 async fn atomless_single_m4b_falls_back_to_whole_file() {
-    if !ffmpeg_available() {
-        eprintln!(
-            "ffmpeg/ffprobe not on PATH — skipping atomless_single_m4b_falls_back_to_whole_file"
-        );
-        return;
-    }
     // Population D: a single-file audio source with no embedded chapters.
     // `expand_single_file` must return one whole-file track (window == None)
     // and the matcher must see (1 chapter, 1 track) → clean pair.
-    let silence = fixture_path("silence.m4a");
-    ensure_silence_fixture(&silence);
+    let silence = fixture_path("silence.wav");
+    support::mk_fixture::write_silence_m4a_like(&silence, 5);
     let text_dir = tempfile::tempdir().unwrap();
     let text_paths = make_chapter_files(text_dir.path(), 1);
 
@@ -462,12 +400,6 @@ async fn atomless_single_m4b_falls_back_to_whole_file() {
 
 #[tokio::test]
 async fn windowed_transcode_catches_duration_mismatch() {
-    if !ffmpeg_available() {
-        eprintln!(
-            "ffmpeg/ffprobe not on PATH — skipping windowed_transcode_catches_duration_mismatch"
-        );
-        return;
-    }
     let src = fixture_path("synth_chapters_generic.m4b");
     assert!(src.exists(), "missing fixture {}", src.display());
 

@@ -1,12 +1,7 @@
 //! End-to-end orchestrator tests.
-//!
-//! These tests skip when `ffmpeg`/`ffprobe` are missing from PATH so devs
-//! without ffmpeg installed don't see red — same convention as
-//! `audio_golden.rs`.
 
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
-use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -25,19 +20,6 @@ use lingq_upload_lib::core::project::{
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
-
-fn which(bin: &str) -> Option<PathBuf> {
-    SyncCommand::new("which")
-        .arg(bin)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()))
-}
-
-fn ffmpeg_available() -> bool {
-    which("ffmpeg").is_some() && which("ffprobe").is_some()
-}
 
 #[derive(Default, Clone)]
 struct RecordingSink {
@@ -215,10 +197,6 @@ fn mock_imports(server: &mut ServerGuard, expected: usize, start_id: i64) {
 
 #[tokio::test]
 async fn happy_path_three_chapters_three_tracks() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping happy_path_three_chapters_three_tracks");
-        return;
-    }
     let mut fixture = make_fixture(3).await;
     mock_collection(&mut fixture.server, 4242);
     mock_imports(&mut fixture.server, 3, 1000);
@@ -281,10 +259,6 @@ async fn happy_path_three_chapters_three_tracks() {
 
 #[tokio::test]
 async fn cancellation_after_first_chapter_stops_the_run() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping cancellation test");
-        return;
-    }
     let mut fixture = make_fixture(3).await;
     mock_collection(&mut fixture.server, 4242);
     // Only the first import should land — we cancel before the second.
@@ -366,10 +340,6 @@ async fn cancellation_after_first_chapter_stops_the_run() {
 
 #[tokio::test]
 async fn resume_skips_chapters_already_uploaded() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping resume test");
-        return;
-    }
     let mut fixture = make_fixture(3).await;
     mock_collection(&mut fixture.server, 4242);
     // Only two imports — chapter 0 is already done.
@@ -426,10 +396,6 @@ async fn resume_skips_chapters_already_uploaded() {
 /// receipts 0/1 carry chapter body, 2/3 are degraded with " ".
 #[tokio::test]
 async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping pair_accept_leftover test");
-        return;
-    }
     let mut fixture = make_fixture_with_counts(2, 4).await;
     mock_collection(&mut fixture.server, 4242);
     mock_imports(&mut fixture.server, 4, 5000);
@@ -604,10 +570,6 @@ async fn done_project_does_not_spawn_ffmpeg_even_when_audio_missing() {
 /// `Done` with a stamped `last_transition_at`.
 #[tokio::test]
 async fn new_project_advances_through_lifecycle_stages_in_order() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping lifecycle stage test");
-        return;
-    }
     let mut fixture = make_fixture(2).await;
     mock_collection(&mut fixture.server, 4242);
     mock_imports(&mut fixture.server, 2, 6000);

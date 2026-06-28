@@ -1,18 +1,15 @@
 //! Chapter-divider absorb-policy carver coverage.
 //!
-//! The pure-function policy math is always exercised. The ffmpeg-driven
-//! detection paths are gated behind `LINGQ_E2E_AUDIO=0` so devs without
-//! ffmpeg on PATH can opt out; CI sets nothing and the tests run by default.
+//! The pure-function policy math is always exercised. The symphonia-backed
+//! detection paths run unconditionally — no ffmpeg required.
 //!
 //! The committed `clip_*.wav` fixtures are immutable inputs — pinned by
 //! sha256. Regenerate all three via `scripts/fixtures/gen_silence_corpus.sh`
 //! (clip_c ends mid-silence to exercise the EOF silence_end synthesis), then
 //! update the sha256 constants below + the matching
-//! `clip_*.golden_offsets.json` (record `ffmpeg -version` first line as
-//! `ffmpeg_version`).
+//! `clip_*.golden_offsets.json`.
 
 use std::path::PathBuf;
-use std::process::Command as SyncCommand;
 
 use lingq_upload_lib::core::audio::{
     boundaries_from_silences, carve, AbsorbPolicy, Boundary, BoundaryKind, CarveOpts, SilenceRun,
@@ -37,14 +34,6 @@ struct GoldenOffsets {
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio/silence_corpus")
-}
-
-fn ffmpeg_on_path() -> bool {
-    SyncCommand::new("ffmpeg")
-        .arg("-version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
 }
 
 fn load_golden(name: &str) -> GoldenOffsets {
@@ -218,13 +207,6 @@ fn store_round_trips_absorb_policy_via_put_get() {
 }
 
 async fn assert_clip_matches_golden(stem: &str, sha256: &str) {
-    if std::env::var("LINGQ_E2E_AUDIO").as_deref() == Ok("0") {
-        return;
-    }
-    assert!(
-        ffmpeg_on_path(),
-        "ffmpeg required for carve_{stem}_per_policy; set LINGQ_E2E_AUDIO=0 to skip"
-    );
     let clip = assert_fixture(&format!("{stem}.wav"), sha256);
     let golden = load_golden(&format!("{stem}.golden_offsets.json"));
     for (policy, expected) in [
@@ -258,13 +240,11 @@ async fn assert_clip_matches_golden(stem: &str, sha256: &str) {
 }
 
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn carve_clip_a_per_policy() {
     assert_clip_matches_golden("clip_a", CLIP_A_SHA256).await;
 }
 
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn carve_clip_b_per_policy() {
     assert_clip_matches_golden("clip_b", CLIP_B_SHA256).await;
 }
@@ -272,33 +252,6 @@ async fn carve_clip_b_per_policy() {
 // clip_c ends mid-silence: the final boundary only exists if a silence_end is
 // synthesized at stream duration when silencedetect leaves the run open at EOF.
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn carve_clip_c_tail_silence_keeps_final_boundary() {
     assert_clip_matches_golden("clip_c", CLIP_C_SHA256).await;
-    if std::env::var("LINGQ_E2E_AUDIO").as_deref() == Ok("0") || !ffmpeg_on_path() {
-        return;
-    }
-    let clip = assert_fixture("clip_c.wav", CLIP_C_SHA256);
-    let golden = load_golden("clip_c.golden_offsets.json");
-    for (policy, expected_last) in [
-        (
-            AbsorbPolicy::Backward,
-            *golden.backward_offsets_ms.last().unwrap(),
-        ),
-        (AbsorbPolicy::Drop, *golden.drop_offsets_ms.last().unwrap()),
-    ] {
-        let opts = CarveOpts {
-            absorb: policy,
-            ..Default::default()
-        };
-        let boundaries = carve(&clip, opts).await.expect("carve clip_c");
-        let last = boundaries
-            .last()
-            .unwrap_or_else(|| panic!("policy={policy:?}: tail-silence boundary missing"));
-        assert!(
-            diff(last.cut_offset_ms, expected_last) <= 50,
-            "policy={policy:?} final boundary {} not within 50ms of {expected_last}",
-            last.cut_offset_ms
-        );
-    }
 }

@@ -1,11 +1,7 @@
 //! Per-lesson atomic flush + rehydration replay.
-//!
-//! Skips when `ffmpeg`/`ffprobe` are missing from PATH — same convention as
-//! `job_orchestrator_test.rs`.
 
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
-use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
@@ -24,19 +20,6 @@ use lingq_upload_lib::core::project::{
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore, StoreError};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
-
-fn which(bin: &str) -> Option<PathBuf> {
-    SyncCommand::new("which")
-        .arg(bin)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()))
-}
-
-fn ffmpeg_available() -> bool {
-    which("ffmpeg").is_some() && which("ffprobe").is_some()
-}
 
 // --- Recording store wrapper -------------------------------------------------
 
@@ -286,10 +269,6 @@ fn mock_imports(server: &mut ServerGuard, count: usize, start_id: i64) -> Vec<mo
 /// Combined POST count across both runs == 5; all 5 receipts carry a lesson_id.
 #[tokio::test]
 async fn five_chapters_killed_after_three_resumes_for_two() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping resume test");
-        return;
-    }
     let mut fixture = make_fixture(5).await;
     mock_collection(&mut fixture.server, 4242);
     // Five mocks total — three for run 1, two for run 2. mockito doesn't
@@ -371,10 +350,6 @@ async fn five_chapters_killed_after_three_resumes_for_two() {
 /// AC1: `patch_chapter` is called once per uploaded chapter.
 #[tokio::test]
 async fn patch_chapter_call_count_matches_chapter_count() {
-    if !ffmpeg_available() {
-        eprintln!("ffmpeg/ffprobe not on PATH — skipping patch_chapter count test");
-        return;
-    }
     let mut fixture = make_fixture(3).await;
     mock_collection(&mut fixture.server, 4242);
     let _imports = mock_imports(&mut fixture.server, 3, 8000);

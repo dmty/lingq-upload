@@ -19,6 +19,7 @@ pub fn write_silence_wav(path: &Path, seconds: u32, sr: u32, channels: u16) {
     w.finalize().expect("finalize");
 }
 
+#[allow(dead_code)]
 pub fn write_sine_wav(path: &Path, seconds: u32, freq: f32, sr: u32, channels: u16) {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create dir");

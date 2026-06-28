@@ -7,7 +7,6 @@
 
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
-use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -150,19 +149,6 @@ async fn transcode_future_drop_kills_ffmpeg_and_unlinks_dst() {
     );
 }
 
-fn which(bin: &str) -> Option<PathBuf> {
-    SyncCommand::new("which")
-        .arg(bin)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()))
-}
-
-fn ffprobe_available() -> bool {
-    which("ffprobe").is_some()
-}
-
 #[derive(Default)]
 struct CancelSink {
     events: Arc<Mutex<Vec<String>>>,
@@ -209,11 +195,6 @@ async fn run_project_job_cancel_unlinks_partial_dst_and_holds_stage() {
     use mockito::{Matcher, Server};
     use secrecy::SecretString;
     use tokio_util::sync::CancellationToken;
-
-    if !ffprobe_available() {
-        eprintln!("ffprobe not on PATH — skipping run_project_job_cancel test");
-        return;
-    }
 
     let _guard = SlowFfmpegGuard::install(10);
 

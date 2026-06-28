@@ -5,7 +5,6 @@
 
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::path::{Path, PathBuf};
-use std::process::Command as SyncCommand;
 use std::sync::{Arc, Mutex};
 
 use mockito::{Matcher, Server, ServerGuard};
@@ -193,34 +192,6 @@ fn baseline_project_json_loads_with_default_selection_and_ids() {
     }
 }
 
-// --- Orchestrator gate ------------------------------------------------------
-
-fn which(bin: &str) -> Option<PathBuf> {
-    SyncCommand::new("which")
-        .arg(bin)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()))
-}
-
-fn ffmpeg_available() -> bool {
-    which("ffmpeg").is_some() && which("ffprobe").is_some()
-}
-
-/// Carver-style gate for ffmpeg-backed tests: explicit opt-out via env var,
-/// hard failure when ffmpeg is missing without it.
-fn require_ffmpeg_or_opt_out() -> bool {
-    if std::env::var("LINGQ_E2E_AUDIO").as_deref() == Ok("0") {
-        return false;
-    }
-    assert!(
-        ffmpeg_available(),
-        "ffmpeg/ffprobe required; set LINGQ_E2E_AUDIO=0 to skip"
-    );
-    true
-}
-
 #[derive(Default, Clone)]
 struct RecordingSink {
     chapter_dones: Arc<Mutex<Vec<usize>>>,
@@ -339,11 +310,7 @@ fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
 }
 
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn run_skips_marked_chapters_and_imports_only_remainder() {
-    if !require_ffmpeg_or_opt_out() {
-        return;
-    }
     let total = 4usize;
     let skipped_idx = [1usize, 3];
     let skipped_ids: Vec<ChapterId> = skipped_idx.iter().map(|i| cid(*i)).collect();
@@ -423,13 +390,9 @@ async fn run_skips_marked_chapters_and_imports_only_remainder() {
 /// never uploads. Also pins production seeding: a clean auto-match run
 /// persists an initial MappingState.
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn mapping_pairs_drive_upload_and_parked_tracks_are_excluded() {
     use lingq_upload_lib::core::matcher::{MappingPair, MappingState};
 
-    if !require_ffmpeg_or_opt_out() {
-        return;
-    }
     let total = 3usize;
     let mut fixture = make_fixture(total).await;
     mock_collection(&mut fixture.server, 4242);
@@ -526,11 +489,7 @@ async fn mapping_pairs_drive_upload_and_parked_tracks_are_excluded() {
 /// A clean auto-match run seeds MappingState in production: one untouched
 /// pair per chapter, empty parking lot, op_id 0.
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn clean_run_seeds_initial_mapping_state() {
-    if !require_ffmpeg_or_opt_out() {
-        return;
-    }
     let total = 2usize;
     let mut fixture = make_fixture(total).await;
     mock_collection(&mut fixture.server, 4242);
@@ -576,11 +535,7 @@ async fn clean_run_seeds_initial_mapping_state() {
 }
 
 #[tokio::test]
-#[ignore = "ffmpeg-backed; runs by default in CI, opt out with LINGQ_E2E_AUDIO=0"]
 async fn skipping_after_upload_does_not_delete_existing_lesson() {
-    if !require_ffmpeg_or_opt_out() {
-        return;
-    }
     let total = 3usize;
     let mut fixture = make_fixture(total).await;
     mock_collection(&mut fixture.server, 9999);
