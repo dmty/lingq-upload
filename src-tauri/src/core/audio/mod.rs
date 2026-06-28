@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -24,10 +24,6 @@ pub(crate) const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
 #[serde(tag = "kind", content = "message")]
 #[allow(dead_code)]
 pub enum AudioError {
-    #[error("ffmpeg not found at {0}")]
-    FfmpegNotFound(String),
-    #[error("ffmpeg exited with status {status}: {stderr}")]
-    FfmpegFailed { status: i32, stderr: String },
     #[error("ffprobe parse error: {0}")]
     Probe(String),
     #[error("duration mismatch (delta {delta_sec}s > {threshold_sec}s)")]
@@ -70,19 +66,6 @@ pub struct TranscodeReport {
     pub src_duration_sec: f64,
     pub dst_duration_sec: f64,
     pub delta_sec: f64,
-}
-
-/// Resolve the ffmpeg binary path.
-/// Order: `FFMPEG_BIN` env > PATH.
-pub fn resolve_ffmpeg_bin() -> Result<PathBuf, AudioError> {
-    if let Ok(v) = std::env::var("FFMPEG_BIN") {
-        let p = PathBuf::from(v);
-        if !p.exists() {
-            return Err(AudioError::FfmpegNotFound(p.display().to_string()));
-        }
-        return Ok(p);
-    }
-    Ok(PathBuf::from("ffmpeg"))
 }
 
 pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {

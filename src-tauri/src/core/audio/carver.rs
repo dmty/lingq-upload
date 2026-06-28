@@ -1,16 +1,10 @@
 use std::path::Path;
-use std::process::Stdio;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
-use tokio::io::AsyncReadExt;
-use tokio::process::Command;
 
-use super::{probe_duration, resolve_ffmpeg_bin, AudioError};
-
-const STDERR_CAPTURE_BYTES: usize = 4 * 1024;
-const MAX_STDERR_PARSE_BYTES: usize = 4 * 1024 * 1024;
+use super::AudioError;
 
 /// How a silent chapter-divider is folded into its neighbour tracks.
 ///
@@ -79,18 +73,13 @@ pub struct SilenceRun {
 
 #[derive(Debug, Error)]
 pub enum CarveError {
-    #[error("audio probe: {0}")]
+    #[error("audio: {0}")]
     Audio(#[from] AudioError),
-    #[error("silencedetect parse: {0}")]
-    Parse(String),
-    #[error("silencedetect stderr exceeded {max} byte cap ({bytes} read)")]
-    StderrTooLarge { bytes: usize, max: usize },
 }
 
 /// Map detected silence runs into per-policy chapter boundaries.
 ///
-/// Pure function — no IO. The `carve` entrypoint runs `ffmpeg silencedetect`
-/// and feeds the parsed runs in here.
+/// Pure function — no IO.
 ///
 /// `Forward`: cut at the END of each silence run (silence absorbed by NEXT).
 /// `Backward`: cut at the START of each silence run (silence absorbed by PREV).
@@ -129,104 +118,22 @@ async fn detect_silences(
     silence_db: f32,
     min_silence_ms: u32,
 ) -> Result<Vec<SilenceRun>, CarveError> {
-    let bin = resolve_ffmpeg_bin().map_err(CarveError::Audio)?;
-    let min_d = format!("{:.3}", (min_silence_ms as f64) / 1000.0);
-    let af = format!("silencedetect=noise={silence_db}dB:d={min_d}");
-    let mut child = Command::new(&bin)
-        .args(["-hide_banner", "-nostats", "-v", "info", "-i"])
-        .arg(path)
-        .args(["-af", &af, "-f", "null", "-"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))?;
+    let path = path.to_path_buf();
+    let runs = tokio::task::spawn_blocking(move || {
+        use crate::codecs::silence::detect_silence;
+        use crate::codecs::{symphonia_impl::SymphoniaDecoder, AudioDecoder};
 
-    let mut buf = Vec::new();
-    if let Some(err) = child.stderr.take() {
-        // Read one byte past the cap so an over-cap buffer is detectable.
-        let mut bounded = err.take(MAX_STDERR_PARSE_BYTES as u64 + 1);
-        bounded
-            .read_to_end(&mut buf)
-            .await
-            .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))?;
-    }
-    if buf.len() > MAX_STDERR_PARSE_BYTES {
-        // Reap the child so we don't leak a zombie on the early return.
-        let _ = child.kill().await;
-        return Err(CarveError::StderrTooLarge {
-            bytes: buf.len(),
-            max: MAX_STDERR_PARSE_BYTES,
+        let mut dec = SymphoniaDecoder::open(&path).map_err(CarveError::Audio)?;
+        let info = dec.info();
+        let iter = std::iter::from_fn(move || match dec.next_frame() {
+            Ok(Some(f)) => Some(f),
+            _ => None,
         });
-    }
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))?;
-    if !status.success() {
-        let tail_start = buf.len().saturating_sub(STDERR_CAPTURE_BYTES);
-        let stderr = String::from_utf8_lossy(&buf[tail_start..]).into_owned();
-        return Err(CarveError::Audio(AudioError::FfmpegFailed {
-            status: status.code().unwrap_or(-1),
-            stderr,
-        }));
-    }
-    let log = String::from_utf8_lossy(&buf);
-    let (mut runs, pending_start) = parse_silencedetect(&log)?;
-    // Older ffmpeg emits no silence_end when the stream ends mid-silence;
-    // synthesize one at stream duration so the final boundary survives.
-    if let Some(start_ms) = pending_start {
-        let dur = probe_duration(path).await.map_err(CarveError::Audio)?;
-        let end_ms = seconds_to_ms(dur)?;
-        if end_ms > start_ms {
-            runs.push(SilenceRun { start_ms, end_ms });
-        }
-    }
+        Ok::<_, CarveError>(detect_silence(iter, &info, silence_db, min_silence_ms))
+    })
+    .await
+    .map_err(|e| CarveError::Audio(AudioError::Io(e.to_string())))??;
     Ok(runs)
-}
-
-/// Returns parsed runs plus any silence_start left unmatched at EOF.
-fn parse_silencedetect(log: &str) -> Result<(Vec<SilenceRun>, Option<u32>), CarveError> {
-    let mut runs: Vec<SilenceRun> = Vec::new();
-    let mut pending_start: Option<u32> = None;
-    for line in log.lines() {
-        if let Some(rest) = line.split("silence_start:").nth(1) {
-            let val = rest.split_whitespace().next().unwrap_or("");
-            let secs: f64 = val
-                .parse()
-                .map_err(|e| CarveError::Parse(format!("silence_start {val:?}: {e}")))?;
-            pending_start = Some(seconds_to_ms(secs)?);
-        } else if let Some(rest) = line.split("silence_end:").nth(1) {
-            let val = rest.split_whitespace().next().unwrap_or("");
-            let secs: f64 = val
-                .parse()
-                .map_err(|e| CarveError::Parse(format!("silence_end {val:?}: {e}")))?;
-            let end_ms = seconds_to_ms(secs)?;
-            if let Some(start_ms) = pending_start.take() {
-                if end_ms > start_ms {
-                    runs.push(SilenceRun { start_ms, end_ms });
-                }
-            }
-        }
-    }
-    Ok((runs, pending_start))
-}
-
-fn seconds_to_ms(secs: f64) -> Result<u32, CarveError> {
-    if !secs.is_finite() {
-        return Err(CarveError::Parse(format!("non-finite seconds: {secs}")));
-    }
-    if secs.is_sign_negative() {
-        return Ok(0);
-    }
-    let ms = (secs * 1000.0).round();
-    if ms > u32::MAX as f64 {
-        return Err(CarveError::Parse(format!(
-            "seconds {secs} overflows u32 ms"
-        )));
-    }
-    Ok(ms as u32)
 }
 
 #[cfg(test)]
@@ -375,8 +282,7 @@ mod tests {
 
     #[test]
     fn overlapping_runs_still_yield_per_run_boundaries() {
-        // ffmpeg silencedetect won't emit this, but the pure function is
-        // total over its input — guard against malformed callers.
+        // The pure function is total over its input — guard against malformed callers.
         let runs = [
             SilenceRun {
                 start_ms: 5_000,
@@ -394,83 +300,41 @@ mod tests {
         assert_ne!(f[0].track_index, f[1].track_index);
     }
 
+    /// Verify detect_silences delegates correctly: [1s sine][1s silence][1s sine]
+    /// at 16 kHz should yield exactly one SilenceRun.
     #[test]
-    fn parses_silencedetect_log() {
-        let log = "\
-[silencedetect @ 0xdead] silence_start: 5.001
-[silencedetect @ 0xdead] silence_end: 6.000 | silence_duration: 0.999
-[silencedetect @ 0xdead] silence_start: 9.0
-[silencedetect @ 0xdead] silence_end: 10.0 | silence_duration: 1.0
-";
-        let (runs, pending) = parse_silencedetect(log).expect("parse");
-        assert_eq!(runs.len(), 2);
-        assert_eq!(runs[0].start_ms, 5_001);
-        assert_eq!(runs[0].end_ms, 6_000);
-        assert_eq!(pending, None);
-    }
+    fn detect_silence_finds_one_run_in_synthetic_stream() {
+        use crate::codecs::silence::detect_silence;
+        use crate::codecs::{PcmFrame, StreamInfo};
 
-    #[test]
-    fn superseded_start_is_dropped() {
-        let log = "\
-[silencedetect] silence_start: 1.0
-[silencedetect] silence_start: 5.0
-[silencedetect] silence_end: 6.0
-";
-        let (runs, pending) = parse_silencedetect(log).expect("parse");
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].start_ms, 5_000);
-        assert_eq!(pending, None);
-    }
-
-    #[test]
-    fn trailing_start_surfaces_as_pending() {
-        let log = "\
-[silencedetect] silence_start: 1.0
-[silencedetect] silence_end: 2.0
-[silencedetect] silence_start: 7.04
-";
-        let (runs, pending) = parse_silencedetect(log).expect("parse");
-        assert_eq!(runs.len(), 1);
-        assert_eq!(pending, Some(7_040));
-    }
-
-    #[test]
-    fn seconds_to_ms_negative_clamps_to_zero() {
-        assert_eq!(seconds_to_ms(-1.0).unwrap(), 0);
-    }
-
-    #[test]
-    fn seconds_to_ms_overflow_errors() {
-        assert!(matches!(seconds_to_ms(1.0e12), Err(CarveError::Parse(_))));
-    }
-
-    #[test]
-    fn seconds_to_ms_nan_errors() {
-        assert!(matches!(seconds_to_ms(f64::NAN), Err(CarveError::Parse(_))));
-    }
-
-    #[test]
-    fn stderr_parse_cap_is_four_mib() {
-        assert_eq!(MAX_STDERR_PARSE_BYTES, 4 * 1024 * 1024);
-    }
-
-    #[tokio::test]
-    async fn read_bounded_by_max_stderr_parse_bytes() {
-        // Stand-in for ffmpeg stderr: a stream larger than the cap. We reuse
-        // the same `AsyncRead::take(N+1).read_to_end` pattern as `carve` so
-        // the test exercises the actual bound, not a copy of the constant.
-        use tokio::io::AsyncReadExt;
-        let oversized = vec![b'x'; MAX_STDERR_PARSE_BYTES + 4096];
-        let mut bounded = (&oversized[..]).take(MAX_STDERR_PARSE_BYTES as u64 + 1);
-        let mut buf = Vec::new();
-        bounded.read_to_end(&mut buf).await.unwrap();
-        assert!(buf.len() > MAX_STDERR_PARSE_BYTES);
-        assert_eq!(buf.len(), MAX_STDERR_PARSE_BYTES + 1);
-
-        let err = CarveError::StderrTooLarge {
-            bytes: buf.len(),
-            max: MAX_STDERR_PARSE_BYTES,
+        let sr = 16_000u32;
+        let n = sr as usize;
+        let sine: Vec<f32> = (0..n)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr as f32).sin())
+            .collect();
+        let frames = vec![
+            PcmFrame {
+                frames: n,
+                samples: sine.clone(),
+            },
+            PcmFrame {
+                frames: n,
+                samples: vec![0.0; n],
+            },
+            PcmFrame {
+                frames: n,
+                samples: sine,
+            },
+        ];
+        let info = StreamInfo {
+            sample_rate: sr,
+            channels: 1,
+            duration_sec: 3.0,
+            codec: "wav",
         };
-        assert!(matches!(err, CarveError::StderrTooLarge { .. }));
+        let runs = detect_silence(frames.into_iter(), &info, -45.0, 500);
+        assert_eq!(runs.len(), 1);
+        assert!(runs[0].start_ms >= 950 && runs[0].start_ms <= 1050);
+        assert!(runs[0].end_ms >= 1950 && runs[0].end_ms <= 2050);
     }
 }
