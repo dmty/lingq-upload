@@ -15,7 +15,9 @@
     const pair = mapping.mappingState.pairs.find((p) => p.chapter_id === id);
     const buckets = mapping.buckets ?? [];
     const i = buckets.findIndex((b) => b.trackId === pair?.track_id);
-    return i >= 0 ? `Audio ${i + 1} · ${buckets[i].atomTitle ?? ""}`.trim() : "";
+    return i >= 0
+      ? `Audio ${i + 1} · ${buckets[i].atomTitle ?? ""}`.trim()
+      : "";
   });
 
   let el: HTMLAudioElement | undefined = $state();
@@ -38,7 +40,11 @@
     else el.pause();
   }
   function onPlay() {
-    if (el && audio && (el.currentTime < audio.start || el.currentTime >= audio.end))
+    if (
+      el &&
+      audio &&
+      (el.currentTime < audio.start || el.currentTime >= audio.end)
+    )
       el.currentTime = audio.start;
     playing = true;
   }
@@ -63,8 +69,10 @@
   }
   function nudge(e: KeyboardEvent) {
     if (!el || !audio) return;
-    if (e.key === "ArrowRight") el.currentTime = Math.min(audio.end, el.currentTime + 5);
-    else if (e.key === "ArrowLeft") el.currentTime = Math.max(audio.start, el.currentTime - 5);
+    if (e.key === "ArrowRight")
+      el.currentTime = Math.min(audio.end, el.currentTime + 5);
+    else if (e.key === "ArrowLeft")
+      el.currentTime = Math.max(audio.start, el.currentTime - 5);
     else return;
     e.preventDefault();
     cur = Math.max(0, el.currentTime - audio.start);
@@ -83,7 +91,9 @@
   >
     <header class="border-b border-border px-5 pb-4 pt-5">
       {#if bucketLabel}
-        <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-accent">
+        <div
+          class="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-accent"
+        >
           {bucketLabel}
         </div>
       {/if}
@@ -91,7 +101,9 @@
     </header>
 
     {#if audio}
-      <div class="flex items-center gap-3 border-b border-border bg-surface-sunken px-5 py-3">
+      <div
+        class="flex items-center gap-3 border-b border-border bg-surface-sunken px-5 py-3"
+      >
         <button
           type="button"
           data-testid="inspector-play"
@@ -100,13 +112,27 @@
           class="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-white transition hover:bg-accent-hover active:scale-95"
         >
           {#if playing}
-            <svg width="13" height="13" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 12 12"
+              fill="currentColor"
+              aria-hidden="true"
+            >
               <rect x="2" y="1.5" width="2.6" height="9" rx="0.6" />
               <rect x="7.4" y="1.5" width="2.6" height="9" rx="0.6" />
             </svg>
           {:else}
-            <svg width="13" height="13" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-              <path d="M3 1.8c0-.6.66-.98 1.18-.66l6 3.7a.78.78 0 0 1 0 1.32l-6 3.7A.78.78 0 0 1 3 9.2z" />
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 12 12"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 1.8c0-.6.66-.98 1.18-.66l6 3.7a.78.78 0 0 1 0 1.32l-6 3.7A.78.78 0 0 1 3 9.2z"
+              />
             </svg>
           {/if}
         </button>
@@ -131,7 +157,9 @@
               style="left: {frac * 100}%"
             ></div>
           </div>
-          <div class="mt-1.5 flex justify-between text-[10px] tabular-nums text-fg-subtle">
+          <div
+            class="mt-1.5 flex justify-between text-[10px] tabular-nums text-fg-subtle"
+          >
             <span>{fmt(cur)}</span>
             <span>{fmt(dur)}</span>
           </div>
@@ -141,12 +169,13 @@
           data-testid="inspector-audio"
           data-window-start={audio.start}
           data-window-end={audio.end}
-          src={audio.src}
           class="hidden"
           onplay={onPlay}
           onpause={onPause}
           ontimeupdate={onTimeUpdate}
-        ></audio>
+        >
+          <source src={audio.src} type={audio.type} />
+        </audio>
       </div>
     {/if}
 
@@ -167,7 +196,8 @@
         data-testid="inspector-remove"
         onclick={() => mapping.removeChapter(id!)}
         class="ml-auto rounded-md px-3 py-1.5 text-xs font-medium text-fg-subtle transition hover:bg-error-soft hover:text-error"
-      >Remove chapter</button>
+        >Remove chapter</button
+      >
     </div>
   </aside>
 {/if}
@@ -175,6 +205,10 @@
 <style>
   /* Soft fade where the scrollable text meets the actions bar. */
   .inspector-text {
-    mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent);
+    mask-image: linear-gradient(
+      to bottom,
+      black calc(100% - 1.5rem),
+      transparent
+    );
   }
 </style>

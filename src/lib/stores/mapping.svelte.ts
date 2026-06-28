@@ -8,7 +8,7 @@ import {
   type MappingState,
   type ProjectId,
 } from "$lib/ipc/bindings";
-import { assetUrl } from "$lib/audio";
+import { assetUrl, audioMime } from "$lib/audio";
 
 type State = {
   projectId: ProjectId | null;
@@ -372,7 +372,12 @@ export const mapping = {
     return state.chapterTextCache[id] ?? null;
   },
 
-  selectedBucketAudio(): { src: string; start: number; end: number } | null {
+  selectedBucketAudio(): {
+    src: string;
+    type: string;
+    start: number;
+    end: number;
+  } | null {
     const id = state.selectedChapterId;
     if (!id || !state.mappingState) return null;
     const pair = state.mappingState.pairs.find((p) => p.chapter_id === id);
@@ -382,7 +387,12 @@ export const mapping = {
     );
     if (!bucket?.audioPath) return null;
     const [start, end] = bucket.window ?? [0, bucket.atomDurationSec];
-    return { src: assetUrl(bucket.audioPath), start, end };
+    return {
+      src: assetUrl(bucket.audioPath),
+      type: audioMime(bucket.audioPath),
+      start,
+      end,
+    };
   },
 
   gateContinue(): boolean {
