@@ -61,6 +61,10 @@ pub enum AudioError {
     Io(String),
     #[error("cancelled")]
     Cancelled,
+    #[error("decode: {0}")]
+    Decode(String),
+    #[error("encode: {0}")]
+    Encode(String),
 }
 
 impl From<std::io::Error> for AudioError {
