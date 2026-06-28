@@ -133,9 +133,8 @@ impl AudioDecoder for SymphoniaDecoder {
 }
 
 impl AudioMetadata for SymphoniaMetadata {
-    fn probe_chapters(_path: &Path) -> Result<Vec<crate::core::audio::ChapterAtom>, AudioError> {
-        // Body added in Task 4. Returning empty here keeps callers compilable.
-        Ok(Vec::new())
+    fn probe_chapters(path: &Path) -> Result<Vec<crate::core::audio::ChapterAtom>, AudioError> {
+        super::mp4_chapters::read_chapters(path)
     }
 
     fn probe_duration(path: &Path) -> Result<f64, AudioError> {
@@ -189,5 +188,32 @@ mod tests {
             (total_frames as i32 - 22_050).abs() < 1024,
             "frames {total_frames}"
         );
+    }
+
+    #[test]
+    fn metadata_probe_chapters_matches_mp4_reader() {
+        let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/audio/synth_chapters_generic.m4b");
+        let atoms = SymphoniaMetadata::probe_chapters(&p).expect("probe");
+        assert_eq!(atoms.len(), 3);
+    }
+
+    #[test]
+    fn metadata_probe_chapters_on_wav_returns_empty() {
+        let dir = tempdir().expect("tmp");
+        let p = dir.path().join("silence.wav");
+        let spec = WavSpec {
+            channels: 1,
+            sample_rate: 22_050,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        };
+        let mut w = WavWriter::create(&p, spec).expect("wav writer");
+        for _ in 0..22_050 {
+            w.write_sample(0_i16).expect("write");
+        }
+        w.finalize().expect("finalize");
+        let atoms = SymphoniaMetadata::probe_chapters(&p).expect("probe");
+        assert!(atoms.is_empty());
     }
 }
