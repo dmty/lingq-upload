@@ -9,6 +9,8 @@ pub mod symphonia_impl;
 pub use symphonia_impl::{SymphoniaDecoder, SymphoniaMetadata};
 
 pub mod mp4_chapters;
+pub mod silence;
+pub use silence::detect_silence;
 
 pub trait AudioDecoder: Send {
     fn open(path: &Path) -> Result<Self, AudioError>
