@@ -35,7 +35,7 @@ pub fn set_bundled_binaries(ffmpeg: PathBuf, ffprobe: PathBuf) {
 
 /// Threshold above which |dst - src| seconds is considered a transcode mismatch.
 /// Rationale lives in the shared-context audio-corruption story.
-const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
+pub(crate) const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
 
 /// Truncate captured ffmpeg stderr to keep error payloads bounded for logs / IPC.
 const STDERR_CAPTURE_BYTES: usize = 4 * 1024;

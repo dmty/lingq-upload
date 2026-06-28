@@ -6,10 +6,9 @@ use mp3lame_encoder::{Bitrate, Builder, FlushNoGap, InterleavedPcm, MonoPcm, Qua
 
 use super::{AudioDecoder, PcmFrame, StreamInfo};
 use crate::codecs::symphonia_impl::SymphoniaDecoder;
-use crate::core::audio::{AudioError, EncoderSettings, TranscodeReport};
-
-// Private in core::audio::mod — mirrored locally.
-const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
+use crate::core::audio::{
+    AudioError, EncoderSettings, TranscodeReport, DURATION_DELTA_THRESHOLD_SEC,
+};
 
 /// Encode an interleaved-PCM stream to MP3.
 ///
@@ -129,9 +128,8 @@ fn adapt_frame(
     out_sr: usize,
 ) -> AdaptedFrame {
     // Step 1: channel adapt.
-    let downmixed: Vec<f32> = if in_channels == out_channels {
-        frame.samples.clone()
-    } else if in_channels > 1 && out_channels == 1 {
+    let downmixed: Vec<f32> = if in_channels > 1 && out_channels == 1 {
+        // SIMPLIFY: mono-downmix via explicit averaging; all other cases use generic loop.
         (0..frame.frames)
             .map(|i| {
                 let sum: f32 = (0..in_channels)
@@ -147,7 +145,7 @@ fn adapt_frame(
             })
             .collect()
     } else {
-        // mono → stereo or channel count mismatch: duplicate/clip channels.
+        // Generic loop covers: in == out (copy), mono → stereo (duplicate), and mismatches.
         let mut v = Vec::with_capacity(frame.frames * out_channels);
         for i in 0..frame.frames {
             for c in 0..out_channels {
