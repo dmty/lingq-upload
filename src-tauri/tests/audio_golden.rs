@@ -23,12 +23,6 @@ struct Golden {
     duration_sec_tolerance: f64,
 }
 
-fn probe_full(path: &std::path::Path) -> lingq_upload_lib::codecs::StreamInfo {
-    SymphoniaDecoder::open(path)
-        .expect("probe mp3")
-        .info()
-}
-
 #[tokio::test]
 async fn silence_transcode_matches_golden() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -54,7 +48,7 @@ async fn silence_transcode_matches_golden() {
         report.delta_sec
     );
 
-    let info = probe_full(&dst);
+    let info = SymphoniaDecoder::open(&dst).expect("probe mp3").info();
     assert_eq!(info.codec, golden.codec_name, "codec_name");
     assert_eq!(info.sample_rate, golden.sample_rate, "sample_rate");
     assert_eq!(info.channels as u32, golden.channels, "channels");
