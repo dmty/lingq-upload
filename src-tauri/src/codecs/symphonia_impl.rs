@@ -18,6 +18,8 @@ pub struct SymphoniaDecoder {
     decoder: Box<dyn Decoder>,
     track_id: u32,
     info: StreamInfo,
+    // ponytail: AAC ESDS hides channel-config; first packet reveals it
+    prebuffered: Option<PcmFrame>,
 }
 
 pub struct SymphoniaMetadata;
@@ -38,27 +40,16 @@ impl AudioDecoder for SymphoniaDecoder {
                 &MetadataOptions::default(),
             )
             .map_err(|e| AudioError::Decode(format!("probe: {e}")))?;
-        let reader = probed.format;
+        let mut reader = probed.format;
         let track = reader
             .tracks()
             .iter()
             .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
             .ok_or_else(|| AudioError::Decode("no audio track".into()))?;
         let track_id = track.id;
-        let sample_rate = track
-            .codec_params
-            .sample_rate
-            .ok_or_else(|| AudioError::Decode("missing sample_rate".into()))?;
-        let channels = track
-            .codec_params
-            .channels
-            .map(|c| c.count() as u8)
-            .ok_or_else(|| AudioError::Decode("missing channels".into()))?;
-        let duration_sec = track
-            .codec_params
-            .n_frames
-            .map(|n| n as f64 / sample_rate as f64)
-            .unwrap_or(0.0);
+        let codec_params_sample_rate = track.codec_params.sample_rate;
+        let codec_params_channels = track.codec_params.channels;
+        let codec_params_n_frames = track.codec_params.n_frames;
         let codec_label = match track.codec_params.codec {
             symphonia::core::codecs::CODEC_TYPE_MP3 => "mp3",
             symphonia::core::codecs::CODEC_TYPE_AAC => "aac",
@@ -69,9 +60,43 @@ impl AudioDecoder for SymphoniaDecoder {
             | symphonia::core::codecs::CODEC_TYPE_PCM_F32LE => "wav",
             _ => "unknown",
         };
-        let decoder = symphonia::default::get_codecs()
+        let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|e| AudioError::Decode(format!("decoder init: {e}")))?;
+
+        let (sample_rate, channels, prebuffered) =
+            match (codec_params_sample_rate, codec_params_channels) {
+                (Some(sr), Some(ch)) => (sr, ch.count() as u8, None),
+                _ => {
+                    // Decode the first matching packet to learn spec (AAC ESDS path).
+                    let (spec, first_frame) = loop {
+                        let pkt = reader
+                            .next_packet()
+                            .map_err(|e| AudioError::Decode(format!("packet: {e}")))?;
+                        if pkt.track_id() != track_id {
+                            continue;
+                        }
+                        let decoded = decoder
+                            .decode(&pkt)
+                            .map_err(|e| AudioError::Decode(format!("decode: {e}")))?;
+                        let spec = *decoded.spec();
+                        let mut buf = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
+                        buf.copy_interleaved_ref(decoded);
+                        let frames = buf.samples().len() / (spec.channels.count().max(1));
+                        break (
+                            spec,
+                            PcmFrame { samples: buf.samples().to_vec(), frames },
+                        );
+                    };
+                    let sr = codec_params_sample_rate.unwrap_or(spec.rate);
+                    (sr, spec.channels.count() as u8, Some(first_frame))
+                }
+            };
+
+        let duration_sec = codec_params_n_frames
+            .map(|n| n as f64 / sample_rate as f64)
+            .unwrap_or(0.0);
+
         Ok(Self {
             reader,
             decoder,
@@ -82,6 +107,7 @@ impl AudioDecoder for SymphoniaDecoder {
                 duration_sec,
                 codec: codec_label,
             },
+            prebuffered,
         })
     }
 
@@ -103,6 +129,9 @@ impl AudioDecoder for SymphoniaDecoder {
     }
 
     fn next_frame(&mut self) -> Result<Option<PcmFrame>, AudioError> {
+        if let Some(frame) = self.prebuffered.take() {
+            return Ok(Some(frame));
+        }
         loop {
             let packet = match self.reader.next_packet() {
                 Ok(p) => p,
