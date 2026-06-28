@@ -146,9 +146,8 @@ mod tests {
     use std::path::PathBuf;
 
     fn fixture(name: &str) -> PathBuf {
-        // CARGO_MANIFEST_DIR = src-tauri/; fixtures live one level up.
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/fixtures/audio")
+            .join("tests/fixtures/audio")
             .join(name)
     }
 
