@@ -67,11 +67,7 @@ where
                         silence_start = Some(win_start);
                     }
                 } else if let Some(ss) = silence_start.take() {
-                    let start_ms = (ss as f64 / samples_per_ms).round() as u32;
-                    let end_ms = (win_start as f64 / samples_per_ms).round() as u32;
-                    if end_ms.saturating_sub(start_ms) >= min_ms {
-                        runs.push(SilenceRun { start_ms, end_ms });
-                    }
+                    emit_run_if_long_enough(ss, win_start, samples_per_ms, min_ms, &mut runs);
                 }
             }
         }
@@ -87,25 +83,31 @@ where
             silence_start = Some(win_start);
         } else if !is_silent {
             if let Some(ss) = silence_start.take() {
-                let start_ms = (ss as f64 / samples_per_ms).round() as u32;
-                let end_ms = (win_start as f64 / samples_per_ms).round() as u32;
-                if end_ms.saturating_sub(start_ms) >= min_ms {
-                    runs.push(SilenceRun { start_ms, end_ms });
-                }
+                emit_run_if_long_enough(ss, win_start, samples_per_ms, min_ms, &mut runs);
             }
         }
     }
 
     // Close any run that extends to end-of-stream.
     if let Some(ss) = silence_start {
-        let start_ms = (ss as f64 / samples_per_ms).round() as u32;
-        let end_ms = (sample_pos as f64 / samples_per_ms).round() as u32;
-        if end_ms.saturating_sub(start_ms) >= min_ms {
-            runs.push(SilenceRun { start_ms, end_ms });
-        }
+        emit_run_if_long_enough(ss, sample_pos, samples_per_ms, min_ms, &mut runs);
     }
 
     runs
+}
+
+fn emit_run_if_long_enough(
+    start: usize,
+    end: usize,
+    samples_per_ms: f64,
+    min_ms: u32,
+    runs: &mut Vec<SilenceRun>,
+) {
+    let start_ms = (start as f64 / samples_per_ms).round() as u32;
+    let end_ms = (end as f64 / samples_per_ms).round() as u32;
+    if end_ms.saturating_sub(start_ms) >= min_ms {
+        runs.push(SilenceRun { start_ms, end_ms });
+    }
 }
 
 fn rms_f32(samples: &[f32]) -> f32 {
