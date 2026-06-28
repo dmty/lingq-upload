@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI",
+    sans-serif;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+
+  --color-canvas: #fcfcfa;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f4f3ef;
+  --color-border: #e5e3dc;
+  --color-border-strong: #cdcabf;
+  --color-fg: #1c1b1a;
+  --color-fg-muted: #6b6760;
+  --color-fg-subtle: #94908a;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-soft: #eef2ff;
+  --color-success: #15803d;
+  --color-success-soft: #ecfdf5;
+  --color-warning: #b45309;
+  --color-error: #b91c1c;
+  --color-error-soft: #fef2f2;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 0 rgb(0 0 0 / 0.02);
+}
+
+/* Dark-mode hooks declared but not implemented in this pass. */
+@media (prefers-color-scheme: dark) {
+  /* TODO: dark palette */
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  button {
+    cursor: pointer;
+    font: inherit;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Content-width tiers. `col-form` is a readable measure for single-column
+   forms; `col-wide` fills the window (capped on large monitors) for
+   data-dense and two-pane workspace screens. The shell `<main>` owns the
+   side padding, so these only set the measure. */
+.col-form {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+.col-wide {
+  max-width: 72rem;
+  margin-inline: auto;
+}

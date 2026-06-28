@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v3/zz/collections/my/",
+  "url_query": "page_size=1",
+  "status": 404,
+  "response_body": "{\"detail\":\"Not found.\"}",
+  "response_content_type": "application/json"
+}

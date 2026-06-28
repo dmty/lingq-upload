@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v3/ja/collections/my/",
+  "url_query": "page_size=1",
+  "status": 401,
+  "response_body": "{\"detail\":\"Invalid token.\"}",
+  "response_content_type": "application/json"
+}

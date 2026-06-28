@@ -1,0 +1,9 @@
+{
+  "codec_name": "mp3",
+  "sample_rate": 22050,
+  "channels": 2,
+  "bit_rate_target": 96000,
+  "bit_rate_tolerance_pct": 5,
+  "duration_sec_target": 5.0,
+  "duration_sec_tolerance": 0.1
+}

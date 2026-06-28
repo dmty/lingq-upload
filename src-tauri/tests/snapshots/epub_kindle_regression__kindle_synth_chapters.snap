@@ -1,0 +1,24 @@
+---
+source: tests/epub_kindle_regression.rs
+expression: pinned
+---
+[
+  {
+    "id": "kindle:d3005f1cdf2dcefc",
+    "kind": "body",
+    "order": 0,
+    "title": "Chapter One"
+  },
+  {
+    "id": "kindle:b410e57279a44750",
+    "kind": "body",
+    "order": 1,
+    "title": "Chapter Two"
+  },
+  {
+    "id": "kindle:944dd08c133bef0f",
+    "kind": "body",
+    "order": 2,
+    "title": "Chapter Three"
+  }
+]
