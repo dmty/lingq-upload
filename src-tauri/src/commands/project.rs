@@ -152,13 +152,9 @@ pub async fn chapter_text(
                 .ok_or_else(|| AppError::Other(format!("chapter '{chapter_id}' not found")))
         }
         TextSource::LooseFiles { paths } => {
-            let idx = chapter_id
-                .order_index()
-                .ok_or_else(|| {
-                    AppError::Other(format!(
-                        "chapter id '{chapter_id}' is not order-indexed"
-                    ))
-                })?;
+            let idx = chapter_id.order_index().ok_or_else(|| {
+                AppError::Other(format!("chapter id '{chapter_id}' is not order-indexed"))
+            })?;
             let path = paths
                 .get(idx)
                 .ok_or_else(|| AppError::Other(format!("chapter index {idx} out of range")))?;
@@ -245,10 +241,10 @@ pub fn confirm_mapping_impl(
 #[cfg(test)]
 mod confirm_mapping_tests {
     use super::*;
+    use crate::core::identity::ProjectId;
     use crate::core::matcher::MappingState;
     use crate::core::project::Project;
     use crate::core::store::{InMemoryProjectStore, ProjectStore};
-    use crate::core::identity::ProjectId;
 
     fn seed(store: &dyn ProjectStore, mapping: Option<MappingState>) -> ProjectId {
         let id = ProjectId::from_title_author("Book", "Author");

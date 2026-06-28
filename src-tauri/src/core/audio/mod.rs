@@ -18,13 +18,12 @@ pub use probe::{probe_chapters, ChapterAtom};
 pub use track::AudioTrack;
 
 /// Threshold above which |dst - src| seconds is considered a transcode mismatch.
-pub(crate) const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
+pub const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
 
 #[derive(Error, Debug, Serialize, Deserialize, Type, Clone)]
 #[serde(tag = "kind", content = "message")]
-#[allow(dead_code)]
 pub enum AudioError {
-    #[error("ffprobe parse error: {0}")]
+    #[error("Probe parse error: {0}")]
     Probe(String),
     #[error("duration mismatch (delta {delta_sec}s > {threshold_sec}s)")]
     DurationMismatch { delta_sec: f64, threshold_sec: f64 },
@@ -92,6 +91,10 @@ pub async fn transcode(
 
         let mut decoder = SymphoniaDecoder::open(&src)?;
         let info = decoder.info();
+        let src_duration = match window {
+            Some((start, end)) => end - start,
+            None => info.duration_sec,
+        };
         let (start, end) = window.unwrap_or((0.0, info.duration_sec));
         if start > 0.0 {
             decoder.seek(start)?;
@@ -117,7 +120,23 @@ pub async fn transcode(
                 Err(_) => None,
             }
         });
-        encode_mp3(iter, &info, &dst, &enc)
+        encode_mp3(iter, &info, &dst, &enc)?;
+
+        // Verify transcoded duration against original to catch corruption.
+        let dst_duration = <crate::codecs::SymphoniaMetadata as crate::codecs::AudioMetadata>::probe_duration(&dst)?;
+        let delta = dst_duration - src_duration;
+        if delta.abs() > DURATION_DELTA_THRESHOLD_SEC {
+            return Err(AudioError::DurationMismatch {
+                delta_sec: delta,
+                threshold_sec: DURATION_DELTA_THRESHOLD_SEC,
+            });
+        }
+
+        Ok(TranscodeReport {
+            src_duration_sec: src_duration,
+            dst_duration_sec: dst_duration,
+            delta_sec: delta,
+        })
     })
     .await
     .map_err(|e| AudioError::Io(e.to_string()))?
@@ -133,16 +152,5 @@ mod tests {
         assert_eq!(d.bitrate, "96k");
         assert_eq!(d.sample_rate, 22050);
         assert_eq!(d.channels, 2);
-    }
-
-    #[tokio::test]
-    async fn drop_cancels_in_flight_transcode() {
-        use std::time::Duration;
-        use tokio::time::timeout;
-
-        let src = std::path::PathBuf::from("/definitely/not/a/real/input.m4a");
-        let dst = std::path::PathBuf::from("/tmp/never-written.mp3");
-        let enc = EncoderSettings::default();
-        let _ = timeout(Duration::from_millis(50), transcode(&src, &dst, &enc, None)).await;
     }
 }

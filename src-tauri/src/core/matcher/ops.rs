@@ -216,7 +216,10 @@ fn reassign(
     track_id: TrackId,
 ) -> Result<(), MappingError> {
     let idx = pair_idx(state, &chapter_id)?;
-    let known = state.pairs.iter().any(|p| p.track_id.as_ref() == Some(&track_id))
+    let known = state
+        .pairs
+        .iter()
+        .any(|p| p.track_id.as_ref() == Some(&track_id))
         || state.buckets.iter().any(|b| b.track_id == track_id);
     if !known {
         return Err(MappingError::UnknownTrack(track_id));
@@ -245,7 +248,10 @@ pub fn build_bucket_meta(
     let mut out = Vec::new();
     let mut i = 0;
     while i < pairs.len() {
-        let Some(tid) = pairs[i].track_id.clone() else { i += 1; continue; };
+        let Some(tid) = pairs[i].track_id.clone() else {
+            i += 1;
+            continue;
+        };
         let start = i;
         while i < pairs.len() && pairs[i].track_id.as_ref() == Some(&tid) {
             i += 1;
@@ -257,10 +263,24 @@ pub fn build_bucket_meta(
         let (title, dur, audio_path, window) = track_meta
             .iter()
             .find(|t| t.track_id == tid)
-            .map(|t| (t.title.clone(), t.duration_sec, t.audio_path.clone(), t.window))
+            .map(|t| {
+                (
+                    t.title.clone(),
+                    t.duration_sec,
+                    t.audio_path.clone(),
+                    t.window,
+                )
+            })
             .unwrap_or((None, 0.0, String::new(), None));
         let chars_per_sec = if dur > 0.0 { chars as f64 / dur } else { 0.0 };
-        out.push(BucketMeta { track_id: tid, atom_title: title, atom_duration_sec: dur, chars_per_sec, audio_path, window });
+        out.push(BucketMeta {
+            track_id: tid,
+            atom_title: title,
+            atom_duration_sec: dur,
+            chars_per_sec,
+            audio_path,
+            window,
+        });
     }
     out
 }
@@ -292,7 +312,8 @@ mod tests {
                 { "trackId": "t0", "atomTitle": "Audio 1", "atomDurationSec": 600.0, "charsPerSec": 5.0 }
             ]
         }"#;
-        let state: MappingState = serde_json::from_str(json).expect("legacy bucket deserialization failed");
+        let state: MappingState =
+            serde_json::from_str(json).expect("legacy bucket deserialization failed");
         assert_eq!(state.buckets[0].audio_path, "");
         assert_eq!(state.buckets[0].window, None);
     }
@@ -301,9 +322,27 @@ mod tests {
     fn build_bucket_meta_groups_contiguous_track_ids() {
         use std::collections::HashMap;
         let pairs = vec![
-            MappingPair { chapter_id: cid("c0"), track_id: Some("t0".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
-            MappingPair { chapter_id: cid("c1"), track_id: Some("t0".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
-            MappingPair { chapter_id: cid("c2"), track_id: Some("t1".into()), confidence: 1.0, touched: false, original_confidence: 1.0 },
+            MappingPair {
+                chapter_id: cid("c0"),
+                track_id: Some("t0".into()),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: cid("c1"),
+                track_id: Some("t0".into()),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: cid("c2"),
+                track_id: Some("t1".into()),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
         ];
         let track_meta = vec![
             TrackMeta {

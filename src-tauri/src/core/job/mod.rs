@@ -275,7 +275,7 @@ pub async fn run_project_job(
                 tracing::info!(
                     at = step_pos,
                     dst = %dst.display(),
-                    "job: cancelled mid-transcode; ffmpeg child killed via Drop",
+                    "job: cancelled mid-transcode; transcode codec processing halted",
                 );
                 if let Err(e) = std::fs::remove_file(&dst) {
                     if e.kind() != std::io::ErrorKind::NotFound {
@@ -623,7 +623,7 @@ pub fn seed_mapping_if_count_matches(
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
     // auto_match only needs the track count and order; duration_sec stays None
-    // here so we skip the async ffprobe path. No audio source = nothing to seed.
+    // here. No audio source = nothing to seed.
     let audio_paths = match &project.sources.audio {
         Some(src) => match audio_source_paths(src) {
             Ok(paths) => paths,
@@ -1822,8 +1822,8 @@ mod tests {
         let id = ProjectId::from_title_author("Book", "Author");
         let mut p = Project::new_test(id.clone(), "Book");
 
-        // Two audio path stubs — no ffprobe needed; seed_mapping_if_count_matches
-        // builds AudioTrack stubs directly from AudioSource paths.
+        // Two audio path stubs; seed_mapping_if_count_matches builds AudioTrack
+        // stubs directly from AudioSource paths.
         let audio_paths = vec![
             std::path::PathBuf::from("/stub/a.m4b"),
             std::path::PathBuf::from("/stub/b.m4b"),

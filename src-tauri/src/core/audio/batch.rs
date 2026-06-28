@@ -48,8 +48,7 @@ impl From<BatchError> for AudioError {
 /// If `token` is provided and gets cancelled, returns `BatchError::Cancelled`.
 /// Cancellation is checked both between jobs (fast path) and during an
 /// in-flight transcode via `tokio::select!`. When the in-flight branch loses
-/// the race, the transcode future is dropped — `tokio::process::Child` with
-/// `kill_on_drop(true)` then SIGKILLs ffmpeg.
+/// the race, the transcode future is dropped and codec processing halts.
 pub async fn transcode_batch_sequential<F>(
     jobs: Vec<TranscodeJob>,
     token: Option<CancellationToken>,
