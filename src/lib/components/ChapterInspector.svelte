@@ -36,8 +36,22 @@
 
   function toggle() {
     if (!el) return;
-    if (el.paused) void el.play();
-    else el.pause();
+    if (el.paused) {
+      el.play().catch((err) => {
+        console.warn("inspector audio play() rejected:", err);
+      });
+    } else el.pause();
+  }
+  function onMediaError() {
+    if (!el) return;
+    const e = el.error;
+    console.warn("inspector audio error:", {
+      code: e?.code,
+      message: e?.message,
+      networkState: el.networkState,
+      readyState: el.readyState,
+      src: el.currentSrc,
+    });
   }
   function onPlay() {
     if (
@@ -173,6 +187,7 @@
           onplay={onPlay}
           onpause={onPause}
           ontimeupdate={onTimeUpdate}
+          onerror={onMediaError}
         >
           <source src={audio.src} type={audio.type} />
         </audio>
