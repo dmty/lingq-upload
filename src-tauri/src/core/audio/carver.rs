@@ -7,9 +7,10 @@ use thiserror::Error;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
-use super::{
-    probe_duration, resolve_ffmpeg_bin, AudioError, MAX_STDERR_PARSE_BYTES, STDERR_CAPTURE_BYTES,
-};
+use super::{probe_duration, resolve_ffmpeg_bin, AudioError};
+
+const STDERR_CAPTURE_BYTES: usize = 4 * 1024;
+const MAX_STDERR_PARSE_BYTES: usize = 4 * 1024 * 1024;
 
 /// How a silent chapter-divider is folded into its neighbour tracks.
 ///

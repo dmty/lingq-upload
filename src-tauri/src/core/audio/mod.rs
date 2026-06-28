@@ -1,11 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
-use tokio::process::Command;
 
 pub mod batch;
 pub mod carver;
@@ -20,30 +17,8 @@ pub use carver::{
 pub use probe::{probe_chapters, ChapterAtom};
 pub use track::AudioTrack;
 
-/// Bundled binary paths set at app startup from `app.path().resource_dir()`.
-/// Release builds use these; dev builds fall through to `FFMPEG_BIN` or PATH.
-static BUNDLED_FFMPEG: OnceLock<PathBuf> = OnceLock::new();
-static BUNDLED_FFPROBE: OnceLock<PathBuf> = OnceLock::new();
-
-/// Register the bundled ffmpeg / ffprobe paths. Called once at app startup.
-/// Subsequent calls are ignored.
-#[allow(dead_code)]
-pub fn set_bundled_binaries(ffmpeg: PathBuf, ffprobe: PathBuf) {
-    let _ = BUNDLED_FFMPEG.set(ffmpeg);
-    let _ = BUNDLED_FFPROBE.set(ffprobe);
-}
-
 /// Threshold above which |dst - src| seconds is considered a transcode mismatch.
-/// Rationale lives in the shared-context audio-corruption story.
 pub(crate) const DURATION_DELTA_THRESHOLD_SEC: f64 = 1.0;
-
-/// Truncate captured ffmpeg stderr to keep error payloads bounded for logs / IPC.
-const STDERR_CAPTURE_BYTES: usize = 4 * 1024;
-
-/// Hard cap on stderr buffered for `silencedetect` parsing. A long real-world
-/// audiobook produces well under 1 MiB of detector lines; 4 MiB bounds the
-/// worst case so a pathological ffmpeg log can't exhaust RAM before we parse.
-pub(crate) const MAX_STDERR_PARSE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Error, Debug, Serialize, Deserialize, Type, Clone)]
 #[serde(tag = "kind", content = "message")]
@@ -98,7 +73,7 @@ pub struct TranscodeReport {
 }
 
 /// Resolve the ffmpeg binary path.
-/// Order: `FFMPEG_BIN` env > bundled (set at startup from `resource_dir`) > PATH.
+/// Order: `FFMPEG_BIN` env > PATH.
 pub fn resolve_ffmpeg_bin() -> Result<PathBuf, AudioError> {
     if let Ok(v) = std::env::var("FFMPEG_BIN") {
         let p = PathBuf::from(v);
@@ -107,43 +82,7 @@ pub fn resolve_ffmpeg_bin() -> Result<PathBuf, AudioError> {
         }
         return Ok(p);
     }
-    if let Some(p) = BUNDLED_FFMPEG.get() {
-        if p.exists() {
-            return Ok(p.clone());
-        }
-    }
     Ok(PathBuf::from("ffmpeg"))
-}
-
-/// Resolve ffprobe. Mirrors `resolve_ffmpeg_bin`, with a sibling-of-ffmpeg fallback.
-pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
-    if let Ok(v) = std::env::var("FFPROBE_BIN") {
-        let p = PathBuf::from(v);
-        if !p.exists() {
-            return Err(AudioError::FfmpegNotFound(p.display().to_string()));
-        }
-        return Ok(p);
-    }
-    // If FFMPEG_BIN is set, prefer the sibling ffprobe next to it.
-    if let Ok(v) = std::env::var("FFMPEG_BIN") {
-        let p = PathBuf::from(v);
-        if let Some(parent) = p.parent() {
-            let candidate = parent.join(if cfg!(windows) {
-                "ffprobe.exe"
-            } else {
-                "ffprobe"
-            });
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-        }
-    }
-    if let Some(p) = BUNDLED_FFPROBE.get() {
-        if p.exists() {
-            return Ok(p.clone());
-        }
-    }
-    Ok(PathBuf::from("ffprobe"))
 }
 
 pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {
@@ -161,76 +100,44 @@ pub async fn transcode(
     enc: &EncoderSettings,
     window: Option<(f64, f64)>,
 ) -> Result<TranscodeReport, AudioError> {
-    let src_duration = match window {
-        Some((start, end)) => end - start,
-        None => probe_duration(src).await?,
-    };
+    let src = src.to_path_buf();
+    let dst = dst.to_path_buf();
+    let enc = enc.clone();
+    tokio::task::spawn_blocking(move || {
+        use crate::codecs::mp3_encoder::encode_mp3;
+        use crate::codecs::{symphonia_impl::SymphoniaDecoder, AudioDecoder};
 
-    let bin = resolve_ffmpeg_bin()?;
-    let mut cmd = Command::new(&bin);
-    cmd.args(["-y", "-hide_banner", "-v", "error"]);
-    // Input-side seek + re-encode: m4b containers reject output-side seek
-    // accuracy; ffprobe-reported atom boundaries match input-side -ss/-to.
-    if let Some((start, end)) = window {
-        cmd.args(["-ss", &start.to_string(), "-to", &end.to_string()]);
-    }
-    let output = cmd
-        .arg("-i")
-        .arg(src)
-        .args([
-            "-vn",
-            "-map",
-            "0:a:0",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            &enc.bitrate,
-            "-ar",
-            &enc.sample_rate.to_string(),
-            "-ac",
-            &enc.channels.to_string(),
-        ])
-        .arg(dst)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output()
-        .await
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => AudioError::FfmpegNotFound(bin.display().to_string()),
-            _ => AudioError::Io(e.to_string()),
-        })?;
-
-    if !output.status.success() {
-        let stderr = tail_lossy(&output.stderr, STDERR_CAPTURE_BYTES);
-        return Err(AudioError::FfmpegFailed {
-            status: output.status.code().unwrap_or(-1),
-            stderr,
+        let mut decoder = SymphoniaDecoder::open(&src)?;
+        let info = decoder.info();
+        let (start, end) = window.unwrap_or((0.0, info.duration_sec));
+        if start > 0.0 {
+            decoder.seek(start)?;
+        }
+        let max_frames = ((end - start) * info.sample_rate as f64).max(0.0) as u64;
+        let mut yielded: u64 = 0;
+        let iter = std::iter::from_fn(move || {
+            if yielded >= max_frames {
+                return None;
+            }
+            match decoder.next_frame() {
+                Ok(Some(mut f)) => {
+                    let take = (max_frames - yielded).min(f.frames as u64) as usize;
+                    if take < f.frames {
+                        let ch = info.channels as usize;
+                        f.samples.truncate(take * ch);
+                        f.frames = take;
+                    }
+                    yielded += f.frames as u64;
+                    Some(f)
+                }
+                Ok(None) => None,
+                Err(_) => None,
+            }
         });
-    }
-
-    let dst_duration = probe_duration(dst).await?;
-    let delta = dst_duration - src_duration;
-    if delta.abs() > DURATION_DELTA_THRESHOLD_SEC {
-        return Err(AudioError::DurationMismatch {
-            delta_sec: delta,
-            threshold_sec: DURATION_DELTA_THRESHOLD_SEC,
-        });
-    }
-
-    Ok(TranscodeReport {
-        src_duration_sec: src_duration,
-        dst_duration_sec: dst_duration,
-        delta_sec: delta,
+        encode_mp3(iter, &info, &dst, &enc)
     })
-}
-
-/// Keep only the trailing `max_bytes` of a stderr buffer; lossy-decode to UTF-8.
-/// ffmpeg stderr can be megabytes on verbose builds; we just want the tail.
-fn tail_lossy(buf: &[u8], max_bytes: usize) -> String {
-    let start = buf.len().saturating_sub(max_bytes);
-    String::from_utf8_lossy(&buf[start..]).into_owned()
+    .await
+    .map_err(|e| AudioError::Io(e.to_string()))?
 }
 
 #[cfg(test)]
@@ -245,32 +152,6 @@ mod tests {
         assert_eq!(d.channels, 2);
     }
 
-    #[test]
-    fn ffmpeg_bin_env_override_missing_path_errors() {
-        // SAFETY: tests run single-threaded for this var via #[serial] would be ideal,
-        // but cargo test default is multi-threaded. We only set then restore.
-        let prev = std::env::var("FFMPEG_BIN").ok();
-        std::env::set_var("FFMPEG_BIN", "/definitely/not/a/real/path/ffmpeg");
-        let res = resolve_ffmpeg_bin();
-        match prev {
-            Some(v) => std::env::set_var("FFMPEG_BIN", v),
-            None => std::env::remove_var("FFMPEG_BIN"),
-        }
-        assert!(matches!(res, Err(AudioError::FfmpegNotFound(_))));
-    }
-
-    #[test]
-    fn tail_lossy_truncates() {
-        let buf = vec![b'x'; 10_000];
-        let s = tail_lossy(&buf, 1024);
-        assert_eq!(s.len(), 1024);
-    }
-
-    /// Spawn a transcode against a non-existent input; drop the future early.
-    /// On Unix `kill_on_drop(true)` SIGKILLs the child. We can't portably
-    /// assert no orphans here, but we verify Drop semantics compile and run.
-    /// Windows: tokio uses TerminateProcess; same Drop semantics, just a
-    /// different syscall path.
     #[tokio::test]
     async fn drop_cancels_in_flight_transcode() {
         use std::time::Duration;
@@ -279,10 +160,6 @@ mod tests {
         let src = std::path::PathBuf::from("/definitely/not/a/real/input.m4a");
         let dst = std::path::PathBuf::from("/tmp/never-written.mp3");
         let enc = EncoderSettings::default();
-
-        // Race the future against a tiny timeout; if it returns an error
-        // first (because ffmpeg/ffprobe rejects the input), that's also fine —
-        // the point is the drop path doesn't panic or leak.
         let _ = timeout(Duration::from_millis(50), transcode(&src, &dst, &enc, None)).await;
     }
 }

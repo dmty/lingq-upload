@@ -139,7 +139,6 @@ pub fn run() {
             use std::collections::HashMap;
             use std::sync::{Arc, Mutex};
             use tauri::Manager;
-            register_bundled_audio_binaries(app);
             let root = app
                 .path()
                 .app_data_dir()
@@ -154,35 +153,4 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-/// Resolve the bundled ffmpeg / ffprobe under `resource_dir/ffmpeg/<os>/` and
-/// hand them to the audio module. Layout matches `docs/dev-setup.md`.
-fn register_bundled_audio_binaries(app: &tauri::App) {
-    use tauri::Manager;
-
-    let Ok(resource_dir) = app.path().resource_dir() else {
-        return;
-    };
-    let platform = if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
-        "linux"
-    };
-    let (ffmpeg_name, ffprobe_name) = if cfg!(target_os = "windows") {
-        ("ffmpeg.exe", "ffprobe.exe")
-    } else {
-        ("ffmpeg", "ffprobe")
-    };
-    let base = resource_dir.join("ffmpeg").join(platform);
-    let ffmpeg = base.join(ffmpeg_name);
-    let ffprobe = base.join(ffprobe_name);
-    // Only register bundled paths when both files actually exist. Otherwise the
-    // resolver falls through to FFMPEG_BIN / PATH so a system-installed ffmpeg
-    // is usable until the bundling story (AD-008) lands.
-    if ffmpeg.is_file() && ffprobe.is_file() {
-        core::audio::set_bundled_binaries(ffmpeg, ffprobe);
-    }
 }
