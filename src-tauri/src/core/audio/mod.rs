@@ -147,51 +147,12 @@ pub fn resolve_ffprobe_bin() -> Result<PathBuf, AudioError> {
 }
 
 pub async fn probe_duration(path: &Path) -> Result<f64, AudioError> {
-    let stdout = run_ffprobe(
-        &[
-            "-hide_banner",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=nw=1:nk=1",
-        ],
-        path,
-    )
-    .await?;
-    let s = String::from_utf8_lossy(&stdout);
-    let trimmed = s.trim();
-    trimmed
-        .parse::<f64>()
-        .map_err(|e| AudioError::Probe(format!("expected float, got {trimmed:?}: {e}")))
-}
-
-/// Spawn `ffprobe` with `args + path`, returning stdout on success. Captures
-/// stderr tail into `AudioError::FfmpegFailed` on non-zero exit. Shared by
-/// every ffprobe caller in this module.
-pub(crate) async fn run_ffprobe(args: &[&str], path: &Path) -> Result<Vec<u8>, AudioError> {
-    let bin = resolve_ffprobe_bin()?;
-    let output = Command::new(&bin)
-        .args(args)
-        .arg(path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output()
-        .await
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => AudioError::FfmpegNotFound(bin.display().to_string()),
-            _ => AudioError::Io(e.to_string()),
-        })?;
-    if !output.status.success() {
-        return Err(AudioError::FfmpegFailed {
-            status: output.status.code().unwrap_or(-1),
-            stderr: tail_lossy(&output.stderr, STDERR_CAPTURE_BYTES),
-        });
-    }
-    Ok(output.stdout)
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        <crate::codecs::SymphoniaMetadata as crate::codecs::AudioMetadata>::probe_duration(&path)
+    })
+    .await
+    .map_err(|e| AudioError::Io(e.to_string()))?
 }
 
 pub async fn transcode(
