@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/dmty/lingq-upload/compare/v0.1.1...v0.1.2) (2026-06-28)
+
+
+### Bug Fixes
+
+* **ci:** defer pr-json parse until sync step runs ([76b8bfd](https://github.com/dmty/lingq-upload/commit/76b8bfd34cb8d4fc8c218cc14a585cf6b0893da7))
+
 ## 0.1.1 (2026-06-27)
 
 First release. End-to-end: EPUB + audio → LingQ courses.
