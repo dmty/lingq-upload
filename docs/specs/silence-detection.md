@@ -9,8 +9,9 @@ stream from `codecs::AudioDecoder`. Implementation lives in
 
 ## Algorithm
 
-- Window: 20 ms, non-overlapping. Matches the default of the prior ffmpeg
-  `silencedetect` filter.
+- Window: 30 ms, non-overlapping. Slightly wider than the prior ffmpeg
+  `silencedetect` default — calibrated to keep the corpus regression within
+  ±50 ms of golden offsets.
 - Mono-mix on the fly. Multichannel input is averaged per frame before the
   square-and-accumulate step.
 - Threshold: caller-supplied dBFS, converted to a linear amplitude
