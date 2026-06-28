@@ -18,7 +18,7 @@ pub struct SymphoniaDecoder {
     decoder: Box<dyn Decoder>,
     track_id: u32,
     info: StreamInfo,
-    // ponytail: AAC ESDS hides channel-config; first packet reveals it
+    // SIMPLIFY: AAC ESDS hides channel-config; first packet reveals it
     prebuffered: Option<PcmFrame>,
 }
 
