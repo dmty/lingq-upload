@@ -73,3 +73,4 @@ trybuild = "1"
 sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 hound = "3.5"
+md5 = "0.7"

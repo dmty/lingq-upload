@@ -8,6 +8,7 @@ pub use pcm::{PcmFrame, StreamInfo};
 pub mod symphonia_impl;
 pub use symphonia_impl::{SymphoniaDecoder, SymphoniaMetadata};
 
+pub mod mp3_encoder;
 pub mod mp4_chapters;
 pub mod silence;
 pub use silence::detect_silence;
