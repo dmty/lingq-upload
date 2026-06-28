@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "url_path": "/api/v3/ja/lessons/import/",
+  "url_query": "",
+  "status": 201,
+  "response_body": "{\"title\":\"Chapter 1\",\"collection\":42,\"status\":\"private\"}",
+  "response_content_type": "application/json"
+}

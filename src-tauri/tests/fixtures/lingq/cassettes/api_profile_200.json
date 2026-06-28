@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v2/api-profile/",
+  "url_query": "",
+  "status": 200,
+  "response_body": "{\"username\":\"dmty\",\"email\":\"redacted@example.com\",\"is_premium\":true}",
+  "response_content_type": "application/json"
+}

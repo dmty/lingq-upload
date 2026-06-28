@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": {
+    "content_hash": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "sources": {
+    "text": {
+      "kind": "epub",
+      "value": "/tmp/baseline.epub"
+    },
+    "audio": null,
+    "chapter_manifest": null
+  },
+  "settings": {
+    "language": "ja",
+    "collection_title": "Baseline Book",
+    "level": 1,
+    "tags": []
+  },
+  "receipts": [],
+  "queue_cursor": 0,
+  "completed_lesson_ids": [],
+  "matcher_decision": null,
+  "cover_path": null,
+  "authors": ["Author"],
+  "series": null,
+  "lingq_collection_id": null,
+  "last_activity_at": null,
+  "stage": "new",
+  "last_transition_at": null,
+  "_chapters_for_migration_check": [
+    { "order": 0, "title": "Preface", "body": "Hello." },
+    { "order": 1, "title": "Chapter 1", "body": "Body." }
+  ]
+}

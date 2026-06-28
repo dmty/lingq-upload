@@ -1,0 +1,9 @@
+{
+  "name": "clean_pair_27",
+  "chapters": 27,
+  "tracks": 27,
+  "expected_outcome": "Paired",
+  "expected_condition": null,
+  "expected_options": null,
+  "expected_preselect": null
+}

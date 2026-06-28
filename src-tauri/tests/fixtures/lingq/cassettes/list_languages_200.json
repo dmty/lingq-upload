@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "url_path": "/api/v2/languages/",
+  "url_query": "",
+  "status": 200,
+  "response_body": "[{\"code\":\"en\",\"title\":\"English\",\"known_words\":0},{\"code\":\"fr\",\"title\":\"French\",\"known_words\":100},{\"code\":\"ja\",\"title\":\"Japanese\",\"known_words\":73900},{\"code\":\"ru\",\"title\":\"Russian\",\"known_words\":23472}]",
+  "response_content_type": "application/json"
+}
