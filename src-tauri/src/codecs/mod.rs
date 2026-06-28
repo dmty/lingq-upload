@@ -8,6 +8,8 @@ pub use pcm::{PcmFrame, StreamInfo};
 pub mod symphonia_impl;
 pub use symphonia_impl::{SymphoniaDecoder, SymphoniaMetadata};
 
+pub mod mp4_chapters;
+
 pub trait AudioDecoder: Send {
     fn open(path: &Path) -> Result<Self, AudioError>
     where
