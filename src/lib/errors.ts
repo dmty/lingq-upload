@@ -43,11 +43,10 @@ export function lingqMessage(e: LingqError): string {
 export function audioMessage(e: AudioError): string {
   switch (e.kind) {
     case "Decode":
-      return `Decode error: ${e.message}`;
     case "Encode":
-      return `Encode error: ${e.message}`;
+      return `${e.kind} error: ${e.message}`;
     case "Probe":
-      return `ffprobe: ${e.message}`;
+      return `Probe: ${e.message}`;
     case "DurationMismatch":
       return `Transcode duration mismatch (delta ${e.message.delta_sec}s)`;
     case "Io":
