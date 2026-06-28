@@ -42,10 +42,10 @@ export function lingqMessage(e: LingqError): string {
 
 export function audioMessage(e: AudioError): string {
   switch (e.kind) {
-    case "FfmpegNotFound":
-      return `ffmpeg not found at ${e.message}`;
-    case "FfmpegFailed":
-      return `ffmpeg exited ${e.message.status}: ${e.message.stderr}`;
+    case "Decode":
+      return `Decode error: ${e.message}`;
+    case "Encode":
+      return `Encode error: ${e.message}`;
     case "Probe":
       return `ffprobe: ${e.message}`;
     case "DurationMismatch":

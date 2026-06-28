@@ -5,465 +5,684 @@
 
 /** user-defined commands **/
 
-
 export const commands = {
-async ping() : Promise<Result<string, AppError>> {
+  async ping(): Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("ping") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async startDemoJob() : Promise<Result<string, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("ping") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async startDemoJob(): Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("start_demo_job") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdSaveLingqKey(key: string) : Promise<Result<null, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("start_demo_job") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdSaveLingqKey(key: string): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_save_lingq_key", { key }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdLoadLingqKey() : Promise<Result<string | null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_save_lingq_key", { key }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdLoadLingqKey(): Promise<Result<string | null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_load_lingq_key") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdClearLingqKey() : Promise<Result<null, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_load_lingq_key") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdClearLingqKey(): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_clear_lingq_key") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdGetDevBackend() : Promise<Result<DevBackendInfo, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_clear_lingq_key") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdGetDevBackend(): Promise<Result<DevBackendInfo, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_get_dev_backend") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdSetDevBackend(choice: BackendChoice) : Promise<Result<null, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_get_dev_backend") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdSetDevBackend(
+    choice: BackendChoice,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_set_dev_backend", { choice }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_set_dev_backend", { choice }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async manualSourceFromFiles(
+    epub: string,
+    audio: string,
+    lang: string,
+    title: string | null,
+  ): Promise<Result<Candidate, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Scan a Calibre or Libation library root and return all candidates.
- */
-async cmdIngestScan(source: LibrarySource, root: string) : Promise<Result<Candidate[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("manual_source_from_files", {
+          epub,
+          audio,
+          lang,
+          title,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Scan a Calibre or Libation library root and return all candidates.
+   */
+  async cmdIngestScan(
+    source: LibrarySource,
+    root: string,
+  ): Promise<Result<Candidate[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_ingest_scan", { source, root }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Expand a dropped directory into the ordered list of top-level audio files
- * it contains. Non-recursive; extensions `m4b` / `m4a` / `mp3` (case-insens).
- * Sorted by natural order on the file name so "1, 2, 10" reads as 1, 2, 10
- * rather than 1, 10, 2.
- */
-async cmdExpandAudioDir(dirPath: string) : Promise<Result<string[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_ingest_scan", { source, root }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Expand a dropped directory into the ordered list of top-level audio files
+   * it contains. Non-recursive; extensions `m4b` / `m4a` / `mp3` (case-insens).
+   * Sorted by natural order on the file name so "1, 2, 10" reads as 1, 2, 10
+   * rather than 1, 10, 2.
+   */
+  async cmdExpandAudioDir(
+    dirPath: string,
+  ): Promise<Result<string[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_expand_audio_dir", { dirPath }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdAccountProfile() : Promise<Result<AccountProfile, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_expand_audio_dir", { dirPath }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdAccountProfile(): Promise<Result<AccountProfile, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_account_profile") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the caller's enrolled languages. With a username we get the
- * user-trimmed catalogue (matches the browser extension); without one we
- * fall back to the full catalogue and let the UI filter by known_words.
- */
-async cmdListLanguages(username: string | null) : Promise<Result<Language[], AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_account_profile") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Returns the caller's enrolled languages. With a username we get the
+   * user-trimmed catalogue (matches the browser extension); without one we
+   * fall back to the full catalogue and let the UI filter by known_words.
+   */
+  async cmdListLanguages(
+    username: string | null,
+  ): Promise<Result<Language[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_list_languages", { username }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdListCollections(lang: string) : Promise<Result<Collection[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_list_languages", { username }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdListCollections(
+    lang: string,
+  ): Promise<Result<Collection[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_list_collections", { lang }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : Promise<Result<UploadResult, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_list_collections", { lang }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async uploadOneShot(
+    candidate: Candidate,
+    collectionId: number,
+    lang: string,
+  ): Promise<Result<UploadResult, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("upload_one_shot", { candidate, collectionId, lang }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * List the library. Always rebuilds from the shared `ProjectStore` and
- * rewrites `library.index.json` as a cold-start cache. Threads the in-flight
- * `JobCancelMap` so each entry's `status` reflects whether a job is running.
- */
-async cmdLibraryList() : Promise<Result<LibraryIndex, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("upload_one_shot", {
+          candidate,
+          collectionId,
+          lang,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * List the library. Always rebuilds from the shared `ProjectStore` and
+   * rewrites `library.index.json` as a cold-start cache. Threads the in-flight
+   * `JobCancelMap` so each entry's `status` reflects whether a job is running.
+   */
+  async cmdLibraryList(): Promise<Result<LibraryIndex, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_library_list") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdTrashProject(projectId: ProjectId) : Promise<Result<TrashEntry, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_library_list") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdTrashProject(
+    projectId: ProjectId,
+  ): Promise<Result<TrashEntry, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_trash_project", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdListTrash() : Promise<Result<TrashEntry[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_trash_project", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdListTrash(): Promise<Result<TrashEntry[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_list_trash") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdRestoreProject(trashId: string) : Promise<Result<null, AppError>> {
+      return { status: "ok", data: await TAURI_INVOKE("cmd_list_trash") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdRestoreProject(trashId: string): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_restore_project", { trashId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cmdPurgeProject(trashId: string) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_restore_project", { trashId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async cmdPurgeProject(trashId: string): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_purge_project", { trashId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Persist a Candidate as a Project. Returns `Created` with the stable
- * `ProjectId`, or `Conflict { existing, conflict_title }` if a project
- * with the derived id already exists. On conflict no write occurs — the
- * caller resolves via `cmd_create_project_with_resolution`.
- */
-async cmdCreateProject(candidate: Candidate, language: string, collectionTitle: string) : Promise<Result<CreateProjectResult, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_purge_project", { trashId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Persist a Candidate as a Project. Returns `Created` with the stable
+   * `ProjectId`, or `Conflict { existing, conflict_title }` if a project
+   * with the derived id already exists. On conflict no write occurs — the
+   * caller resolves via `cmd_create_project_with_resolution`.
+   */
+  async cmdCreateProject(
+    candidate: Candidate,
+    language: string,
+    collectionTitle: string,
+  ): Promise<Result<CreateProjectResult, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_create_project", { candidate, language, collectionTitle }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Resolve a create-project conflict by user choice.
- * 
- * - `Replace` overwrites the existing project at the conflict id.
- * - `Skip` returns the conflict id directly without re-reading the store
- * (the conflict was already detected in `cmd_create_project`; a second
- * `store.get` would race against a delete).
- * - `NewProject` mutates the candidate's *title* and re-derives the id
- * until it lands on an unused content hash. The id is hashed from
- * `candidate.title + authors[0]`, so mutating `collection_title` alone
- * keeps the hash constant and loops forever — append `" (copy)"` to
- * `candidate.title` instead, capped at `MAX_COPY_ATTEMPTS`.
- */
-async cmdCreateProjectWithResolution(candidate: Candidate, language: string, collectionTitle: string, resolution: ConflictResolution) : Promise<Result<ProjectId, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_create_project", {
+          candidate,
+          language,
+          collectionTitle,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Resolve a create-project conflict by user choice.
+   *
+   * - `Replace` overwrites the existing project at the conflict id.
+   * - `Skip` returns the conflict id directly without re-reading the store
+   * (the conflict was already detected in `cmd_create_project`; a second
+   * `store.get` would race against a delete).
+   * - `NewProject` mutates the candidate's *title* and re-derives the id
+   * until it lands on an unused content hash. The id is hashed from
+   * `candidate.title + authors[0]`, so mutating `collection_title` alone
+   * keeps the hash constant and loops forever — append `" (copy)"` to
+   * `candidate.title` instead, capped at `MAX_COPY_ATTEMPTS`.
+   */
+  async cmdCreateProjectWithResolution(
+    candidate: Candidate,
+    language: string,
+    collectionTitle: string,
+    resolution: ConflictResolution,
+  ): Promise<Result<ProjectId, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_create_project_with_resolution", { candidate, language, collectionTitle, resolution }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Record the user's matcher decision and seed the initial mapping-grid
- * state so the review step has pairs to render.
- */
-async cmdMatcherResolve(projectId: ProjectId, condition: MismatchCondition, response: MismatchResponse, chapterCount: number, trackCount: number) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_create_project_with_resolution", {
+          candidate,
+          language,
+          collectionTitle,
+          resolution,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Record the user's matcher decision and seed the initial mapping-grid
+   * state so the review step has pairs to render.
+   */
+  async cmdMatcherResolve(
+    projectId: ProjectId,
+    condition: MismatchCondition,
+    response: MismatchResponse,
+    chapterCount: number,
+    trackCount: number,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_matcher_resolve", { projectId, condition, response, chapterCount, trackCount }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Re-probe a project parked in `needs_match` and return the resolve payload.
- * 
- * Used by the Resolve UI when the user enters from the Library (no live job
- * event to consume). Returns `None` when the project pairs cleanly or has
- * already been resolved.
- */
-async cmdMatcherInspect(projectId: ProjectId) : Promise<Result<MismatchInspection | null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_matcher_resolve", {
+          projectId,
+          condition,
+          response,
+          chapterCount,
+          trackCount,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Re-probe a project parked in `needs_match` and return the resolve payload.
+   *
+   * Used by the Resolve UI when the user enters from the Library (no live job
+   * event to consume). Returns `None` when the project pairs cleanly or has
+   * already been resolved.
+   */
+  async cmdMatcherInspect(
+    projectId: ProjectId,
+  ): Promise<Result<MismatchInspection | null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_matcher_inspect", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Replace the project's audio source before any chapter has been uploaded.
- * 
- * Rejects when `receipts` is non-empty (the upload pipeline has already
- * written to LingQ — reshaping audio mid-flight is out of scope here) and
- * when the new source resolves to zero usable files. On success, clears
- * `matcher_decision` and `mapping`: both were seeded against the prior
- * track count and would mis-render after the swap.
- */
-async cmdReplaceAudioSource(projectId: ProjectId, audioSource: AudioSource) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_matcher_inspect", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Replace the project's audio source before any chapter has been uploaded.
+   *
+   * Rejects when `receipts` is non-empty (the upload pipeline has already
+   * written to LingQ — reshaping audio mid-flight is out of scope here) and
+   * when the new source resolves to zero usable files. On success, clears
+   * `matcher_decision` and `mapping`: both were seeded against the prior
+   * track count and would mis-render after the swap.
+   */
+  async cmdReplaceAudioSource(
+    projectId: ProjectId,
+    audioSource: AudioSource,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_replace_audio_source", { projectId, audioSource }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Seed the mapping-grid state for a count-match project that has not run a
- * job yet. Idempotent — no-op when `matcher_decision` or `mapping` is already
- * set. Accepts a join-key so the /match page can call it without a prior
- * `cmd_project_load` round-trip.
- */
-async cmdSeedMapping(key: string) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_replace_audio_source", {
+          projectId,
+          audioSource,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Seed the mapping-grid state for a count-match project that has not run a
+   * job yet. Idempotent — no-op when `matcher_decision` or `mapping` is already
+   * set. Accepts a join-key so the /match page can call it without a prior
+   * `cmd_project_load` round-trip.
+   */
+  async cmdSeedMapping(key: string): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_seed_mapping", { key }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Apply a single mapping-editor op to a project and persist the new state.
- * 
- * The store performs the load → gate → apply → put cycle under its
- * per-project write lock so concurrent callers cannot interleave their RMW
- * windows. Stale-op and `MappingError` discriminants survive intact onto the
- * IPC boundary; UI may match on `MappingError::UnknownChapter` /
- * `MappingError::UnknownTrack` / stale-op without parsing prose.
- */
-async cmdApplyMappingOp(projectId: ProjectId, op: MappingOp, expectedOpId: number) : Promise<Result<MappingState, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_seed_mapping", { key }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Apply a single mapping-editor op to a project and persist the new state.
+   *
+   * The store performs the load → gate → apply → put cycle under its
+   * per-project write lock so concurrent callers cannot interleave their RMW
+   * windows. Stale-op and `MappingError` discriminants survive intact onto the
+   * IPC boundary; UI may match on `MappingError::UnknownChapter` /
+   * `MappingError::UnknownTrack` / stale-op without parsing prose.
+   */
+  async cmdApplyMappingOp(
+    projectId: ProjectId,
+    op: MappingOp,
+    expectedOpId: number,
+  ): Promise<Result<MappingState, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_apply_mapping_op", { projectId, op, expectedOpId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Load a persisted project by its `join_key`.
- * 
- * The frontend reaches Match and Run routes with a stringified key in the URL
- * (e.g. `asin:B0...`, `isbn13:978...`, `uuid:...`, `ch:<hex>`). This command
- * resolves that key back to the full [`Project`] so the UI can render
- * receipts, settings, and rebuild a ProjectId for typed downstream commands
- * (notably `cmd_matcher_resolve`).
- */
-async cmdProjectLoad(key: string) : Promise<Result<Project, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_apply_mapping_op", {
+          projectId,
+          op,
+          expectedOpId,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Load a persisted project by its `join_key`.
+   *
+   * The frontend reaches Match and Run routes with a stringified key in the URL
+   * (e.g. `asin:B0...`, `isbn13:978...`, `uuid:...`, `ch:<hex>`). This command
+   * resolves that key back to the full [`Project`] so the UI can render
+   * receipts, settings, and rebuild a ProjectId for typed downstream commands
+   * (notably `cmd_matcher_resolve`).
+   */
+  async cmdProjectLoad(key: string): Promise<Result<Project, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_project_load", { key }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * List the parsed chapters of a project's text source so the picker can
- * render rows. Re-parses on each call — the picker is short-lived UI so
- * the cost is acceptable; a future iteration may cache.
- */
-async cmdProjectChapters(projectId: ProjectId) : Promise<Result<ChapterMeta[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_project_load", { key }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * List the parsed chapters of a project's text source so the picker can
+   * render rows. Re-parses on each call — the picker is short-lived UI so
+   * the cost is acceptable; a future iteration may cache.
+   */
+  async cmdProjectChapters(
+    projectId: ProjectId,
+  ): Promise<Result<ChapterMeta[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_project_chapters", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Return one chapter's body on demand. The list projection (`ChapterMeta`) is
- * body-less; callers fetch full text only when they need to inspect it.
- */
-async cmdChapterText(projectId: ProjectId, chapterId: ChapterId) : Promise<Result<string, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_project_chapters", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Return one chapter's body on demand. The list projection (`ChapterMeta`) is
+   * body-less; callers fetch full text only when they need to inspect it.
+   */
+  async cmdChapterText(
+    projectId: ProjectId,
+    chapterId: ChapterId,
+  ): Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_chapter_text", { projectId, chapterId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Replace the project's skipped-chapter set wholesale.
- * 
- * The picker UI debounces user edits and flushes the resulting selection
- * here. `ProjectStore::set_selection` is atomic per AD-022.
- */
-async cmdSetSelection(projectId: ProjectId, skippedIds: ChapterId[]) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_chapter_text", { projectId, chapterId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Replace the project's skipped-chapter set wholesale.
+   *
+   * The picker UI debounces user edits and flushes the resulting selection
+   * here. `ProjectStore::set_selection` is atomic per AD-022.
+   */
+  async cmdSetSelection(
+    projectId: ProjectId,
+    skippedIds: ChapterId[],
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_set_selection", { projectId, skippedIds }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Persist the chapter-divider absorb policy for a project.
- */
-async cmdSetAbsorbPolicy(projectId: ProjectId, policy: AbsorbPolicy) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_set_selection", {
+          projectId,
+          skippedIds,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Persist the chapter-divider absorb policy for a project.
+   */
+  async cmdSetAbsorbPolicy(
+    projectId: ProjectId,
+    policy: AbsorbPolicy,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_set_absorb_policy", { projectId, policy }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Persist a user-chosen cover image path for a project. Display only — the
- * cover is never uploaded to LingQ. The frontend renders it via
- * `convertFileSrc(cover_path)`.
- */
-async cmdSetCover(projectId: ProjectId, coverPath: string) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_set_absorb_policy", {
+          projectId,
+          policy,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Persist a user-chosen cover image path for a project. Display only — the
+   * cover is never uploaded to LingQ. The frontend renders it via
+   * `convertFileSrc(cover_path)`.
+   */
+  async cmdSetCover(
+    projectId: ProjectId,
+    coverPath: string,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_set_cover", { projectId, coverPath }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Mark the chapter↔track mapping as user-confirmed. Sets
- * `confirmed_at = Some(Utc::now())`. Idempotent — re-confirming
- * overwrites the timestamp.
- */
-async cmdConfirmMapping(projectId: ProjectId) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_set_cover", { projectId, coverPath }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Mark the chapter↔track mapping as user-confirmed. Sets
+   * `confirmed_at = Some(Utc::now())`. Idempotent — re-confirming
+   * overwrites the timestamp.
+   */
+  async cmdConfirmMapping(
+    projectId: ProjectId,
+  ): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_confirm_mapping", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Start an end-to-end project job. Returns immediately with the new job id;
- * the actual work runs on the tokio runtime and streams `JobEvent`s.
- */
-async cmdStartProjectJob(projectId: ProjectId) : Promise<Result<string, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_confirm_mapping", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Start an end-to-end project job. Returns immediately with the new job id;
+   * the actual work runs on the tokio runtime and streams `JobEvent`s.
+   */
+  async cmdStartProjectJob(
+    projectId: ProjectId,
+  ): Promise<Result<string, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_start_project_job", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Signal cancellation for a previously started job. No-op if the job has
- * already finished and the token was reaped.
- */
-async cmdCancelJob(jobId: string) : Promise<Result<null, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_start_project_job", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Signal cancellation for a previously started job. No-op if the job has
+   * already finished and the token was reaped.
+   */
+  async cmdCancelJob(jobId: string): Promise<Result<null, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_cancel_job", { jobId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Signal cancellation for every active job whose project id matches. Lets the
- * Run screen cancel without first knowing the server-issued `job_id` — the
- * jobless start-race window and post-reload state both lose that handle.
- */
-async cmdProjectCancel(projectId: ProjectId) : Promise<Result<number, AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_cancel_job", { jobId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Signal cancellation for every active job whose project id matches. Lets the
+   * Run screen cancel without first knowing the server-issued `job_id` — the
+   * jobless start-race window and post-reload state both lose that handle.
+   */
+  async cmdProjectCancel(
+    projectId: ProjectId,
+  ): Promise<Result<number, AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_project_cancel", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Replay persisted receipts so the Run screen can render already-uploaded
- * chapters as green chips immediately on cold rehydration, without re-running
- * the job.
- */
-async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[], AppError>> {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_project_cancel", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Replay persisted receipts so the Run screen can render already-uploaded
+   * chapters as green chips immediately on cold rehydration, without re-running
+   * the job.
+   */
+  async cmdReplayReceipts(
+    projectId: ProjectId,
+  ): Promise<Result<ReceiptSnapshot[], AppError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cmd_replay_receipts", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-}
-}
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_replay_receipts", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+};
 
 /** user-defined events **/
 
-
-
 /** user-defined constants **/
-
-
 
 /** user-defined types **/
 
 /**
  * How a silent chapter-divider is folded into its neighbour tracks.
- * 
+ *
  * `Forward` is the legacy behaviour and the default for newly created
  * projects: every cut lands at the END of the silent run, so the silence
  * glues onto the NEXT chapter. `Backward` cuts at the START of the silence
  * (silence stays with the PREVIOUS chapter). `Drop` emits a paired (start,
  * end) so the silent run is excised from both sides.
  */
-export type AbsorbPolicy = "forward" | "backward" | "drop"
-export type AccountProfile = { username: string }
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Other"; message: string }
-export type AudioError = { kind: "FfmpegNotFound"; message: string } | { kind: "FfmpegFailed"; message: { status: number; stderr: string } } | { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" }
-export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
+export type AbsorbPolicy = "forward" | "backward" | "drop";
+export type AccountProfile = { username: string };
+export type AppError =
+  | { kind: "Io"; message: string }
+  | { kind: "Internal"; message: string }
+  | { kind: "MissingApiKey" }
+  | { kind: "Unsupported"; message: string }
+  | { kind: "Secrets"; message: SecretError }
+  | { kind: "Text"; message: TextError }
+  | { kind: "Audio"; message: AudioError }
+  | { kind: "Lingq"; message: LingqError }
+  | { kind: "Ingest"; message: IngestError }
+  | { kind: "Mapping"; message: MappingError }
+  | { kind: "MappingStaleOp"; message: { server: number; expected: number } }
+  | { kind: "Other"; message: string };
+export type AudioError =
+  | { kind: "Decode"; message: string }
+  | { kind: "Encode"; message: string }
+  | { kind: "Probe"; message: string }
+  | {
+      kind: "DurationMismatch";
+      message: { delta_sec: number; threshold_sec: number };
+    }
+  | { kind: "Io"; message: string }
+  | { kind: "Cancelled" };
+export type AudioSource =
+  | { kind: "single_file"; value: string }
+  | { kind: "folder"; value: string }
+  | { kind: "libation_manifest"; value: string }
+  | { kind: "multiple_files"; value: string[] };
 /**
  * Which backend the secrets layer uses. In release builds the choice is
  * fixed to `Keychain`; the variant exists in the type so the IPC surface
  * stays the same across debug/release.
  */
-export type BackendChoice = "file" | "keychain"
-export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurationSec: number; charsPerSec: number; audioPath?: string; window?: [number, number] | null }
+export type BackendChoice = "file" | "keychain";
+export type BucketMeta = {
+  trackId: string;
+  atomTitle: string | null;
+  atomDurationSec: number;
+  charsPerSec: number;
+  audioPath?: string;
+  window?: [number, number] | null;
+};
 /**
  * Read-only preview row for the Mismatch UI's `SplitProportional` card.
  * One row per audio atom: text-chapter index range that the proportional
@@ -473,211 +692,447 @@ export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurati
  * narrator skips or extra material at the boundary. See AD-023 and
  * `docs/specs/m4b-chapters.md`.
  */
-export type BucketPreview = { textRangeStart: number; textRangeEnd: number; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
-export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
-export type Chapter = { order: number; title: string; body: string; id?: ChapterId; kind?: ChapterKind }
-export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
+export type BucketPreview = {
+  textRangeStart: number;
+  textRangeEnd: number;
+  atomTitle: string | null;
+  atomDurationSec: number;
+  charsPerSec: number;
+};
+export type Candidate = {
+  source_id: string;
+  title: string;
+  authors: string[];
+  language: string | null;
+  series: SeriesRef | null;
+  cover_path: string | null;
+  text_source: TextSource;
+  audio_source: AudioSource | null;
+  chapter_manifest: ChapterManifest | null;
+  metadata_extras: Partial<{ [key in string]: JsonValue }>;
+};
+export type Chapter = {
+  order: number;
+  title: string;
+  body: string;
+  id?: ChapterId;
+  kind?: ChapterKind;
+};
+export type ChapterEntry = {
+  title: string;
+  start_sec: number;
+  end_sec: number | null;
+};
 /**
  * Stable identity for a parsed chapter.
- * 
+ *
  * EPUB parsers build the id via [`ChapterId::from_chapter_parts`] so the same
  * EPUB bytes produce the same id set across runs. Non-EPUB ingest paths
  * (loose files, manifests) fall back to [`ChapterId::from_order`] — those
  * chapter sets are anchored by file system layout, not a heading strategy.
  */
-export type ChapterId = string
+export type ChapterId = string;
 /**
  * Position of a chapter within a project's text.
- * 
+ *
  * Tagged by the heading strategy at parse time. `Body` is the default;
  * `FrontMatter` / `BackMatter` flag preface / epilogue chapters so the UI
  * can preselect them as skipped.
  */
-export type ChapterKind = "body" | "front_matter" | "back_matter"
-export type ChapterManifest = { chapters: ChapterEntry[] }
+export type ChapterKind = "body" | "front_matter" | "back_matter";
+export type ChapterManifest = { chapters: ChapterEntry[] };
 /**
  * Picker-facing projection of [`Chapter`] without the body. Picker rows only
  * need identity + label + kind; shipping the body over IPC would cost tens
  * of MB on book-length inputs.
  */
-export type ChapterMeta = { id: ChapterId; order: number; title: string; kind: ChapterKind }
-export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
-export type Collection = { id: number; title: string }
-export type ConflictResolution = "replace" | "skip" | "new_project"
-export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
+export type ChapterMeta = {
+  id: ChapterId;
+  order: number;
+  title: string;
+  kind: ChapterKind;
+};
+export type ChapterReceipt = {
+  chapter_index: number;
+  track_index?: number | null;
+  lesson_id?: number | null;
+  degraded?: boolean;
+  uploaded_at?: string | null;
+};
+export type Collection = { id: number; title: string };
+export type ConflictResolution = "replace" | "skip" | "new_project";
+export type CreateProjectResult =
+  | { status: "created"; id: ProjectId }
+  | { status: "conflict"; existing: ProjectId; conflict_title: string };
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
  * hide the toggle in release builds; `env_override` flags when the choice
  * is forced by the `LINGQ_USE_REAL_KEYCHAIN` env var.
  */
-export type DevBackendInfo = { is_debug: boolean; current: BackendChoice; env_override: boolean }
-export type EpubVendor = "kindle" | "kobo" | "generic"
-export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy?: EpubVendor | null } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
-/**
- * Emitted when the orchestrator can't auto-pair chapters and tracks
- * and needs the user to pick a [`MismatchResponse`]. Terminal: once
- * emitted no further events fire for this job — the UI navigates to
- * `/match`, the user resolves, and the next job kicks off fresh.
- */
-{ kind: "NeedsMatch"; job_id: string; title: string; chapters: number; tracks: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview?: BucketPreview[] | null }
-export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
-export type Language = { code: string; title: string; known_words: number }
-export type LessonOpts = { level: string; status: string; tags: string; save: string }
-export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; status?: LibraryStatus; failed_reason?: string | null }
-export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
+export type DevBackendInfo = {
+  is_debug: boolean;
+  current: BackendChoice;
+  env_override: boolean;
+};
+export type EpubVendor = "kindle" | "kobo" | "generic";
+export type IngestError =
+  | { kind: "NotSupported" }
+  | { kind: "Io"; message: string }
+  | { kind: "Parse"; message: string }
+  | { kind: "Other"; message: string };
+export type JobEvent =
+  | {
+      kind: "Started";
+      job_id: string;
+      stage: Stage;
+      strategy?: EpubVendor | null;
+    }
+  | { kind: "StageChanged"; job_id: string; stage: Stage }
+  | { kind: "Progress"; job_id: string; pct: number; message: string | null }
+  | { kind: "Log"; job_id: string; level: LogLevel; message: string }
+  | {
+      kind: "ChapterDone";
+      job_id: string;
+      chapter_index: number;
+      lesson_id: number;
+      degraded: boolean;
+    }
+  | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue }
+  | { kind: "Cancelled"; job_id: string }
+  /**
+   * Emitted when the orchestrator can't auto-pair chapters and tracks
+   * and needs the user to pick a [`MismatchResponse`]. Terminal: once
+   * emitted no further events fire for this job — the UI navigates to
+   * `/match`, the user resolves, and the next job kicks off fresh.
+   */
+  | {
+      kind: "NeedsMatch";
+      job_id: string;
+      title: string;
+      chapters: number;
+      tracks: number;
+      condition: MismatchCondition;
+      options: MismatchResponse[];
+      preselect: MismatchResponse;
+      bucket_preview?: BucketPreview[] | null;
+    };
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | Partial<{ [key in string]: JsonValue }>;
+export type Language = { code: string; title: string; known_words: number };
+export type LessonOpts = {
+  level: string;
+  status: string;
+  tags: string;
+  save: string;
+};
+export type LibraryEntry = {
+  id: ProjectId;
+  title: string;
+  language: string;
+  completed_lesson_count: number;
+  receipt_count: number;
+  mtime: string | null;
+  cover_path?: string | null;
+  authors?: string[];
+  series?: SeriesRef | null;
+  lingq_collection_id?: number | null;
+  last_activity_at?: string | null;
+  status?: LibraryStatus;
+  failed_reason?: string | null;
+};
+export type LibraryIndex = {
+  schema_version: number;
+  generated_at: string;
+  entries: LibraryEntry[];
+};
 /**
  * Bookshelf source for `cmd_ingest_scan`. Modelled as an enum so specta
  * emits a TS union and the frontend can't pass a misspelled string.
  */
-export type LibrarySource = "calibre" | "libation"
-export type LibraryStatus = "done" | "running" | "paused" | "needs_match" | "failed" | "idle"
-export type LingqError = { kind: "Unauthorized" } | { kind: "NotFound" } | { kind: "BadRequest"; message: string } | { kind: "Server"; message: string } | { kind: "Schema"; message: string } | { kind: "Transport"; message: string } | { kind: "Io"; message: string }
-export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
-export type MappingError = { kind: "UnknownChapter"; message: string } | { kind: "UnknownTrack"; message: string } | { kind: "Invalid"; message: string }
-export type MappingOp = { kind: "swap"; chapter_id: ChapterId; track_id: string } | { kind: "park"; track_id: string } | { kind: "unpark"; track_id: string; chapter_id: ChapterId } | { kind: "reassign"; chapter_id: ChapterId; track_id: string }
-export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; confidence: number; touched?: boolean; 
-/**
- * Confidence at pair construction. The score gate blocks Continue when
- * the original score is red AND the pair is still untouched, even if
- * `confidence` was bumped to the recomputed placeholder by an op.
- */
-original_confidence?: number }
-export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number; buckets?: BucketMeta[] }
-export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
-export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
+export type LibrarySource = "calibre" | "libation";
+export type LibraryStatus =
+  | "done"
+  | "running"
+  | "paused"
+  | "needs_match"
+  | "failed"
+  | "idle";
+export type LingqError =
+  | { kind: "Unauthorized" }
+  | { kind: "NotFound" }
+  | { kind: "BadRequest"; message: string }
+  | { kind: "Server"; message: string }
+  | { kind: "Schema"; message: string }
+  | { kind: "Transport"; message: string }
+  | { kind: "Io"; message: string };
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+export type MappingError =
+  | { kind: "UnknownChapter"; message: string }
+  | { kind: "UnknownTrack"; message: string }
+  | { kind: "Invalid"; message: string };
+export type MappingOp =
+  | { kind: "swap"; chapter_id: ChapterId; track_id: string }
+  | { kind: "park"; track_id: string }
+  | { kind: "unpark"; track_id: string; chapter_id: ChapterId }
+  | { kind: "reassign"; chapter_id: ChapterId; track_id: string };
+export type MappingPair = {
+  chapter_id: ChapterId;
+  track_id?: string | null;
+  confidence: number;
+  touched?: boolean;
+  /**
+   * Confidence at pair construction. The score gate blocks Continue when
+   * the original score is red AND the pair is still untouched, even if
+   * `confidence` was bumped to the recomputed placeholder by an op.
+   */
+  original_confidence?: number;
+};
+export type MappingState = {
+  pairs: MappingPair[];
+  parking_lot?: string[];
+  op_id?: number;
+  buckets?: BucketMeta[];
+};
+export type MatcherDecision = {
+  condition: MismatchCondition;
+  response: MismatchResponse;
+  chapter_count: number;
+  track_count: number;
+  user_overrode?: boolean;
+  decided_at: string;
+};
+export type MismatchCondition =
+  | "one_to_many"
+  | "many_to_one"
+  | "many_to_few"
+  | "count_off"
+  | "unalignable"
+  | "unknown";
 /**
  * Re-derived mismatch payload for a project parked in `needs_match`.
- * 
+ *
  * Mirrors the `NeedsMatch` job event so the Resolve UI can hydrate from a
  * cold reload without replaying the upload job.
  */
-export type MismatchInspection = { title: string; chapter_count: number; track_count: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview: BucketPreview[] | null }
-export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
-export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
-/**
- * Chapter ids the user opted out of uploading. Replaced wholesale
- * by `ProjectStore::set_selection`. A chapter already uploaded
- * (carries a `lesson_id` in `receipts`) is not retroactively deleted
- * from LingQ when added here — selection only gates not-yet-uploaded
- * chapters in the run loop.
- */
-skipped_chapters?: ChapterId[]; 
-/**
- * How chapter-divider silence is folded into neighbouring tracks at
- * carve time. Default `Forward` preserves legacy behaviour.
- */
-absorb_policy?: AbsorbPolicy; 
-/**
- * Persisted state of the two-column mapping editor: the chapter↔track
- * pairing, the parking lot of unpaired tracks, and a monotonic op_id.
- * The store rejects an op whose `expected_op_id != op_id + 1`
- * (`MappingStaleOp`), so a reloaded or duplicated submission re-syncs
- * from this state instead of double-applying.
- */
-mapping?: MappingState | null; confirmed_at?: string | null }
+export type MismatchInspection = {
+  title: string;
+  chapter_count: number;
+  track_count: number;
+  condition: MismatchCondition;
+  options: MismatchResponse[];
+  preselect: MismatchResponse;
+  bucket_preview: BucketPreview[] | null;
+};
+export type MismatchResponse =
+  | "pair_accept"
+  | "pair_drop"
+  | "single_lesson"
+  | "split_proportional"
+  | "cancel"
+  | "unknown";
+export type Project = {
+  schema_version?: number;
+  id: ProjectId;
+  sources: ProjectSources;
+  settings: ProjectSettings;
+  receipts?: ChapterReceipt[];
+  queue_cursor?: number;
+  completed_lesson_ids?: number[];
+  matcher_decision?: MatcherDecision | null;
+  cover_path?: string | null;
+  authors?: string[];
+  series?: SeriesRef | null;
+  lingq_collection_id?: number | null;
+  last_activity_at?: string | null;
+  stage?: ProjectStage;
+  last_transition_at?: string | null;
+  /**
+   * Chapter ids the user opted out of uploading. Replaced wholesale
+   * by `ProjectStore::set_selection`. A chapter already uploaded
+   * (carries a `lesson_id` in `receipts`) is not retroactively deleted
+   * from LingQ when added here — selection only gates not-yet-uploaded
+   * chapters in the run loop.
+   */
+  skipped_chapters?: ChapterId[];
+  /**
+   * How chapter-divider silence is folded into neighbouring tracks at
+   * carve time. Default `Forward` preserves legacy behaviour.
+   */
+  absorb_policy?: AbsorbPolicy;
+  /**
+   * Persisted state of the two-column mapping editor: the chapter↔track
+   * pairing, the parking lot of unpaired tracks, and a monotonic op_id.
+   * The store rejects an op whose `expected_op_id != op_id + 1`
+   * (`MappingStaleOp`), so a reloaded or duplicated submission re-syncs
+   * from this state instead of double-applying.
+   */
+  mapping?: MappingState | null;
+  confirmed_at?: string | null;
+};
 /**
  * Canonical project identity (AD-021).
- * 
+ *
  * `content_hash` is the always-present fallback. Strong keys
  * (`audible_asin` / `isbn13` / `calibre_uuid`) supply higher-confidence
  * joins when available across sources.
  */
-export type ProjectId = { content_hash: string; audible_asin?: string | null; isbn13?: string | null; calibre_uuid?: string | null }
-export type ProjectSettings = { language: string; collection_title: string; level?: number; tags?: string[] }
-export type ProjectSources = { text: TextSource; audio?: AudioSource | null; chapter_manifest?: ChapterManifest | null }
+export type ProjectId = {
+  content_hash: string;
+  audible_asin?: string | null;
+  isbn13?: string | null;
+  calibre_uuid?: string | null;
+};
+export type ProjectSettings = {
+  language: string;
+  collection_title: string;
+  level?: number;
+  tags?: string[];
+};
+export type ProjectSources = {
+  text: TextSource;
+  audio?: AudioSource | null;
+  chapter_manifest?: ChapterManifest | null;
+};
 /**
  * Persisted lifecycle stage of a Project. Monotonic — see `Project::advance`.
- * 
+ *
  * Distinct from `events::Stage`, which is the verb of an in-flight job
  * (transcoding, uploading, parsing). The two enums are non-interchangeable.
  */
-export type ProjectStage = "new" | "parsed" | "mapped" | 
-/**
- * Reserved slot between Mapped and Uploaded. The current orchestrator
- * interleaves transcode + upload per chapter and jumps Mapped → Done at
- * end-of-loop. This variant lights up when the carver introduces a
- * distinct pre-upload transcode pass.
- */
-"transcoded" | "uploaded" | "done"
-export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null; confirmed_at?: string | null }
+export type ProjectStage =
+  | "new"
+  | "parsed"
+  | "mapped"
+  /**
+   * Reserved slot between Mapped and Uploaded. The current orchestrator
+   * interleaves transcode + upload per chapter and jumps Mapped → Done at
+   * end-of-loop. This variant lights up when the carver introduces a
+   * distinct pre-upload transcode pass.
+   */
+  | "transcoded"
+  | "uploaded"
+  | "done";
+export type ProjectSummary = {
+  id: ProjectId;
+  title: string;
+  language: string;
+  receipt_count: number;
+  completed_lesson_count: number;
+  cover_path?: string | null;
+  authors?: string[];
+  series?: SeriesRef | null;
+  lingq_collection_id?: number | null;
+  last_activity_at?: string | null;
+  queue_cursor?: number;
+  has_matcher_decision?: boolean;
+  has_audio_source?: boolean;
+  last_receipt_degraded?: boolean;
+  chapter_manifest_len?: number | null;
+  confirmed_at?: string | null;
+};
 /**
  * Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
  * rehydration. Includes only the fields the Run screen needs to render chips.
  */
-export type ReceiptSnapshot = { chapter_index: number; lesson_id: number | null; degraded: boolean; uploaded_at: string | null }
+export type ReceiptSnapshot = {
+  chapter_index: number;
+  lesson_id: number | null;
+  degraded: boolean;
+  uploaded_at: string | null;
+};
 /**
  * Errors raised by the secrets layer, lifted from the keyring backend.
- * 
+ *
  * Variants are intentionally coarse: the UI surfaces them as distinct
  * messages and `Backend(_)` is the catch-all so platform churn doesn't
  * break the contract.
  */
-export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | { kind: "MissingEntry" } | { kind: "Backend"; message: string }
-export type SeriesRef = { name: string; index: number | null }
-export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
-export type TextError = { kind: "Io"; message: string }
-export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
-export type TrashEntry = { trash_id: string; project_id: ProjectId; title: string; language: string; trashed_at: string }
-export type UploadResult = { lesson_id: number; lesson_url: string }
-export type WhoAmI = { ok: boolean }
+export type SecretError =
+  | { kind: "LockedKeychain" }
+  | { kind: "UserDenied" }
+  | { kind: "MissingEntry" }
+  | { kind: "Backend"; message: string };
+export type SeriesRef = { name: string; index: number | null };
+export type Stage =
+  | { kind: "transcoding" }
+  | { kind: "uploading" }
+  | { kind: "parsing" };
+export type TextError = { kind: "Io"; message: string };
+export type TextSource =
+  | { kind: "epub"; value: string }
+  | { kind: "loose_files"; value: { paths: string[] } }
+  | { kind: "missing" };
+export type TrashEntry = {
+  trash_id: string;
+  project_id: ProjectId;
+  title: string;
+  language: string;
+  trashed_at: string;
+};
+export type UploadResult = { lesson_id: number; lesson_url: string };
+export type WhoAmI = { ok: boolean };
 
 /** tauri-specta globals **/
 
 import {
-	invoke as TAURI_INVOKE,
-	Channel as TAURI_CHANNEL,
+  invoke as TAURI_INVOKE,
+  Channel as TAURI_CHANNEL,
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
-	listen: (
-		cb: TAURI_API_EVENT.EventCallback<T>,
-	) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
-	once: (
-		cb: TAURI_API_EVENT.EventCallback<T>,
-	) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-	emit: null extends T
-		? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
-		: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
+  listen: (
+    cb: TAURI_API_EVENT.EventCallback<T>,
+  ) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
+  once: (
+    cb: TAURI_API_EVENT.EventCallback<T>,
+  ) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
+  emit: null extends T
+    ? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
+    : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
 export type Result<T, E> =
-	| { status: "ok"; data: T }
-	| { status: "error"; error: E };
+  | { status: "ok"; data: T }
+  | { status: "error"; error: E };
 
 function __makeEvents__<T extends Record<string, any>>(
-	mappings: Record<keyof T, string>,
+  mappings: Record<keyof T, string>,
 ) {
-	return new Proxy(
-		{} as unknown as {
-			[K in keyof T]: __EventObj__<T[K]> & {
-				(handle: __WebviewWindow__): __EventObj__<T[K]>;
-			};
-		},
-		{
-			get: (_, event) => {
-				const name = mappings[event as keyof T];
+  return new Proxy(
+    {} as unknown as {
+      [K in keyof T]: __EventObj__<T[K]> & {
+        (handle: __WebviewWindow__): __EventObj__<T[K]>;
+      };
+    },
+    {
+      get: (_, event) => {
+        const name = mappings[event as keyof T];
 
-				return new Proxy((() => {}) as any, {
-					apply: (_, __, [window]: [__WebviewWindow__]) => ({
-						listen: (arg: any) => window.listen(name, arg),
-						once: (arg: any) => window.once(name, arg),
-						emit: (arg: any) => window.emit(name, arg),
-					}),
-					get: (_, command: keyof __EventObj__<any>) => {
-						switch (command) {
-							case "listen":
-								return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-							case "once":
-								return (arg: any) => TAURI_API_EVENT.once(name, arg);
-							case "emit":
-								return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-						}
-					},
-				});
-			},
-		},
-	);
+        return new Proxy((() => {}) as any, {
+          apply: (_, __, [window]: [__WebviewWindow__]) => ({
+            listen: (arg: any) => window.listen(name, arg),
+            once: (arg: any) => window.once(name, arg),
+            emit: (arg: any) => window.emit(name, arg),
+          }),
+          get: (_, command: keyof __EventObj__<any>) => {
+            switch (command) {
+              case "listen":
+                return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+              case "once":
+                return (arg: any) => TAURI_API_EVENT.once(name, arg);
+              case "emit":
+                return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+            }
+          },
+        });
+      },
+    },
+  );
 }
