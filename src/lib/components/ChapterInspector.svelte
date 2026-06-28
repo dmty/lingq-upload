@@ -34,8 +34,22 @@
     cur = 0;
   });
 
+  function snap(tag: string) {
+    if (!el) return;
+    console.log("inspector audio " + tag, {
+      currentSrc: el.currentSrc,
+      readyState: el.readyState,
+      networkState: el.networkState,
+      duration: el.duration,
+      currentTime: el.currentTime,
+      paused: el.paused,
+      muted: el.muted,
+      volume: el.volume,
+    });
+  }
   function toggle() {
     if (!el) return;
+    snap("toggle pre");
     if (el.paused) {
       // Seek into the window BEFORE play(); mutating currentTime mid-play
       // aborts the play() promise with AbortError on WebKit.
@@ -190,6 +204,11 @@
           onpause={onPause}
           ontimeupdate={onTimeUpdate}
           onerror={onMediaError}
+          onloadedmetadata={() => snap("loadedmetadata")}
+          oncanplay={() => snap("canplay")}
+          onstalled={() => snap("stalled")}
+          onwaiting={() => snap("waiting")}
+          onseeked={() => snap("seeked")}
         >
           <source src={audio.src} type={audio.type} />
         </audio>
