@@ -84,24 +84,72 @@
     let n = 0;
     return chapters
       .filter((c) => !skipped.has(c.id))
-      .map((c) => ({ chapter: c, pair: pairByCh.get(c.id) ?? null, number: ++n }));
+      .map((c) => ({
+        chapter: c,
+        pair: pairByCh.get(c.id) ?? null,
+        number: ++n,
+      }));
   });
 
-  type BandRow = { chapter: ChapterMeta; pair: (typeof rows)[number]["pair"]; number: number };
-  type Band = { trackId: string | null; meta: BucketMeta | null; rows: BandRow[] };
+  type BandRow = {
+    chapter: ChapterMeta;
+    pair: (typeof rows)[number]["pair"];
+    number: number;
+  };
+  type Band = {
+    trackId: string | null;
+    meta: BucketMeta | null;
+    rows: BandRow[];
+  };
 
-  // Contiguous bands by track_id, joined to bucket metadata.
+  // Bands render in canonical audio order — one band per known track, filled
+  // or empty. A bucket emptied by Reassign or Remove keeps its slot so the
+  // audio stays visible (backend ships it as an audio-only degraded lesson)
+  // and adjacent ↑/↓ can re-fill it. Parked buckets are hidden — the
+  // ParkingLot UI owns them. Unpaired chapters (track_id=null) form a
+  // trailing band. Track order follows the `buckets` array; any track only
+  // referenced by pairs (fixtures without seeded buckets) appends after.
   const bands = $derived.by(() => {
-    const metaByTrack = new Map(buckets.map((b) => [b.trackId, b]));
-    const out: Band[] = [];
+    const rowsByTrack = new Map<string, BandRow[]>();
+    const unpaired: BandRow[] = [];
     for (const r of rows) {
       const tid = r.pair?.track_id ?? null;
-      const last = out[out.length - 1];
-      if (last && last.trackId === tid) {
-        last.rows.push(r);
+      if (tid == null) {
+        unpaired.push(r);
       } else {
-        out.push({ trackId: tid, meta: tid ? (metaByTrack.get(tid) ?? null) : null, rows: [r] });
+        const list = rowsByTrack.get(tid);
+        if (list) list.push(r);
+        else rowsByTrack.set(tid, [r]);
       }
+    }
+    const metaByTrack = new Map(buckets.map((b) => [b.trackId, b]));
+    const parked = new Set(mappingState?.parking_lot ?? []);
+    const trackOrder: string[] = [];
+    const seen = new Set<string>();
+    for (const b of buckets) {
+      if (!seen.has(b.trackId)) {
+        trackOrder.push(b.trackId);
+        seen.add(b.trackId);
+      }
+    }
+    for (const r of rows) {
+      const tid = r.pair?.track_id;
+      if (tid && !seen.has(tid)) {
+        trackOrder.push(tid);
+        seen.add(tid);
+      }
+    }
+    const out: Band[] = [];
+    for (const tid of trackOrder) {
+      if (parked.has(tid)) continue;
+      out.push({
+        trackId: tid,
+        meta: metaByTrack.get(tid) ?? null,
+        rows: rowsByTrack.get(tid) ?? [],
+      });
+    }
+    if (unpaired.length > 0) {
+      out.push({ trackId: null, meta: null, rows: unpaired });
     }
     return out;
   });
@@ -165,39 +213,49 @@
   const driftMedian = $derived(median(buckets.map((b) => b.charsPerSec)));
 
   function isDrift(cps: number): boolean {
-    return driftMedian > 0 && cps > 0 && Math.abs(cps - driftMedian) / driftMedian > 0.3;
+    return (
+      driftMedian > 0 &&
+      cps > 0 &&
+      Math.abs(cps - driftMedian) / driftMedian > 0.3
+    );
   }
 </script>
 
 <div data-testid="mapping-grid" class="flex w-full flex-col gap-2">
   {#each bands as band, i (`band-${i}-${band.trackId ?? "unpaired"}`)}
-    <section data-testid="mapping-bucket-band" class="overflow-hidden rounded-md border border-border bg-surface">
+    <section
+      data-testid="mapping-bucket-band"
+      class="overflow-hidden rounded-md border border-border bg-surface"
+    >
       {#if band.meta}
         <header
           data-testid="bucket-band-meta"
           class="flex items-center gap-2 border-b border-border bg-surface-sunken px-3 py-1.5 text-xs"
         >
           <span class="font-medium text-fg">
-            {band.meta.atomTitle ?? "Audio"} · {fmtDur(band.meta.atomDurationSec)}
+            {band.meta.atomTitle ?? "Audio"} · {fmtDur(
+              band.meta.atomDurationSec,
+            )}
           </span>
           {#if isDrift(band.meta.charsPerSec)}
             <span
               data-testid="bucket-drift"
               title="chars/sec deviates >±30% from the median — the narrator may have added or skipped material here."
               class="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
-            >drift</span>
+              >drift</span
+            >
           {/if}
         </header>
       {/if}
       <ul role="listbox" aria-label="Chapter rows">
         {#each band.rows as row, rowIdx (row.chapter.id)}
           {@const pair = row.pair}
-          {@const displayConf = pair?.original_confidence ?? pair?.confidence ?? 0}
+          {@const displayConf =
+            pair?.original_confidence ?? pair?.confidence ?? 0}
           {@const confBand = pair ? confidenceBand(displayConf) : null}
           {@const touched = pair?.touched ?? false}
           {@const isSingleton = band.rows.length === 1}
-          {@const upTrack =
-            rowIdx === 0 && i > 0 ? bands[i - 1].trackId : null}
+          {@const upTrack = rowIdx === 0 && i > 0 ? bands[i - 1].trackId : null}
           {@const downTrack =
             rowIdx === band.rows.length - 1 && i < bands.length - 1
               ? bands[i + 1].trackId
@@ -219,7 +277,8 @@
               <span
                 data-testid="chapter-number"
                 class="w-6 shrink-0 text-right text-xs tabular-nums text-fg-muted"
-              >{row.number}</span>
+                >{row.number}</span
+              >
               <span class="flex-1 truncate text-fg">{row.chapter.title}</span>
               {#if pair && isSingleton && confBand}
                 <span
@@ -242,33 +301,33 @@
                   Confirm
                 </button>
               {/if}
-              {#if band.trackId && upTrack}
+              {#if upTrack}
                 <button
                   type="button"
                   data-testid="chapter-move-up"
                   data-chapter-id={row.chapter.id}
                   aria-label={`Move ${row.chapter.title} up to the previous audio`}
                   class="leading-none text-fg-subtle transition hover:text-accent"
-                  onclick={() => onMove(row.chapter.id, upTrack!)}
-                >↑</button>
+                  onclick={() => onMove(row.chapter.id, upTrack!)}>↑</button
+                >
               {/if}
-              {#if band.trackId && downTrack}
+              {#if downTrack}
                 <button
                   type="button"
                   data-testid="chapter-move-down"
                   data-chapter-id={row.chapter.id}
                   aria-label={`Move ${row.chapter.title} down to the next audio`}
                   class="leading-none text-fg-subtle transition hover:text-accent"
-                  onclick={() => onMove(row.chapter.id, downTrack!)}
-                >↓</button>
+                  onclick={() => onMove(row.chapter.id, downTrack!)}>↓</button
+                >
               {/if}
               <button
                 type="button"
                 data-testid="chapter-remove"
                 aria-label={`Remove ${row.chapter.title}`}
                 class="text-fg-subtle hover:text-error"
-                onclick={() => onRemove(row.chapter.id)}
-              >×</button>
+                onclick={() => onRemove(row.chapter.id)}>×</button
+              >
             </div>
           </li>
         {/each}
@@ -281,22 +340,25 @@
       data-testid="removed-strip"
       class="rounded-md border border-dashed border-border-strong px-3 py-2 text-xs text-fg-muted"
     >
-      Removed ({removedChapters.length}): {removedChapters.map((c) => c.title).join(" · ")}
+      Removed ({removedChapters.length}): {removedChapters
+        .map((c) => c.title)
+        .join(" · ")}
       <button
         type="button"
         data-testid="removed-undo"
         class="ml-2 text-accent"
-        onclick={() => onUndoRemove()}
-      >undo</button>
+        onclick={() => onUndoRemove()}>undo</button
+      >
     </div>
   {/if}
 
   <ParkingLot
     parked={mappingState?.parking_lot ?? []}
-    unpairedChapterIds={unpairedChapterIds}
-    chapterTitleById={chapterTitleById}
+    {unpairedChapterIds}
+    {chapterTitleById}
     onPark={(tid) => onOp({ kind: "park", track_id: tid })}
-    onUnpark={(tid, cid) => onOp({ kind: "unpark", track_id: tid, chapter_id: cid })}
+    onUnpark={(tid, cid) =>
+      onOp({ kind: "unpark", track_id: tid, chapter_id: cid })}
   />
 
   <footer
