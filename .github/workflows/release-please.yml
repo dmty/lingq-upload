@@ -43,9 +43,10 @@ jobs:
         if: steps.release.outputs.pr != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           set -euo pipefail
+          BRANCH=$(echo "$PR_JSON" | jq -r '.headBranchName')
           git config --global user.name "lingq-upload-release-please[bot]"
           git config --global user.email "297390800+lingq-upload-release-please[bot]@users.noreply.github.com"
           git clone --branch "$BRANCH" --depth 1 \
