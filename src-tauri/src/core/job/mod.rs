@@ -831,6 +831,15 @@ fn plan_from_mapping(
 ) -> PlanOrPause {
     let mut steps: Vec<Step> = Vec::new();
     let mut used_tracks: std::collections::HashSet<TrackId> = std::collections::HashSet::new();
+    // Tracks paired with ANY chapter in the persisted mapping — including
+    // chapters that were skipped after pairing. A skipped chapter still
+    // claims its track, so the track must not fall through to an audio-only
+    // degraded upload below.
+    let claimed_tracks: std::collections::HashSet<TrackId> = mapping
+        .pairs
+        .iter()
+        .filter_map(|p| p.track_id.clone())
+        .collect();
     let mut i = 0;
     while i < chapters.len() {
         let Some(pair) = mapping
@@ -880,10 +889,14 @@ fn plan_from_mapping(
             });
         }
     }
-    // Tracks referenced by nothing and not parked -> audio-only degraded.
+    // Tracks referenced by no pair (including pairs to skipped chapters)
+    // and not parked -> audio-only degraded.
     for (k, track) in tracks.iter().enumerate() {
         let tid = track_id_for(track);
-        if used_tracks.contains(&tid) || mapping.parking_lot.contains(&tid) {
+        if used_tracks.contains(&tid)
+            || claimed_tracks.contains(&tid)
+            || mapping.parking_lot.contains(&tid)
+        {
             continue;
         }
         steps.push(Step {
