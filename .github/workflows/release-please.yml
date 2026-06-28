@@ -49,7 +49,9 @@ jobs:
           BRANCH=$(echo "$PR_JSON" | jq -r '.headBranchName')
           git config --global user.name "lingq-upload-release-please[bot]"
           git config --global user.email "297390800+lingq-upload-release-please[bot]@users.noreply.github.com"
-          git clone --branch "$BRANCH" --depth 1 \
+          # depth 2 (not 1) so `git commit --amend` can copy the parent ref;
+          # a depth-1 shallow clone makes amend produce an orphan commit.
+          git clone --branch "$BRANCH" --depth 2 \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pr-branch
           cd pr-branch
           NEW_VERSION=$(awk -F'"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)
