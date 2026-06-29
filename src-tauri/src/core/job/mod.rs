@@ -21,7 +21,7 @@ use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
     MatchOutcome, MismatchCondition, MismatchResponse,
 };
-use crate::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectStage};
+use crate::core::project::{filter_cover_chapter, ChapterReceipt, MatcherDecision, Project, ProjectStage};
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
@@ -119,7 +119,7 @@ pub async fn run_project_job(
         }
     };
     let chapters = match resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy) {
-        Ok(c) => c,
+        Ok(c) => filter_cover_chapter(c, project.cover_source_href.as_deref()),
         Err(e) => {
             sink.result(false, serde_json::json!({"error": e.to_string()}));
             return Err(e);
@@ -606,7 +606,10 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
     // Same vendor autodetect as the run, so chapter ids and counts can't
     // disagree between inspection and the actual upload.
     let (epub_bytes, strategy) = epub_inputs(project);
-    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let all_chapters = filter_cover_chapter(
+        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
+        project.cover_source_href.as_deref(),
+    );
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
     match build_plan(project, &chapters, &tracks, all_chapters.len()) {
@@ -642,7 +645,10 @@ pub fn seed_mapping_if_count_matches(
         return Ok(());
     }
     let (epub_bytes, strategy) = epub_inputs(&project);
-    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let all_chapters = filter_cover_chapter(
+        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
+        project.cover_source_href.as_deref(),
+    );
     let skipped: std::collections::HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
@@ -695,7 +701,10 @@ pub async fn seed_mapping_for_response(
     }
     let tracks = resolve_audio_tracks(project).await?;
     let (epub_bytes, strategy) = epub_inputs(project);
-    let all_chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let all_chapters = filter_cover_chapter(
+        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
+        project.cover_source_href.as_deref(),
+    );
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
     if chapters.is_empty() || tracks.is_empty() {

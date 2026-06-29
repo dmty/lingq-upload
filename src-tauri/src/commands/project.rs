@@ -6,7 +6,7 @@ use specta::Type;
 use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
-use crate::core::project::Project;
+use crate::core::project::{filter_cover_chapter, Project};
 use crate::core::store::{ProjectStore, StoreError};
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
@@ -90,14 +90,23 @@ pub async fn cmd_project_chapters(
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
     project_id: ProjectId,
 ) -> Result<Vec<ChapterMeta>, AppError> {
+    project_chapters_impl(&**store, &project_id)
+}
+
+/// Tauri-agnostic core used by [`cmd_project_chapters`] and integration tests.
+pub fn project_chapters_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<Vec<ChapterMeta>, AppError> {
     let project = store
-        .get(&project_id)
+        .get(project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     match &project.sources.text {
         TextSource::Epub(path) => {
             let chapters =
                 parse_epub(path).map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
+            let chapters = filter_cover_chapter(chapters, project.cover_source_href.as_deref());
             Ok(chapters.into_iter().map(ChapterMeta::from).collect())
         }
         TextSource::LooseFiles { paths } => Ok(paths
@@ -145,6 +154,7 @@ pub async fn chapter_text(
         TextSource::Epub(path) => {
             let chapters =
                 parse_epub(path).map_err(|e| AppError::Other(format!("parse_epub: {e}")))?;
+            let chapters = filter_cover_chapter(chapters, project.cover_source_href.as_deref());
             chapters
                 .into_iter()
                 .find(|c| &c.id == chapter_id)
