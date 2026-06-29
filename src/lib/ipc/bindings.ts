@@ -475,7 +475,13 @@ export type BucketMeta = { trackId: string; atomTitle: string | null; atomDurati
  */
 export type BucketPreview = { textRangeStart: number; textRangeEnd: number; atomTitle: string | null; atomDurationSec: number; charsPerSec: number }
 export type Candidate = { source_id: string; title: string; authors: string[]; language: string | null; series: SeriesRef | null; cover_path: string | null; text_source: TextSource; audio_source: AudioSource | null; chapter_manifest: ChapterManifest | null; metadata_extras: Partial<{ [key in string]: JsonValue }> }
-export type Chapter = { order: number; title: string; body: string; id?: ChapterId; kind?: ChapterKind }
+export type Chapter = { order: number; title: string; body: string; id?: ChapterId; kind?: ChapterKind; 
+/**
+ * Spine href of the XHTML document that produced this chapter.
+ * Empty string when the parser does not track spine positions
+ * (loose-file and manifest ingest paths).
+ */
+spine_href?: string }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 /**
  * Stable identity for a parsed chapter.
@@ -575,7 +581,25 @@ absorb_policy?: AbsorbPolicy;
  * (`MappingStaleOp`), so a reloaded or duplicated submission re-syncs
  * from this state instead of double-applying.
  */
-mapping?: MappingState | null; confirmed_at?: string | null }
+mapping?: MappingState | null; confirmed_at?: string | null; 
+/**
+ * User toggle: when true, the project's cover image is pushed to the
+ * LingQ collection on the next lesson upload. Default true.
+ */
+cover_use?: boolean; 
+/**
+ * Set once after a successful LingQ image PATCH so subsequent uploads
+ * skip the cover request. Reset to false whenever `cover_path` is
+ * updated via `cmd_set_cover`.
+ */
+cover_uploaded_to_lingq?: boolean; 
+/**
+ * Spine href of the XHTML page that hosted the extracted cover image,
+ * when known. Used by `filter_cover_chapter` to suppress the cover
+ * page from the chapter list. None for user-supplied covers or
+ * filename-heuristic extractions.
+ */
+cover_source_href?: string | null }
 /**
  * Canonical project identity (AD-021).
  * 

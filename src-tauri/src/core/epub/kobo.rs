@@ -171,6 +171,7 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
             body: g.body,
             id,
             kind,
+            spine_href: g.spine_href,
         });
     }
     Ok(chapters)

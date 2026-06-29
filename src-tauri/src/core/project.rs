@@ -142,6 +142,25 @@ pub struct Project {
     pub mapping: Option<MappingState>,
     #[serde(default)]
     pub confirmed_at: Option<DateTime<Utc>>,
+    /// User toggle: when true, the project's cover image is pushed to the
+    /// LingQ collection on the next lesson upload. Default true.
+    #[serde(default = "default_cover_use")]
+    pub cover_use: bool,
+    /// Set once after a successful LingQ image PATCH so subsequent uploads
+    /// skip the cover request. Reset to false whenever `cover_path` is
+    /// updated via `cmd_set_cover`.
+    #[serde(default)]
+    pub cover_uploaded_to_lingq: bool,
+    /// Spine href of the XHTML page that hosted the extracted cover image,
+    /// when known. Used by `filter_cover_chapter` to suppress the cover
+    /// page from the chapter list. None for user-supplied covers or
+    /// filename-heuristic extractions.
+    #[serde(default)]
+    pub cover_source_href: Option<String>,
+}
+
+fn default_cover_use() -> bool {
+    true
 }
 
 impl Project {
@@ -180,6 +199,9 @@ impl Project {
             absorb_policy: AbsorbPolicy::default(),
             mapping: None,
             confirmed_at: None,
+            cover_use: true,
+            cover_uploaded_to_lingq: false,
+            cover_source_href: None,
         }
     }
 
@@ -260,6 +282,69 @@ impl From<&Project> for ProjectSummary {
                 .map(|m| m.chapters.len()),
             confirmed_at: p.confirmed_at,
         }
+    }
+}
+
+/// Drop the chapter whose `spine_href` matches `cover_source_href`, if any.
+/// No-op when the project has no recorded cover host (`None`) or when no
+/// chapter matches (stale href after a re-parse).
+pub fn filter_cover_chapter(
+    chapters: Vec<crate::core::epub::Chapter>,
+    cover_source_href: Option<&str>,
+) -> Vec<crate::core::epub::Chapter> {
+    let Some(href) = cover_source_href else {
+        return chapters;
+    };
+    chapters
+        .into_iter()
+        .filter(|c| c.spine_href != href)
+        .collect()
+}
+
+#[cfg(test)]
+mod project_cover_tests {
+    use super::*;
+    use crate::core::epub::{Chapter, ChapterId, ChapterKind};
+
+    #[test]
+    fn filter_cover_chapter_drops_matching_spine_href() {
+        let chapters = vec![
+            Chapter {
+                id: ChapterId::from_chapter_parts("k", "cover.xhtml", "Cover"),
+                title: "Cover".into(),
+                body: "body".into(),
+                spine_href: "cover.xhtml".into(),
+                kind: ChapterKind::Body,
+                ..Default::default()
+            },
+            Chapter {
+                id: ChapterId::from_chapter_parts("k", "ch1.xhtml", "Ch 1"),
+                title: "Ch 1".into(),
+                body: "body".into(),
+                spine_href: "ch1.xhtml".into(),
+                kind: ChapterKind::Body,
+                ..Default::default()
+            },
+        ];
+        let out = filter_cover_chapter(chapters.clone(), Some("cover.xhtml"));
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].spine_href, "ch1.xhtml");
+
+        let unchanged = filter_cover_chapter(chapters.clone(), None);
+        assert_eq!(unchanged.len(), 2);
+
+        let no_match = filter_cover_chapter(chapters, Some("does-not-exist.xhtml"));
+        assert_eq!(no_match.len(), 2);
+    }
+
+    #[test]
+    fn project_defaults_for_new_cover_fields() {
+        // Round-trip via JSON to confirm #[serde(default)] holds for legacy rows.
+        let json = r#"{"schema_version":1,"id":{"content_hash":"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"},"sources":{"text":{"kind":"epub","value":"/tmp/x.epub"}},"settings":{"language":"ja","collection_title":"t","level":1,"tags":[]}}"#;
+        let p: Project = serde_json::from_str(json).unwrap();
+        assert!(p.cover_use);
+        assert!(!p.cover_uploaded_to_lingq);
+        assert!(p.cover_source_href.is_none());
     }
 }
 

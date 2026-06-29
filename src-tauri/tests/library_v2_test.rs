@@ -46,6 +46,9 @@ fn make_project(title: &str) -> Project {
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     }
 }
 

@@ -53,6 +53,9 @@ fn make_loose_project(dir: &std::path::Path, chapter_count: usize) -> Project {
         absorb_policy: Default::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     }
 }
 

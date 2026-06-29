@@ -47,6 +47,9 @@ fn make_project_with_mapping(state: MappingState) -> Project {
         absorb_policy: Default::default(),
         mapping: Some(state),
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     }
 }
 

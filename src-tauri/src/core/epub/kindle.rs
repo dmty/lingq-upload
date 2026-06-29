@@ -72,6 +72,7 @@ pub fn parse_from_zip<R: std::io::Read + std::io::Seek>(
             title: g.title,
             body: g.body,
             id,
+            spine_href: g.spine_href,
             ..Default::default()
         });
     }

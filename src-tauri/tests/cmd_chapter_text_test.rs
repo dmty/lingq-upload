@@ -38,6 +38,9 @@ fn make_loose_project(text_dir: &std::path::Path) -> Project {
         absorb_policy: Default::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     }
 }
 

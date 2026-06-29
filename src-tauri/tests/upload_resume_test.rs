@@ -221,6 +221,9 @@ async fn make_fixture(chapters: usize) -> Fixture {
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     };
     store.put(&project).unwrap();
 
@@ -437,6 +440,9 @@ fn cmd_replay_receipts_returns_persisted_state() {
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     };
     store.put(&project).unwrap();
 

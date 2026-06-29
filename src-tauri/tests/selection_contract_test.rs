@@ -65,6 +65,9 @@ fn sample(title: &str, n_receipts: usize) -> Project {
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     }
 }
 
@@ -138,6 +141,7 @@ fn chapter_kind_round_trips_through_json() {
         body: "x".into(),
         id: cid(7),
         kind: ChapterKind::FrontMatter,
+        ..Default::default()
     };
     let s = serde_json::to_string(&c).unwrap();
     let back: Chapter = serde_json::from_str(&s).unwrap();
@@ -284,6 +288,9 @@ async fn make_fixture(chapters: usize) -> Fixture {
         absorb_policy: AbsorbPolicy::default(),
         mapping: None,
         confirmed_at: None,
+        cover_use: true,
+        cover_uploaded_to_lingq: false,
+        cover_source_href: None,
     };
     store.put(&project).unwrap();
 

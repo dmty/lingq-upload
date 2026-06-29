@@ -324,6 +324,11 @@ pub struct Chapter {
     pub id: ChapterId,
     #[serde(default)]
     pub kind: ChapterKind,
+    /// Spine href of the XHTML document that produced this chapter.
+    /// Empty string when the parser does not track spine positions
+    /// (loose-file and manifest ingest paths).
+    #[serde(default)]
+    pub spine_href: String,
 }
 
 #[derive(Debug, Error, Serialize, Deserialize, Type)]
