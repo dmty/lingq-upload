@@ -11,8 +11,12 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Generated audio fixtures (deterministic; produced at test setup).
+# Exception: synth_chapters_*.m4b are checked in so CI can drop ffmpeg.
+# Tests assert structural metadata only — byte-drift across ffmpeg builds
+# is documented in scripts/fixtures/synth_m4b_chapters.sh.
 src-tauri/tests/fixtures/audio/*.m4a
 src-tauri/tests/fixtures/audio/*.m4b
+!src-tauri/tests/fixtures/audio/synth_chapters_*.m4b
 
 # Personal EPUB / Calibre / Libation samples — seeded locally via
 # scripts/fixtures/. Never shipped.
