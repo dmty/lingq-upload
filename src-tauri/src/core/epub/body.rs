@@ -4,7 +4,7 @@
 //! collapsed, `<style>` / `<script>` payloads dropped.
 
 use super::find_case_insensitive;
-use crate::core::text::strip_ruby;
+use crate::core::text::{next_char_at, strip_ruby};
 
 pub(crate) fn clean_chapter_body(html: &str) -> String {
     let stripped = strip_ruby(html);
@@ -34,10 +34,7 @@ fn strip_html_tags(html: &str) -> String {
             }
             continue;
         }
-        let ch = std::str::from_utf8(&bytes[i..])
-            .ok()
-            .and_then(|s| s.chars().next())
-            .unwrap_or('\u{FFFD}');
+        let ch = next_char_at(bytes, i);
         out.push(ch);
         i += ch.len_utf8().max(1);
     }

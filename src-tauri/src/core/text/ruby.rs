@@ -51,13 +51,13 @@ pub fn strip_ruby(html: &str) -> String {
         }
         if inside_rt == 0 && inside_rp == 0 {
             let ch_start = i;
-            let ch = next_char(bytes, i);
+            let ch = super::next_char_at(bytes, i);
             let ch_len = ch.len_utf8();
             out.push(ch);
             i = ch_start + ch_len;
         } else {
             let ch_start = i;
-            let ch = next_char(bytes, i);
+            let ch = super::next_char_at(bytes, i);
             i = ch_start + ch.len_utf8();
         }
     }
@@ -86,13 +86,6 @@ fn parse_tag(raw: &str) -> (&str, bool) {
             .unwrap_or(cleaned.len());
         (&cleaned[..name_end], false)
     }
-}
-
-fn next_char(bytes: &[u8], i: usize) -> char {
-    std::str::from_utf8(&bytes[i..])
-        .ok()
-        .and_then(|s| s.chars().next())
-        .unwrap_or('\u{FFFD}')
 }
 
 fn collapse_inter_cjk_whitespace(s: &str) -> String {
