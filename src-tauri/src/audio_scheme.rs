@@ -53,7 +53,7 @@ pub fn handler<R: Runtime>(
                 .status(StatusCode::RANGE_NOT_SATISFIABLE)
                 .header(header::CONTENT_RANGE, format!("bytes */{size}"))
                 .body(Vec::new())
-                .unwrap();
+                .expect("static response");
         }
         let end = end_opt.unwrap_or(size - 1).min(size - 1);
         let len = end - start + 1;
@@ -68,7 +68,7 @@ pub fn handler<R: Runtime>(
             .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{size}"))
             .header(header::CONTENT_LENGTH, len.to_string())
             .body(buf)
-            .unwrap();
+            .expect("static response");
     }
 
     // No Range header — return a header probe with capped body.
@@ -81,7 +81,7 @@ pub fn handler<R: Runtime>(
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_LENGTH, size.to_string())
         .body(buf)
-        .unwrap()
+        .expect("static response")
 }
 
 fn parse_range(value: &str) -> Option<(u64, Option<u64>)> {
@@ -117,5 +117,5 @@ fn error(status: StatusCode, msg: &'static str) -> Response<Vec<u8>> {
         .status(status)
         .header(header::CONTENT_TYPE, "text/plain")
         .body(msg.as_bytes().to_vec())
-        .unwrap()
+        .expect("static response")
 }

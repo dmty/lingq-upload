@@ -58,8 +58,8 @@ fn read_box_header<R: Read + Seek>(r: &mut R) -> Result<Option<Box>, AudioError>
     if n < 8 {
         return Ok(None);
     }
-    let size32 = u32::from_be_bytes(hdr[0..4].try_into().unwrap()) as u64;
-    let kind: [u8; 4] = hdr[4..8].try_into().unwrap();
+    let size32 = u32::from_be_bytes(hdr[0..4].try_into().expect("len ok")) as u64;
+    let kind: [u8; 4] = hdr[4..8].try_into().expect("len ok");
     let (size, body_offset) = if size32 == 1 {
         let mut ext = [0u8; 8];
         r.read_exact(&mut ext)
@@ -163,7 +163,7 @@ fn read_qt_chapters<R: Read + Seek>(
             if let Some(chap) = find_child(r, &tref, *b"chap")? {
                 let body = read_body(r, &chap)?;
                 for chunk in body.chunks_exact(4) {
-                    audio_chap_refs.push(u32::from_be_bytes(chunk.try_into().unwrap()));
+                    audio_chap_refs.push(u32::from_be_bytes(chunk.try_into().expect("len ok")));
                 }
                 break;
             }
@@ -249,7 +249,7 @@ fn trak_handler<R: Read + Seek>(r: &mut R, trak: &Box) -> Result<Option<[u8; 4]>
     if body.len() < 12 {
         return Ok(None);
     }
-    Ok(Some(body[8..12].try_into().unwrap()))
+    Ok(Some(body[8..12].try_into().expect("len ok")))
 }
 
 fn track_id<R: Read + Seek>(r: &mut R, trak: &Box) -> Result<Option<u32>, AudioError> {
@@ -267,7 +267,7 @@ fn track_id<R: Read + Seek>(r: &mut R, trak: &Box) -> Result<Option<u32>, AudioE
         return Ok(None);
     }
     Ok(Some(u32::from_be_bytes(
-        body[track_id_offset..track_id_offset + 4].try_into().unwrap(),
+        body[track_id_offset..track_id_offset + 4].try_into().expect("len ok"),
     )))
 }
 
@@ -347,7 +347,7 @@ fn read_chapter_samples<R: Read + Seek>(
         let mut buf = vec![0u8; sz as usize];
         r.read_exact(&mut buf)
             .map_err(|e| AudioError::Io(e.to_string()))?;
-        let text_len = u16::from_be_bytes(buf[0..2].try_into().unwrap()) as usize;
+        let text_len = u16::from_be_bytes(buf[0..2].try_into().expect("len ok")) as usize;
         let title_end = (2 + text_len).min(buf.len());
         let title = decode_qt_text(&buf[2..title_end]);
         samples.push(ChapterSample {
@@ -369,22 +369,22 @@ fn parse_mdhd_timescale(body: &[u8]) -> u32 {
     if body.len() < off + 4 {
         return 0;
     }
-    u32::from_be_bytes(body[off..off + 4].try_into().unwrap())
+    u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok"))
 }
 
 fn parse_stts(body: &[u8]) -> Vec<u32> {
     if body.len() < 8 {
         return Vec::new();
     }
-    let count = u32::from_be_bytes(body[4..8].try_into().unwrap()) as usize;
+    let count = u32::from_be_bytes(body[4..8].try_into().expect("len ok")) as usize;
     let mut out = Vec::new();
     let mut off = 8;
     for _ in 0..count {
         if off + 8 > body.len() {
             break;
         }
-        let sample_count = u32::from_be_bytes(body[off..off + 4].try_into().unwrap());
-        let delta = u32::from_be_bytes(body[off + 4..off + 8].try_into().unwrap());
+        let sample_count = u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok"));
+        let delta = u32::from_be_bytes(body[off + 4..off + 8].try_into().expect("len ok"));
         for _ in 0..sample_count {
             out.push(delta);
         }
@@ -403,15 +403,15 @@ fn parse_stsc(body: &[u8]) -> Vec<StscEntry> {
     if body.len() < 8 {
         return Vec::new();
     }
-    let count = u32::from_be_bytes(body[4..8].try_into().unwrap()) as usize;
+    let count = u32::from_be_bytes(body[4..8].try_into().expect("len ok")) as usize;
     let mut out = Vec::with_capacity(count);
     let mut off = 8;
     for _ in 0..count {
         if off + 12 > body.len() {
             break;
         }
-        let first_chunk = u32::from_be_bytes(body[off..off + 4].try_into().unwrap());
-        let samples_per_chunk = u32::from_be_bytes(body[off + 4..off + 8].try_into().unwrap());
+        let first_chunk = u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok"));
+        let samples_per_chunk = u32::from_be_bytes(body[off + 4..off + 8].try_into().expect("len ok"));
         out.push(StscEntry {
             first_chunk,
             samples_per_chunk,
@@ -425,8 +425,8 @@ fn parse_stsz(body: &[u8]) -> Vec<u32> {
     if body.len() < 12 {
         return Vec::new();
     }
-    let default_size = u32::from_be_bytes(body[4..8].try_into().unwrap());
-    let count = u32::from_be_bytes(body[8..12].try_into().unwrap()) as usize;
+    let default_size = u32::from_be_bytes(body[4..8].try_into().expect("len ok"));
+    let count = u32::from_be_bytes(body[8..12].try_into().expect("len ok")) as usize;
     if default_size != 0 {
         return vec![default_size; count];
     }
@@ -436,7 +436,7 @@ fn parse_stsz(body: &[u8]) -> Vec<u32> {
         if off + 4 > body.len() {
             break;
         }
-        out.push(u32::from_be_bytes(body[off..off + 4].try_into().unwrap()));
+        out.push(u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok")));
         off += 4;
     }
     out
@@ -446,14 +446,14 @@ fn parse_stco(body: &[u8]) -> Vec<u64> {
     if body.len() < 8 {
         return Vec::new();
     }
-    let count = u32::from_be_bytes(body[4..8].try_into().unwrap()) as usize;
+    let count = u32::from_be_bytes(body[4..8].try_into().expect("len ok")) as usize;
     let mut out = Vec::with_capacity(count);
     let mut off = 8;
     for _ in 0..count {
         if off + 4 > body.len() {
             break;
         }
-        out.push(u32::from_be_bytes(body[off..off + 4].try_into().unwrap()) as u64);
+        out.push(u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok")) as u64);
         off += 4;
     }
     out
@@ -463,14 +463,14 @@ fn parse_co64(body: &[u8]) -> Vec<u64> {
     if body.len() < 8 {
         return Vec::new();
     }
-    let count = u32::from_be_bytes(body[4..8].try_into().unwrap()) as usize;
+    let count = u32::from_be_bytes(body[4..8].try_into().expect("len ok")) as usize;
     let mut out = Vec::with_capacity(count);
     let mut off = 8;
     for _ in 0..count {
         if off + 8 > body.len() {
             break;
         }
-        out.push(u64::from_be_bytes(body[off..off + 8].try_into().unwrap()));
+        out.push(u64::from_be_bytes(body[off..off + 8].try_into().expect("len ok")));
         off += 8;
     }
     out
@@ -571,7 +571,7 @@ fn read_nero_chpl<R: Read + Seek>(
         if off + 9 > body.len() {
             break;
         }
-        let ts = u64::from_be_bytes(body[off..off + 8].try_into().unwrap());
+        let ts = u64::from_be_bytes(body[off..off + 8].try_into().expect("len ok"));
         let title_len = body[off + 8] as usize;
         off += 9;
         if off + title_len > body.len() {
