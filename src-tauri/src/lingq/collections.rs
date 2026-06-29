@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -135,6 +137,126 @@ impl LingqClient {
             StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
             _ => Ok(None),
         }
+    }
+}
+
+/// Probe candidate for the cover-image PATCH. The cascade tries each in
+/// order; the first 2xx wins and is cached for the lifetime of the process.
+#[derive(Debug, Clone, Copy)]
+enum CoverProbe {
+    /// PATCH /api/v3/{lang}/collections/{cid}/image/ with multipart `image`.
+    DedicatedImageEndpoint,
+    /// PATCH /api/v3/{lang}/collections/{cid}/ with multipart `image`.
+    CollectionImageField,
+    /// PATCH /api/v3/{lang}/collections/{cid}/ with multipart `cover`.
+    CollectionCoverField,
+}
+
+impl CoverProbe {
+    const ALL: [CoverProbe; 3] = [
+        CoverProbe::DedicatedImageEndpoint,
+        CoverProbe::CollectionImageField,
+        CoverProbe::CollectionCoverField,
+    ];
+
+    fn url(self, base: &str, lang: &str, cid: i64) -> String {
+        match self {
+            CoverProbe::DedicatedImageEndpoint => {
+                format!("{base}/api/v3/{lang}/collections/{cid}/image/")
+            }
+            CoverProbe::CollectionImageField | CoverProbe::CollectionCoverField => {
+                format!("{base}/api/v3/{lang}/collections/{cid}/")
+            }
+        }
+    }
+
+    fn field_name(self) -> &'static str {
+        match self {
+            CoverProbe::DedicatedImageEndpoint | CoverProbe::CollectionImageField => "image",
+            CoverProbe::CollectionCoverField => "cover",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            CoverProbe::DedicatedImageEndpoint => "dedicated-image-endpoint",
+            CoverProbe::CollectionImageField => "collection-image-field",
+            CoverProbe::CollectionCoverField => "collection-cover-field",
+        }
+    }
+}
+
+static WINNER: OnceLock<CoverProbe> = OnceLock::new();
+
+fn mime_for_path(p: &Path) -> &'static str {
+    match p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        _ => "application/octet-stream",
+    }
+}
+
+impl LingqClient {
+    /// Upload `img` as the cover image for `cid`. Returns `Ok(true)` on the
+    /// first probe that yields 2xx (cached for the process lifetime). Returns
+    /// `Ok(false)` when all probes exhaust with 4xx — caller should log and
+    /// continue. Returns `Err` on 5xx or transport errors.
+    // SIMPLIFY: no retry on cover 5xx; surface to caller (soft-fail). Add
+    // retry if telemetry shows transient 5xx is common.
+    pub async fn set_collection_image(
+        &self,
+        cid: CollectionId,
+        img: &Path,
+    ) -> Result<bool, LingqError> {
+        let bytes = tokio::fs::read(img)
+            .await
+            .map_err(|e| LingqError::Io(e.to_string()))?;
+        let file_name = img
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("cover.jpg")
+            .to_string();
+        let mime = mime_for_path(img);
+
+        let probes: &[CoverProbe] = match WINNER.get() {
+            Some(w) => std::slice::from_ref(w),
+            None => &CoverProbe::ALL,
+        };
+
+        for probe in probes {
+            let url = probe.url(self.base_url(), self.lang(), cid.0);
+            let part = Part::bytes(bytes.clone())
+                .file_name(file_name.clone())
+                .mime_str(mime)
+                .map_err(|e| LingqError::Transport(e.to_string()))?;
+            let form = Form::new().part(probe.field_name(), part);
+
+            let resp = self
+                .http()
+                .patch(&url)
+                .header("Authorization", self.auth_header())
+                .multipart(form)
+                .send()
+                .await
+                .map_err(|e| LingqError::Transport(e.to_string()))?;
+            let status = resp.status();
+            if status.is_success() {
+                let _ = WINNER.set(*probe);
+                tracing::info!(probe = probe.label(), "lingq cover upload succeeded");
+                return Ok(true);
+            }
+            if status.is_client_error() {
+                continue;
+            }
+            return Err(LingqError::Server(format!("PATCH {url} → {status}")));
+        }
+        Ok(false)
     }
 }
 
