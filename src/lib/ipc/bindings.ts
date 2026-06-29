@@ -356,13 +356,28 @@ async cmdSetAbsorbPolicy(projectId: ProjectId, policy: AbsorbPolicy) : Promise<R
 }
 },
 /**
- * Persist a user-chosen cover image path for a project. Display only — the
- * cover is never uploaded to LingQ. The frontend renders it via
- * `convertFileSrc(cover_path)`.
+ * Persist the project's cover image. When `cover_path` is `Some(src)`, the
+ * source file is copied into the project directory as
+ * `<projects>/<slug>/cover.<ext>` (any prior sidecar at a different
+ * extension is removed first). When `cover_path` is `None`, any existing
+ * sidecar is deleted. In either case `cover_uploaded_to_lingq` is reset
+ * so the next lesson upload re-pushes the cover.
  */
-async cmdSetCover(projectId: ProjectId, coverPath: string) : Promise<Result<null, AppError>> {
+async cmdSetCover(projectId: ProjectId, coverPath: string | null) : Promise<Result<null, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cmd_set_cover", { projectId, coverPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Toggle whether the project's cover should be pushed to LingQ on the
+ * next lesson upload.
+ */
+async cmdSetCoverUse(projectId: ProjectId, value: boolean) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_cover_use", { projectId, value }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

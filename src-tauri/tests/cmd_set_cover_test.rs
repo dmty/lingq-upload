@@ -1,36 +1,90 @@
-//! Round-trip cover for `cmd_set_cover`: the command is a thin wrapper over
-//! `ProjectStore::update` (like `cmd_set_absorb_policy`), so this exercises
-//! that closure path and confirms `cover_path` survives a process boundary.
+//! Round-trip test for `cmd_set_cover`. After the cover-image-upload feature,
+//! the command copies the source file into the project directory and resets
+//! `cover_uploaded_to_lingq`. A `None` value deletes the sidecar.
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::fs;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::Project;
 use lingq_upload_lib::core::store::{JsonProjectStore, ProjectStore};
-use tempfile::TempDir;
 
 #[test]
-fn set_cover_persists_across_reopen() {
-    let store_dir = TempDir::new().unwrap();
-    let store: Arc<dyn ProjectStore> = Arc::new(JsonProjectStore::new(store_dir.path()));
+fn set_cover_copies_into_project_dir_and_resets_upload_flag() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let id = ProjectId::from_title_author("T", "Author");
+    let mut p = Project::new_test(id.clone(), "T");
+    p.cover_uploaded_to_lingq = true;
+    store.put(&p).unwrap();
 
-    let id = ProjectId::from_title_author("Cover Book", "Author");
-    let project = Project::new_test(id.clone(), "Cover Book");
-    store.put(&project).unwrap();
+    // Create a source file outside the project dir.
+    let src_dir = tempfile::tempdir().unwrap();
+    let src = src_dir.path().join("user-pick.png");
+    fs::write(&src, b"PNGDATA").unwrap();
 
-    // Starts with no cover.
-    assert!(store.get(&id).unwrap().unwrap().cover_path.is_none());
+    lingq_upload_lib::commands::project::set_cover_impl(
+        &store,
+        &id,
+        Some(src.to_string_lossy().into_owned()),
+    )
+    .expect("set_cover ok");
 
-    // Apply the same mutation `cmd_set_cover` performs.
-    let cover = PathBuf::from("/covers/botchan.jpg");
-    store
-        .update(&id, &mut |p| p.cover_path = Some(cover.clone()))
-        .expect("update ok");
+    let project = store.get(&id).unwrap().unwrap();
+    let cover_path = project.cover_path.expect("cover_path set");
+    let project_dir = store.project_dir(&id).unwrap();
+    assert!(cover_path.starts_with(&project_dir), "lives inside app-data");
+    assert_eq!(cover_path.extension().unwrap().to_string_lossy(), "png");
+    assert_eq!(fs::read(&cover_path).unwrap(), b"PNGDATA");
+    assert!(!project.cover_uploaded_to_lingq, "upload flag reset");
+}
 
-    // Drop the handle, reopen the store from disk, confirm it survived.
-    drop(store);
-    let reopened: Arc<dyn ProjectStore> = Arc::new(JsonProjectStore::new(store_dir.path()));
-    let after = reopened.get(&id).unwrap().unwrap();
-    assert_eq!(after.cover_path, Some(PathBuf::from("/covers/botchan.jpg")));
+#[test]
+fn set_cover_none_deletes_sidecar() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let id = ProjectId::from_title_author("T", "Author");
+    let mut p = Project::new_test(id.clone(), "T");
+    // Pre-place a sidecar at the project dir.
+    let project_dir = store.project_dir(&id).unwrap();
+    fs::create_dir_all(&project_dir).unwrap();
+    let sidecar = project_dir.join("cover.jpg");
+    fs::write(&sidecar, b"OLD").unwrap();
+    p.cover_path = Some(sidecar.clone());
+    store.put(&p).unwrap();
+
+    lingq_upload_lib::commands::project::set_cover_impl(&store, &id, None).unwrap();
+
+    let project = store.get(&id).unwrap().unwrap();
+    assert!(project.cover_path.is_none());
+    assert!(!sidecar.exists(), "sidecar deleted");
+}
+
+#[test]
+fn set_cover_overwriting_jpg_with_png_removes_old_jpg() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let id = ProjectId::from_title_author("T", "Author");
+    let mut p = Project::new_test(id.clone(), "T");
+    let project_dir = store.project_dir(&id).unwrap();
+    fs::create_dir_all(&project_dir).unwrap();
+    let old = project_dir.join("cover.jpg");
+    fs::write(&old, b"OLDJPG").unwrap();
+    p.cover_path = Some(old.clone());
+    store.put(&p).unwrap();
+
+    let src_dir = tempfile::tempdir().unwrap();
+    let src = src_dir.path().join("new.png");
+    fs::write(&src, b"NEWPNG").unwrap();
+
+    lingq_upload_lib::commands::project::set_cover_impl(
+        &store,
+        &id,
+        Some(src.to_string_lossy().into_owned()),
+    )
+    .unwrap();
+
+    assert!(!old.exists(), "old .jpg sidecar removed");
+    let project = store.get(&id).unwrap().unwrap();
+    let new_cover = project.cover_path.unwrap();
+    assert_eq!(new_cover.extension().unwrap().to_string_lossy(), "png");
 }

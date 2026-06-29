@@ -181,19 +181,101 @@ pub async fn cmd_set_absorb_policy(
     Ok(())
 }
 
-/// Persist a user-chosen cover image path for a project. Display only — the
-/// cover is never uploaded to LingQ. The frontend renders it via
-/// `convertFileSrc(cover_path)`.
+/// Persist the project's cover image. When `cover_path` is `Some(src)`, the
+/// source file is copied into the project directory as
+/// `<projects>/<slug>/cover.<ext>` (any prior sidecar at a different
+/// extension is removed first). When `cover_path` is `None`, any existing
+/// sidecar is deleted. In either case `cover_uploaded_to_lingq` is reset
+/// so the next lesson upload re-pushes the cover.
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_set_cover(
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
     project_id: ProjectId,
-    cover_path: String,
+    cover_path: Option<String>,
+) -> Result<(), AppError> {
+    set_cover_impl(store.inner().as_ref(), &project_id, cover_path)
+}
+
+const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+
+pub fn set_cover_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    cover_path: Option<String>,
+) -> Result<(), AppError> {
+    let project_dir = store
+        .project_dir(project_id)
+        .ok_or_else(|| AppError::Other("store has no filesystem backing".into()))?;
+    std::fs::create_dir_all(&project_dir)
+        .map_err(|e| AppError::Other(format!("create project dir: {e}")))?;
+
+    let new_path: Option<std::path::PathBuf> = match cover_path {
+        Some(src_str) => {
+            let src = std::path::PathBuf::from(&src_str);
+            let ext = src
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_else(|| "jpg".into());
+            let ext = match ext.as_str() {
+                "jpg" | "jpeg" | "png" | "webp" => ext,
+                other => {
+                    return Err(AppError::Unsupported(format!(
+                        "unsupported cover image extension: {other}"
+                    )))
+                }
+            };
+            let dst = project_dir.join(format!("cover.{ext}"));
+            // Remove any prior sidecar at a different extension.
+            for prior in COVER_EXTS {
+                let cand = project_dir.join(format!("cover.{prior}"));
+                if cand != dst && cand.exists() {
+                    let _ = std::fs::remove_file(&cand);
+                }
+            }
+            // Copy into project dir unless src is already that exact path.
+            if src != dst {
+                std::fs::copy(&src, &dst)
+                    .map_err(|e| AppError::Other(format!("copy cover: {e}")))?;
+            }
+            Some(dst)
+        }
+        None => {
+            for prior in COVER_EXTS {
+                let cand = project_dir.join(format!("cover.{prior}"));
+                if cand.exists() {
+                    let _ = std::fs::remove_file(&cand);
+                }
+            }
+            None
+        }
+    };
+
+    store
+        .update(project_id, &mut |p| {
+            p.cover_path = new_path.clone();
+            p.cover_uploaded_to_lingq = false;
+        })
+        .map_err(|e| match e {
+            StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+            other => AppError::Other(format!("store.update: {other}")),
+        })?;
+    Ok(())
+}
+
+/// Toggle whether the project's cover should be pushed to LingQ on the
+/// next lesson upload.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_set_cover_use(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    value: bool,
 ) -> Result<(), AppError> {
     store
         .update(&project_id, &mut |p| {
-            p.cover_path = Some(std::path::PathBuf::from(&cover_path))
+            p.cover_use = value;
         })
         .map_err(|e| match e {
             StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
