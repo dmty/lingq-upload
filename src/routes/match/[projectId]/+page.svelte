@@ -63,6 +63,7 @@
   let audioDropEl = $state<HTMLButtonElement | null>(null);
   let localHover = $state(false);
   let coverPath = $state<string | null>(null);
+  let coverUse = $state(true);
   let authors = $state<string[]>([]);
   let bookTitle = $state<string>("");
 
@@ -121,6 +122,7 @@
     }
     const project = loaded.data;
     coverPath = project.cover_path ?? null;
+    coverUse = project.cover_use ?? true;
     authors = project.authors ?? [];
     bookTitle = project.settings.collection_title;
     const resp = project.matcher_decision?.response;
@@ -174,6 +176,7 @@
     replaceError = null;
     localHover = false;
     coverPath = null;
+    coverUse = true;
     authors = [];
     bookTitle = "";
   }
@@ -475,7 +478,9 @@
     try {
       const picked = await open({
         multiple: false,
-        filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] }],
+        filters: [
+          { name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] },
+        ],
       });
       if (typeof picked !== "string") return; // cancelled
       const res = await commands.cmdSetCover(projectIdValue, picked);
@@ -486,6 +491,27 @@
       coverPath = picked;
     } finally {
       coverBusy = false;
+    }
+  }
+
+  async function onToggleCoverUse(evt: Event) {
+    if (!projectIdValue) return;
+    const value = (evt.currentTarget as HTMLInputElement).checked;
+    coverUse = value;
+    await commands.cmdSetCoverUse(projectIdValue, value);
+  }
+
+  async function clearCover() {
+    if (busyReplace || !projectIdValue) return;
+    busyReplace = true;
+    try {
+      const res = await commands.cmdSetCover(projectIdValue, null);
+      if (res.status === "ok") {
+        coverPath = null;
+        coverUse = false;
+      }
+    } finally {
+      busyReplace = false;
     }
   }
 
@@ -579,29 +605,58 @@
       <header class="flex items-start justify-between gap-3">
         <div class="flex items-start gap-3">
           <div data-testid="match-cover">
-            <CoverThumb coverPath={coverPath} title={bookTitle} />
+            <CoverThumb {coverPath} title={bookTitle} />
           </div>
           <div class="min-w-0">
             <p class="text-xs text-fg-muted">Confirm pairing</p>
-            <h1 data-testid="match-title" class="truncate text-lg font-semibold text-fg">
+            <h1
+              data-testid="match-title"
+              class="truncate text-lg font-semibold text-fg"
+            >
               {bookTitle}
             </h1>
             {#if authors.length > 0}
-              <p data-testid="match-author" class="truncate text-sm text-fg-muted">
+              <p
+                data-testid="match-author"
+                class="truncate text-sm text-fg-muted"
+              >
                 {authors.join(", ")}
               </p>
             {/if}
             <p class="mt-0.5 text-xs text-fg-muted tabular">
               {chapters} → {tracks}
-              <button
-                type="button"
-                data-testid="cover-replace"
-                class="ml-2 text-accent hover:underline"
-                onclick={replaceCover}
-              >
-                {coverPath ? "Replace cover" : "Add cover"}
-              </button>
             </p>
+            <div class="mt-1 flex flex-col gap-1">
+              <label class="flex items-center gap-1.5 text-xs text-fg-muted">
+                <input
+                  type="checkbox"
+                  bind:checked={coverUse}
+                  disabled={coverPath === null || busyReplace}
+                  onchange={onToggleCoverUse}
+                />
+                Use this cover for LingQ course
+              </label>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  data-testid="cover-replace"
+                  class="text-xs text-accent hover:underline disabled:opacity-50"
+                  disabled={busyReplace}
+                  onclick={replaceCover}
+                >
+                  {coverPath ? "Replace cover" : "Add cover"}
+                </button>
+                <button
+                  type="button"
+                  data-testid="cover-clear"
+                  class="text-xs text-fg-muted hover:underline disabled:opacity-50"
+                  disabled={busyReplace || coverPath === null}
+                  onclick={clearCover}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="flex items-center gap-2">
