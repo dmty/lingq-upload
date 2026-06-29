@@ -278,11 +278,13 @@ async fn cancellation_after_first_chapter_stops_the_run() {
     let token = CancellationToken::new();
     let token_for_canceller = token.clone();
 
-    // Cancel as soon as the first ChapterDone lands.
+    // Cancel as soon as the first ChapterDone lands. No iteration cap —
+    // first chapter on slow CI runners can take >10 s; bail on Result so
+    // we don't hang if the orchestrator finishes before any ChapterDone.
     let sink = RecordingSink::default();
     let events_handle = sink.events.clone();
     let canceller = tokio::spawn(async move {
-        for _ in 0..200 {
+        loop {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let evs = events_handle.lock().unwrap().clone();
             if evs
@@ -290,6 +292,9 @@ async fn cancellation_after_first_chapter_stops_the_run() {
                 .any(|e| matches!(e, RecordedEvent::ChapterDone { .. }))
             {
                 token_for_canceller.cancel();
+                return;
+            }
+            if evs.iter().any(|e| matches!(e, RecordedEvent::Result(..))) {
                 return;
             }
         }
