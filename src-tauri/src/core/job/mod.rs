@@ -237,6 +237,30 @@ pub async fn run_project_job(
         })?;
     }
 
+    // Soft-fail cover upload. Never propagates an error — cover is cosmetic.
+    if let Some(img) = project
+        .cover_path
+        .as_deref()
+        .filter(|_| project.cover_use && !project.cover_uploaded_to_lingq)
+        .filter(|p| p.exists())
+    {
+        let img = img.to_path_buf();
+        match client.set_collection_image(collection, &img).await {
+            Ok(true) => {
+                let _ = persist_with(store.as_ref(), &project_id, &mut |p| {
+                    p.cover_uploaded_to_lingq = true;
+                });
+                tracing::info!("lingq course cover set");
+            }
+            Ok(false) => {
+                tracing::warn!("lingq cover probe cascade exhausted; cover skipped");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "lingq cover upload errored; lesson continues");
+            }
+        }
+    }
+
     let staging = tempfile::tempdir()?;
     let enc = EncoderSettings::default();
     let total = plan.steps.len();

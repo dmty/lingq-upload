@@ -611,3 +611,68 @@ async fn new_project_advances_through_lifecycle_stages_in_order() {
 
     let _ = fixture.audio_dir;
 }
+
+/// Cover is uploaded after collection resolves, flag is persisted.
+#[tokio::test]
+async fn cover_uploaded_to_lingq_set_after_collection_create() {
+    let mut fixture = make_fixture(1).await;
+    mock_collection(&mut fixture.server, 777);
+    mock_imports(&mut fixture.server, 1, 5000);
+
+    // Write a tiny PNG-ish file so `cover_path.exists()` passes.
+    let cover_file = fixture.audio_dir.path().join("cover.jpg");
+    std::fs::write(&cover_file, b"\xff\xd8\xff\xe0cover-bytes").unwrap();
+
+    // Probe cascade: probe1 → 404, probe2 → 404, probe3 → 200.
+    let _p1 = fixture
+        .server
+        .mock("PATCH", "/api/v3/ja/collections/777/image/")
+        .with_status(404)
+        .expect(1)
+        .create();
+    let _p2 = fixture
+        .server
+        .mock("PATCH", "/api/v3/ja/collections/777/")
+        .match_body(Matcher::Regex(r#"name="image""#.into()))
+        .with_status(404)
+        .expect(1)
+        .create();
+    let _p3 = fixture
+        .server
+        .mock("PATCH", "/api/v3/ja/collections/777/")
+        .match_body(Matcher::Regex(r#"name="cover""#.into()))
+        .with_status(200)
+        .with_body("{}")
+        .expect(1)
+        .create();
+
+    // Set cover_path and cover_use on the project.
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.cover_path = Some(cover_file);
+    project.cover_use = true;
+    project.cover_uploaded_to_lingq = false;
+    fixture.store.put(&project).unwrap();
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").expect("valid lang"),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let after = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert!(
+        after.cover_uploaded_to_lingq,
+        "cover_uploaded_to_lingq must be true after successful upload"
+    );
+    let _ = fixture.audio_dir;
+}
