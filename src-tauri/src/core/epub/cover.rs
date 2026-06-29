@@ -54,7 +54,7 @@ pub fn extract_to_dir_from_bytes(
     if let Some(item) = manifest.iter().find(|m| m.is_cover_image_property) {
         let href = join_opf(&opf_dir, &item.href);
         return write_sidecar(&mut zip, &href, &item.media_type, dest_dir,
-            host_spine_href(&spine, &manifest, &item.href, &opf_dir));
+            host_spine_href(&spine, &manifest, &item.href));
     }
 
     // Rung 2: EPUB2 <meta name="cover" content="ID"/>
@@ -62,7 +62,7 @@ pub fn extract_to_dir_from_bytes(
         if let Some(item) = manifest.iter().find(|m| m.id == meta_id) {
             let href = join_opf(&opf_dir, &item.href);
             return write_sidecar(&mut zip, &href, &item.media_type, dest_dir,
-                host_spine_href(&spine, &manifest, &item.href, &opf_dir));
+                host_spine_href(&spine, &manifest, &item.href));
         }
     }
 
@@ -301,9 +301,7 @@ fn host_spine_href(
     spine: &[String],
     manifest: &[ManifestItem],
     image_href: &str,
-    opf_dir: &str,
 ) -> Option<String> {
-    let _target = join_opf(opf_dir, image_href);
     for idref in spine {
         let item = manifest.iter().find(|m| &m.id == idref)?;
         if !item.media_type.contains("xhtml") && !item.media_type.contains("html") {

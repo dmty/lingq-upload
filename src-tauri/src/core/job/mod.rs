@@ -605,11 +605,7 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
     let tracks = resolve_audio_tracks(project).await?;
     // Same vendor autodetect as the run, so chapter ids and counts can't
     // disagree between inspection and the actual upload.
-    let (epub_bytes, strategy) = epub_inputs(project);
-    let all_chapters = filter_cover_chapter(
-        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
-        project.cover_source_href.as_deref(),
-    );
+    let all_chapters = project_chapters(project)?;
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
     match build_plan(project, &chapters, &tracks, all_chapters.len()) {
@@ -644,11 +640,7 @@ pub fn seed_mapping_if_count_matches(
     if project.matcher_decision.is_some() || project.mapping.is_some() {
         return Ok(());
     }
-    let (epub_bytes, strategy) = epub_inputs(&project);
-    let all_chapters = filter_cover_chapter(
-        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
-        project.cover_source_href.as_deref(),
-    );
+    let all_chapters = project_chapters(&project)?;
     let skipped: std::collections::HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
@@ -700,11 +692,7 @@ pub async fn seed_mapping_for_response(
         return Ok(None);
     }
     let tracks = resolve_audio_tracks(project).await?;
-    let (epub_bytes, strategy) = epub_inputs(project);
-    let all_chapters = filter_cover_chapter(
-        resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?,
-        project.cover_source_href.as_deref(),
-    );
+    let all_chapters = project_chapters(project)?;
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
     if chapters.is_empty() || tracks.is_empty() {
@@ -1158,6 +1146,12 @@ fn resolve_chapters(
         }
         TextSource::Missing => Err(AppError::Other("project has no text source".into())),
     }
+}
+
+fn project_chapters(project: &Project) -> Result<Vec<Chapter>, AppError> {
+    let (epub_bytes, strategy) = epub_inputs(project);
+    let chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    Ok(filter_cover_chapter(chapters, project.cover_source_href.as_deref()))
 }
 
 async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {
