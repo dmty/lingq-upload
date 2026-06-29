@@ -63,7 +63,14 @@ allow = [
     # switches to system roots.
     "CDLA-Permissive-2.0",
 ]
-exceptions = []
+# mp3lame{,-encoder,-sys} are LGPL-3.0. Scoped exception keeps the LGPL
+# surface to the LAME wrapper pair; rest of the tree stays permissive-only.
+# Static-link → LGPL §6 obliges shipping object files / relinkable form on
+# request. Revisit if/when a permissive MP3 encoder lands (see Shine).
+exceptions = [
+    { name = "mp3lame-encoder", allow = ["LGPL-3.0"] },
+    { name = "mp3lame-sys",     allow = ["LGPL-3.0"] },
+]
 
 # ---------------------------------------------------------------------------
 # bans: catch duplicate-version crates or known-bad crates.
