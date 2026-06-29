@@ -9,22 +9,11 @@ pub mod ruby;
 
 pub use ruby::strip_ruby;
 
-/// Next char at `bytes[i]`. Caller guarantees `bytes` is valid UTF-8 and `i`
-/// is on a char boundary. Lead-byte stepping (don't revert to `from_utf8` —
-/// quadratic per chapter).
-pub(crate) fn next_char_at(bytes: &[u8], i: usize) -> char {
-    let width = match bytes[i] {
-        0x00..=0x7F => 1,
-        0xC2..=0xDF => 2,
-        0xE0..=0xEF => 3,
-        0xF0..=0xF4 => 4,
-        _ => 1,
-    };
-    let end = (i + width).min(bytes.len());
-    unsafe { std::str::from_utf8_unchecked(&bytes[i..end]) }
-        .chars()
-        .next()
-        .unwrap_or('\u{FFFD}')
+/// Next char at `s[i..]`. `i` must sit on a char boundary. Don't revert to
+/// `from_utf8(&s.as_bytes()[i..])` — that revalidates the full tail and
+/// makes chapter-body cleaning quadratic.
+pub(crate) fn next_char_at(s: &str, i: usize) -> char {
+    s[i..].chars().next().unwrap_or('\u{FFFD}')
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Type, Clone)]

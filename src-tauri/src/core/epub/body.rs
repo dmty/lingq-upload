@@ -34,7 +34,7 @@ fn strip_html_tags(html: &str) -> String {
             }
             continue;
         }
-        let ch = next_char_at(bytes, i);
+        let ch = next_char_at(html, i);
         out.push(ch);
         i += ch.len_utf8().max(1);
     }

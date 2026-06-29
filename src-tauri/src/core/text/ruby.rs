@@ -51,13 +51,13 @@ pub fn strip_ruby(html: &str) -> String {
         }
         if inside_rt == 0 && inside_rp == 0 {
             let ch_start = i;
-            let ch = super::next_char_at(bytes, i);
+            let ch = super::next_char_at(html, i);
             let ch_len = ch.len_utf8();
             out.push(ch);
             i = ch_start + ch_len;
         } else {
             let ch_start = i;
-            let ch = super::next_char_at(bytes, i);
+            let ch = super::next_char_at(html, i);
             i = ch_start + ch.len_utf8();
         }
     }
