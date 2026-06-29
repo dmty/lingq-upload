@@ -118,6 +118,7 @@ pub async fn run_project_job(
             return Err(e);
         }
     };
+    // match arm also feeds sink.result on error — can't delegate to project_chapters
     let chapters = match resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy) {
         Ok(c) => filter_cover_chapter(c, project.cover_source_href.as_deref()),
         Err(e) => {

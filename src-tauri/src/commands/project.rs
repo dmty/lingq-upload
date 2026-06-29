@@ -223,11 +223,14 @@ pub fn set_cover_impl(
     let new_path: Option<std::path::PathBuf> = match cover_path {
         Some(src_str) => {
             let src = std::path::PathBuf::from(&src_str);
-            let ext = src
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|s| s.to_ascii_lowercase())
-                .unwrap_or_else(|| "jpg".into());
+            let ext = match src.extension().and_then(|e| e.to_str()) {
+                Some(e) => e.to_ascii_lowercase(),
+                None => {
+                    return Err(AppError::Unsupported(
+                        "cover image path has no extension".into(),
+                    ))
+                }
+            };
             let ext = match ext.as_str() {
                 "jpg" | "jpeg" | "png" | "webp" => ext,
                 other => {

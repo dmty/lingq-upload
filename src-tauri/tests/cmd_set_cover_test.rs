@@ -4,6 +4,8 @@
 
 use std::fs;
 
+use lingq_upload_lib::error::AppError;
+
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::Project;
 use lingq_upload_lib::core::store::{JsonProjectStore, ProjectStore};
@@ -87,4 +89,24 @@ fn set_cover_overwriting_jpg_with_png_removes_old_jpg() {
     let project = store.get(&id).unwrap().unwrap();
     let new_cover = project.cover_path.unwrap();
     assert_eq!(new_cover.extension().unwrap().to_string_lossy(), "png");
+}
+
+#[test]
+fn set_cover_extensionless_path_returns_unsupported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(tmp.path());
+    let id = ProjectId::from_title_author("T", "Author");
+    let p = Project::new_test(id.clone(), "T");
+    store.put(&p).unwrap();
+
+    let err = lingq_upload_lib::commands::project::set_cover_impl(
+        &store,
+        &id,
+        Some("/no/ext/file".into()),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, AppError::Unsupported(ref m) if m.contains("no extension")),
+        "expected Unsupported with no-extension message, got {err:?}",
+    );
 }

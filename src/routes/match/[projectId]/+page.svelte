@@ -479,7 +479,7 @@
       const picked = await open({
         multiple: false,
         filters: [
-          { name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif"] },
+          { name: "Image", extensions: ["jpg", "jpeg", "png", "webp"] },
         ],
       });
       if (typeof picked !== "string") return; // cancelled
@@ -489,6 +489,8 @@
         return;
       }
       coverPath = picked;
+      coverUse = true;
+      await commands.cmdSetCoverUse(projectIdValue, true);
     } finally {
       coverBusy = false;
     }
@@ -509,6 +511,7 @@
       if (res.status === "ok") {
         coverPath = null;
         coverUse = false;
+        await commands.cmdSetCoverUse(projectIdValue, false);
       }
     } finally {
       busyReplace = false;

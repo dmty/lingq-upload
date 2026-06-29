@@ -2,7 +2,7 @@ mod audio_scheme;
 pub mod codecs;
 pub mod commands;
 pub mod core;
-mod error;
+pub mod error;
 pub mod events;
 pub mod ingest;
 pub mod lingq;
