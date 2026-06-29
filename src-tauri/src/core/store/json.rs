@@ -327,6 +327,10 @@ impl ProjectStore for JsonProjectStore {
         write_atomic(&path, &bytes)
     }
 
+    fn project_dir(&self, id: &ProjectId) -> Option<PathBuf> {
+        Some(self.dir_for(id))
+    }
+
     fn apply_mapping_op(
         &self,
         id: &ProjectId,

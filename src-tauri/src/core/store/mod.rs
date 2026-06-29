@@ -35,6 +35,12 @@ pub enum StoreError {
 pub trait ProjectStore: Send + Sync {
     fn put(&self, p: &Project) -> Result<(), StoreError>;
     fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError>;
+    /// Return the on-disk directory for a project, if the store has one.
+    /// `None` for in-memory stores that have no filesystem backing.
+    fn project_dir(&self, id: &ProjectId) -> Option<PathBuf> {
+        let _ = id;
+        None
+    }
     /// Read-modify-write: load the project, apply `f`, persist, return the
     /// updated value. The JSON and in-memory stores run the whole window
     /// under the per-project lock so `f`'s delta cannot clobber a concurrent

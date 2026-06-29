@@ -6,15 +6,16 @@
 //! re-derive the same `candidate_to_id` path and prove the loop and
 //! deduping behaviour through the underlying primitives.
 
+use lingq_upload_lib::commands::add_project::add_project_impl;
 use lingq_upload_lib::core::audio::AbsorbPolicy;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::library::candidate_to_id;
 use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
-use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
+use lingq_upload_lib::core::store::{InMemoryProjectStore, JsonProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{Candidate, TextSource};
 
 fn make_candidate(title: &str, author: &str) -> Candidate {
@@ -149,5 +150,48 @@ fn new_project_loop_terminates_with_existing_copy() {
     assert_ne!(
         second, chosen,
         "second NewProject must produce a distinct id"
+    );
+}
+
+fn epub_fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/epub-covers")
+        .join(name)
+}
+
+/// When a Candidate has an EPUB text source and no sidecar cover, `add_project_impl`
+/// must extract the cover from the EPUB and populate `cover_path` and
+/// `cover_source_href` on the persisted Project.
+#[test]
+fn add_project_extracts_cover_from_epub_when_no_sidecar() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(store_dir.path());
+
+    let epub = epub_fixture("epub2-meta-cover.epub");
+    let candidate = Candidate {
+        source_id: "test://epub2-meta-cover".into(),
+        title: "Meta Cover Book".into(),
+        authors: vec!["Author".into()],
+        language: Some("ja".into()),
+        series: None,
+        cover_path: None, // no sidecar
+        text_source: TextSource::Epub(epub),
+        audio_source: None,
+        chapter_manifest: None,
+        metadata_extras: HashMap::new(),
+    };
+
+    let project = add_project_impl(&store, &candidate, "ja".into(), "Meta Cover Book".into())
+        .expect("add_project_impl should succeed");
+
+    assert!(project.cover_path.is_some(), "cover_path must be populated after epub extraction");
+    let cover = project.cover_path.unwrap();
+    assert!(cover.exists(), "extracted cover file must exist on disk");
+    assert!(std::fs::metadata(&cover).unwrap().len() > 0, "extracted cover must not be empty");
+    // epub2-meta-cover fixture has a cover.xhtml spine entry
+    assert_eq!(
+        project.cover_source_href.as_deref(),
+        Some("cover.xhtml"),
+        "cover_source_href must be set from epub spine"
     );
 }

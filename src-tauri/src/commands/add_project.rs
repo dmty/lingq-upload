@@ -5,12 +5,13 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::Manager;
 
+use crate::core::epub::cover::extract_to_dir;
 use crate::core::identity::ProjectId;
 use crate::core::library::{candidate_to_id, rebuild_from_store, write_atomic, INDEX_FILENAME};
 use crate::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
-use crate::ingest::Candidate;
+use crate::ingest::{Candidate, TextSource};
 
 /// Upper bound on copy-name allocation attempts. A book with 100 colliding
 /// titles in the store is almost certainly a bug, not a legitimate user state.
@@ -73,6 +74,52 @@ fn build_project(candidate: &Candidate, language: String, collection_title: Stri
     }
 }
 
+/// If the project has no cover and its text source is an EPUB, attempt to
+/// extract a cover image into the project's store directory. Soft-fails:
+/// extraction errors are logged and the project proceeds without a cover.
+fn try_extract_epub_cover(project: &mut Project, store: &dyn ProjectStore) {
+    if project.cover_path.is_some() {
+        return;
+    }
+    let TextSource::Epub(epub_path) = &project.sources.text else {
+        return;
+    };
+    let Some(dest_dir) = store.project_dir(&project.id) else {
+        tracing::debug!(id = %project.id.join_key(), "store has no project_dir; skipping epub cover extraction");
+        return;
+    };
+    let epub_path = epub_path.clone();
+    match extract_to_dir(&epub_path, &dest_dir) {
+        Ok(Some(cov)) => {
+            tracing::debug!(path = %cov.path.display(), "extracted epub cover");
+            project.cover_source_href = cov.source_spine_href;
+            project.cover_path = Some(cov.path);
+        }
+        Ok(None) => {
+            tracing::debug!(epub = %epub_path.display(), "no cover found in epub");
+        }
+        Err(e) => {
+            tracing::warn!(epub = %epub_path.display(), error = %e, "epub cover extraction failed; continuing without cover");
+        }
+    }
+}
+
+/// Build, optionally enrich with an extracted EPUB cover, and persist a
+/// project. Returns the persisted `Project`. Exposed for integration tests.
+pub fn add_project_impl(
+    store: &dyn ProjectStore,
+    candidate: &Candidate,
+    language: String,
+    collection_title: String,
+) -> Result<Project, AppError> {
+    let mut project = build_project(candidate, language, collection_title);
+    try_extract_epub_cover(&mut project, store);
+    store
+        .put(&project)
+        .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
+    Ok(project)
+}
+
 fn rebuild_library_index(app: &tauri::AppHandle, store: &dyn ProjectStore) -> Result<(), AppError> {
     let root = app
         .path()
@@ -99,6 +146,18 @@ fn persist_and_reindex(
     rebuild_library_index(app, store.as_ref())
 }
 
+/// Extract cover (if applicable), persist, reindex. Returns the project id.
+fn enrich_and_persist(
+    app: &tauri::AppHandle,
+    store: &Arc<dyn ProjectStore>,
+    project: &mut Project,
+) -> Result<ProjectId, AppError> {
+    let id = project.id.clone();
+    try_extract_epub_cover(project, store.as_ref());
+    persist_and_reindex(app, store, project)?;
+    Ok(id)
+}
+
 /// Persist a Candidate as a Project. Returns `Created` with the stable
 /// `ProjectId`, or `Conflict { existing, conflict_title }` if a project
 /// with the derived id already exists. On conflict no write occurs — the
@@ -112,11 +171,10 @@ pub async fn cmd_create_project(
     language: String,
     collection_title: String,
 ) -> Result<CreateProjectResult, AppError> {
-    let project = build_project(&candidate, language, collection_title);
-    let id = project.id.clone();
+    let mut project = build_project(&candidate, language, collection_title);
 
     if let Some(existing) = store
-        .get(&id)
+        .get(&project.id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
     {
         return Ok(CreateProjectResult::Conflict {
@@ -125,7 +183,7 @@ pub async fn cmd_create_project(
         });
     }
 
-    persist_and_reindex(&app, store.inner(), &project)?;
+    let id = enrich_and_persist(&app, store.inner(), &mut project)?;
 
     Ok(CreateProjectResult::Created { id })
 }
@@ -153,25 +211,21 @@ pub async fn cmd_create_project_with_resolution(
 ) -> Result<ProjectId, AppError> {
     match resolution {
         ConflictResolution::Replace => {
-            let project = build_project(&candidate, language, collection_title);
-            let id = project.id.clone();
-            persist_and_reindex(&app, store.inner(), &project)?;
-            Ok(id)
+            let mut project = build_project(&candidate, language, collection_title);
+            enrich_and_persist(&app, store.inner(), &mut project)
         }
         ConflictResolution::Skip => Ok(candidate_to_id(&candidate)),
         ConflictResolution::NewProject => {
             let mut copy = candidate.clone();
             for _ in 0..MAX_COPY_ATTEMPTS {
                 copy.title.push_str(" (copy)");
-                let project = build_project(&copy, language.clone(), copy.title.clone());
+                let mut project = build_project(&copy, language.clone(), copy.title.clone());
                 let exists = store
                     .get(&project.id)
                     .map_err(|e| AppError::Other(format!("store.get: {e}")))?
                     .is_some();
                 if !exists {
-                    let id = project.id.clone();
-                    persist_and_reindex(&app, store.inner(), &project)?;
-                    return Ok(id);
+                    return Ok(enrich_and_persist(&app, store.inner(), &mut project)?);
                 }
             }
             Err(AppError::Other("could not allocate copy name".into()))
