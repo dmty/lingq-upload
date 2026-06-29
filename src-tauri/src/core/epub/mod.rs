@@ -1,4 +1,5 @@
 mod body;
+pub mod cover;
 pub mod detect;
 pub mod kindle;
 pub mod kobo;
@@ -150,6 +151,25 @@ pub(crate) fn read_to_string_from_zip<R: std::io::Read + std::io::Seek>(
         )));
     }
     decode_xml_bytes(&bytes, name)
+}
+
+pub(crate) fn read_bytes_from_zip<R: std::io::Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Result<Vec<u8>, EpubError> {
+    let f = zip
+        .by_name(name)
+        .map_err(|e| EpubError::Parse(format!("missing {name}: {e}")))?;
+    let mut bytes = Vec::new();
+    f.take(MAX_ENTRY_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| EpubError::Io(e.to_string()))?;
+    if bytes.len() as u64 > MAX_ENTRY_BYTES {
+        return Err(EpubError::Parse(format!(
+            "{name}: decompressed entry exceeds {MAX_ENTRY_BYTES} byte cap"
+        )));
+    }
+    Ok(bytes)
 }
 
 pub(crate) fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
