@@ -250,7 +250,11 @@ mod tests {
         assert_eq!(probed.codec, "mp3");
     }
 
+    // Decoded-PCM md5 drifts across mp3lame-sys builds (psy-acoustic
+    // tuning shifts per LAME build). Cross-OS golden is unportable; gate
+    // to the seeding host. Run locally with `--ignored` to re-seed.
     #[test]
+    #[ignore = "mp3lame build-specific golden; runs locally, not in CI"]
     fn encode_is_deterministic_md5_pcm() {
         let dir = tempdir().expect("tmp");
         let src = dir.path().join("sine_30s.wav");
