@@ -26,15 +26,15 @@ struct Golden {
 #[tokio::test]
 async fn silence_transcode_matches_golden() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let fixture_src = manifest_dir.join("tests/fixtures/audio/silence.wav");
     let golden_path = manifest_dir.join("tests/fixtures/audio/silence.golden.json");
 
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let fixture_src = tmp.path().join("silence.wav");
     support::mk_fixture::write_silence_m4a_like(&fixture_src, 5);
 
     let golden_raw = std::fs::read_to_string(&golden_path).expect("read golden");
     let golden: Golden = serde_json::from_str(&golden_raw).expect("parse golden");
 
-    let tmp = tempfile::tempdir().expect("tempdir");
     let dst = tmp.path().join("silence.mp3");
     let enc = audio::EncoderSettings::default();
 
@@ -68,11 +68,10 @@ async fn silence_transcode_matches_golden() {
 
 #[tokio::test]
 async fn m4b_extension_is_accepted() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let fixture_src = manifest_dir.join("tests/fixtures/audio/silence.wav");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let fixture_src = tmp.path().join("silence.wav");
     support::mk_fixture::write_silence_m4a_like(&fixture_src, 5);
 
-    let tmp = tempfile::tempdir().expect("tempdir");
     let renamed = tmp.path().join("silence.m4b");
     std::fs::copy(&fixture_src, &renamed).expect("copy to .m4b");
 

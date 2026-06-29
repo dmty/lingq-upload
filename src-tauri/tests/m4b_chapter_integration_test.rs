@@ -337,7 +337,8 @@ async fn atomless_single_m4b_falls_back_to_whole_file() {
     // Population D: a single-file audio source with no embedded chapters.
     // `expand_single_file` must return one whole-file track (window == None)
     // and the matcher must see (1 chapter, 1 track) → clean pair.
-    let silence = fixture_path("silence.wav");
+    let audio_dir = tempfile::tempdir().unwrap();
+    let silence = audio_dir.path().join("silence.wav");
     support::mk_fixture::write_silence_m4a_like(&silence, 5);
     let text_dir = tempfile::tempdir().unwrap();
     let text_paths = make_chapter_files(text_dir.path(), 1);
