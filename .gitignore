@@ -16,6 +16,7 @@ vite.config.ts.timestamp-*
 # is documented in scripts/fixtures/synth_m4b_chapters.sh.
 src-tauri/tests/fixtures/audio/*.m4a
 src-tauri/tests/fixtures/audio/*.m4b
+src-tauri/tests/fixtures/audio/*.wav
 !src-tauri/tests/fixtures/audio/synth_chapters_*.m4b
 
 # Personal EPUB / Calibre / Libation samples — seeded locally via
