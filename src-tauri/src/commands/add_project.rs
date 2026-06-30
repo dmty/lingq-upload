@@ -225,7 +225,7 @@ pub async fn cmd_create_project_with_resolution(
                     .map_err(|e| AppError::Other(format!("store.get: {e}")))?
                     .is_some();
                 if !exists {
-                    return Ok(enrich_and_persist(&app, store.inner(), &mut project)?);
+                    return enrich_and_persist(&app, store.inner(), &mut project);
                 }
             }
             Err(AppError::Other("could not allocate copy name".into()))
