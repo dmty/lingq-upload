@@ -6,6 +6,7 @@
 
 use std::io::Write;
 
+use lingq_upload_lib::core::epub::cover::extract_to_dir;
 use lingq_upload_lib::core::epub::parse_epub;
 use zip::write::SimpleFileOptions;
 
@@ -84,4 +85,86 @@ fn namespaced_opf_item_manifest_parses_chapters() {
     );
     assert_eq!(chapters[0].spine_href, "Text/ch1.xhtml");
     assert_eq!(chapters[1].spine_href, "Text/ch2.xhtml");
+}
+
+fn build_sigil_style_epub_with_cover(path: &std::path::Path) {
+    let mut zw = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+
+    zw.start_file(
+        "mimetype",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+    )
+    .unwrap();
+    zw.write_all(b"application/epub+zip").unwrap();
+
+    zw.start_file("META-INF/container.xml", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+    )
+    .unwrap();
+
+    // EPUB2 + Sigil pattern: <opf:item> manifest entries + <meta name="cover" content="cover-id"/>.
+    zw.start_file("content.opf", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="id" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:identifier id="id">urn:uuid:sigil-cover</dc:identifier>
+    <dc:title>Sigil Cover Sample</dc:title>
+    <dc:language>en</dc:language>
+    <meta name="cover" content="cover-image"/>
+  </metadata>
+  <manifest xmlns:opf="http://www.idpf.org/2007/opf">
+    <opf:item href="Images/Cover.jpg" id="cover-image" media-type="image/jpeg"/>
+    <opf:item href="Text/cover.xhtml" id="cover-xhtml" media-type="application/xhtml+xml"/>
+    <opf:item href="Text/ch1.xhtml" id="ch1" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="cover-xhtml"/>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#,
+    )
+    .unwrap();
+
+    // Tiny 1x1 JPEG (same byte payload as the cover-extract fixtures).
+    let jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9";
+    zw.start_file("Images/Cover.jpg", SimpleFileOptions::default()).unwrap();
+    zw.write_all(jpeg).unwrap();
+
+    for (name, body) in [
+        ("Text/cover.xhtml", r#"<img src="../Images/Cover.jpg"/>"#),
+        ("Text/ch1.xhtml", "<h1>Chapter One</h1><p>Body.</p>"),
+    ] {
+        zw.start_file(name, SimpleFileOptions::default()).unwrap();
+        let xhtml = format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>x</title></head><body>{body}</body></html>"#
+        );
+        zw.write_all(xhtml.as_bytes()).unwrap();
+    }
+
+    zw.finish().unwrap();
+}
+
+#[test]
+fn namespaced_opf_item_manifest_extracts_cover() {
+    let tmp = tempfile::tempdir().unwrap();
+    let epub = tmp.path().join("sigil-cover.epub");
+    build_sigil_style_epub_with_cover(&epub);
+
+    let dest = tempfile::tempdir().unwrap();
+    let cov = extract_to_dir(&epub, dest.path())
+        .expect("extract_to_dir ok")
+        .expect("cover present");
+    assert_eq!(cov.mime, "image/jpeg");
+    assert_eq!(cov.path.file_name().unwrap().to_string_lossy(), "cover.jpg");
+    assert!(std::fs::metadata(&cov.path).unwrap().len() > 0);
 }

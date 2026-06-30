@@ -13,7 +13,7 @@ use std::io::{Read, Seek};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use super::{parent_dir, read_to_string_from_zip, EpubError};
+use super::{local_name, parent_dir, read_to_string_from_zip, EpubError};
 
 /// Spine + TOC pointers pulled out of a single OPF pass.
 ///
@@ -426,13 +426,6 @@ fn nav_is_toc(e: &quick_xml::events::BytesStart) -> bool {
                 .map(|v| v.split_whitespace().any(|t| t == "toc"))
                 .unwrap_or(false)
     })
-}
-
-fn local_name(qname: &[u8]) -> &[u8] {
-    match qname.iter().rposition(|&b| b == b':') {
-        Some(i) => &qname[i + 1..],
-        None => qname,
-    }
 }
 
 // Collapse runs of ASCII whitespace inside an NCX label into a single ASCII

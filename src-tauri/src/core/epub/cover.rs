@@ -19,7 +19,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use zip::ZipArchive;
 
-use super::{parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip, EpubError};
+use super::{local_name, parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip, EpubError};
 
 #[derive(Debug, Clone)]
 pub struct ExtractedCover {
@@ -153,9 +153,9 @@ fn parse_manifest(opf_xml: &str) -> Vec<ManifestItem> {
     let mut in_manifest = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"manifest" => in_manifest = true,
-            Ok(Event::End(e)) if e.name().as_ref() == b"manifest" => in_manifest = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_manifest && e.name().as_ref() == b"item" => {
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"manifest" => in_manifest = true,
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"manifest" => in_manifest = false,
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_manifest && local_name(e.name().as_ref()) == b"item" => {
                 let mut id = String::new();
                 let mut href = String::new();
                 let mut media_type = String::new();
@@ -194,9 +194,9 @@ fn parse_spine(opf_xml: &str) -> Vec<String> {
     let mut in_spine = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"spine" => in_spine = true,
-            Ok(Event::End(e)) if e.name().as_ref() == b"spine" => in_spine = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_spine && e.name().as_ref() == b"itemref" => {
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"spine" => in_spine = true,
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"spine" => in_spine = false,
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_spine && local_name(e.name().as_ref()) == b"itemref" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"idref" {
                         out.push(attr.unescape_value().unwrap_or_default().to_string());
@@ -217,7 +217,7 @@ fn parse_meta_cover_id(opf_xml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if e.name().as_ref() == b"meta" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"meta" => {
                 let mut name = None;
                 let mut content = None;
                 for attr in e.attributes().flatten() {
@@ -247,9 +247,9 @@ fn parse_guide_cover_href(opf_xml: &str) -> Option<String> {
     let mut in_guide = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"guide" => in_guide = true,
-            Ok(Event::End(e)) if e.name().as_ref() == b"guide" => in_guide = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_guide && e.name().as_ref() == b"reference" => {
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"guide" => in_guide = true,
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"guide" => in_guide = false,
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_guide && local_name(e.name().as_ref()) == b"reference" => {
                 let mut typ = None;
                 let mut href = None;
                 for attr in e.attributes().flatten() {
@@ -278,7 +278,7 @@ fn first_img_src(xhtml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if e.name().as_ref() == b"img" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"img" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"src" {
                         return attr.unescape_value().ok().map(|c| c.into_owned());

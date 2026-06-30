@@ -153,6 +153,17 @@ pub(crate) fn read_to_string_from_zip<R: std::io::Read + std::io::Seek>(
     decode_xml_bytes(&bytes, name)
 }
 
+/// Strip an XML qualified-name prefix (`opf:item` → `item`). Sigil/Calibre
+/// EPUBs redeclare `xmlns:opf` on `<manifest>` and use `<opf:item>` for every
+/// manifest entry; quick_xml returns the fully-qualified bytes, so callers
+/// must normalise before comparing.
+pub(crate) fn local_name(qname: &[u8]) -> &[u8] {
+    match qname.iter().rposition(|&b| b == b':') {
+        Some(i) => &qname[i + 1..],
+        None => qname,
+    }
+}
+
 pub(crate) fn read_bytes_from_zip<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     name: &str,
