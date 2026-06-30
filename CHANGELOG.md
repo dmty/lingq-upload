@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/dmty/lingq-upload/compare/v0.2.0...v0.3.0) (2026-06-30)
+
+
+### Features
+
+* **chapters:** suppress cover-host XHTML from chapter list ([e82ffa2](https://github.com/dmty/lingq-upload/commit/e82ffa28acabb60cf28c07a3467db3cadf0313de))
+* **commands:** cmd_set_cover copies into project dir; add cmd_set_cover_use ([b05ebcd](https://github.com/dmty/lingq-upload/commit/b05ebcde327b8535e7658122c50d2cdc8c90a78b))
+* **epub:** extract cover image from EPUB to project sidecar ([1dd4f24](https://github.com/dmty/lingq-upload/commit/1dd4f24204d0b70a048bf5af4ec08ebbe87fe302))
+* **ingest:** auto-extract EPUB cover when no sidecar present ([956e93a](https://github.com/dmty/lingq-upload/commit/956e93a4057f05c5e9d47e36b5d7823ccf2e1802))
+* **lingq:** add set_collection_image with three-probe cascade ([fb91b78](https://github.com/dmty/lingq-upload/commit/fb91b78ccc060dd3682db437bc1429cd11a221ae))
+* **project:** add cover_use, cover_uploaded_to_lingq, cover_source_href ([41fdcbf](https://github.com/dmty/lingq-upload/commit/41fdcbf5872380a2e0ddf50148ae7b2bdf6c5778))
+* **ui:** add cover toggle and clear button on mapping screen ([e4bb6a1](https://github.com/dmty/lingq-upload/commit/e4bb6a1cdabb3a4888125ead7d2623a866e30d2a))
+* **upload:** set LingQ course cover after collection create (soft-fail) ([1282207](https://github.com/dmty/lingq-upload/commit/1282207bff141f818ab90b23281dcd8390d2ebe3))
+
+
+### Bug Fixes
+
+* address final-review polish (picker/backend ext mismatch, cover_use drift, strict ext rejection) ([243044d](https://github.com/dmty/lingq-upload/commit/243044d07a299bcd5ed406a27c82f864561ca459))
+* **clippy:** drop needless Ok(...?) wrapper in add_project copy-name branch ([9f87615](https://github.com/dmty/lingq-upload/commit/9f876159e41279e4f6ce3b30ed4dca49be475194))
+* **epub:** cover extraction also handles namespaced OPF manifest ([693cbe0](https://github.com/dmty/lingq-upload/commit/693cbe0e77856336023f5183b21517043825cee4))
+* **epub:** handle namespace-prefixed OPF manifest elements (Sigil/Calibre) ([378d454](https://github.com/dmty/lingq-upload/commit/378d4544ebbfdbdfed3371bcb7571b33a2f68b49))
+* **epub:** strip &lt;head&gt; block so book title doesn't leak into chapter body ([8f4548e](https://github.com/dmty/lingq-upload/commit/8f4548e81b4b0b4239c5bf090ae16af06b8b5d09))
+
 ## [0.2.0](https://github.com/dmty/lingq-upload/compare/v0.1.4...v0.2.0) (2026-06-29)
 
 

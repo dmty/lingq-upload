@@ -1,6 +1,6 @@
 [package]
 name = "lingq-upload"
-version = "0.2.0"
+version = "0.3.0"
 description = "Desktop app: import EPUB + audio into LingQ as language-learning courses."
 edition = "2021"
 default-run = "lingq-upload"
