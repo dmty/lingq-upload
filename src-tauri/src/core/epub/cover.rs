@@ -300,7 +300,7 @@ fn first_img_src(xhtml: &str) -> Option<String> {
 fn host_spine_href(
     spine: &[String],
     manifest: &[ManifestItem],
-    image_href: &str,
+    _image_href: &str,
 ) -> Option<String> {
     for idref in spine {
         let item = manifest.iter().find(|m| &m.id == idref)?;

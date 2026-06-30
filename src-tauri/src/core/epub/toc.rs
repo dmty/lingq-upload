@@ -43,7 +43,7 @@ pub(crate) fn parse_opf_refs(opf_xml: &str, opf_path: &str) -> Result<OpfRefs, E
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
                 let name = e.name();
-                if name.as_ref() == b"item" {
+                if local_name(name.as_ref()) == b"item" {
                     let mut id = None;
                     let mut href = None;
                     let mut media: Option<String> = None;
@@ -73,13 +73,13 @@ pub(crate) fn parse_opf_refs(opf_xml: &str, opf_path: &str) -> Result<OpfRefs, E
                             nav_href_direct = href;
                         }
                     }
-                } else if name.as_ref() == b"spine" {
+                } else if local_name(name.as_ref()) == b"spine" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"toc" {
                             ncx_id_from_spine = attr.unescape_value().map(|v| v.into_owned()).ok();
                         }
                     }
-                } else if name.as_ref() == b"itemref" {
+                } else if local_name(name.as_ref()) == b"itemref" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"idref" {
                             if let Ok(v) = attr.unescape_value() {
