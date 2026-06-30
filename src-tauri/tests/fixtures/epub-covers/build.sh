@@ -54,11 +54,13 @@ cat > content.opf <<EOF
 EOF
 build_epub "epub3-properties.epub" chapter1.xhtml
 
-# Fixtures B & C: EPUB2 variants with cover.xhtml
+# Fixtures B & C: EPUB2 variants with cover.xhtml. Body carries a real
+# paragraph so the cover chapter is not empty-dropped by the parser — the
+# cover-filter behaviour we test only matters when cover.xhtml survives parse.
 cat > cover.xhtml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Cover</title></head>
-<body><img src="cover.jpg" alt="cover"/></body></html>
+<body><p>Cover image follows.</p><img src="cover.jpg" alt="cover"/></body></html>
 EOF
 
 # Fixture B: meta name=cover

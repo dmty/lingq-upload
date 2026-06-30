@@ -41,12 +41,15 @@ fn strip_html_tags(html: &str) -> String {
     decode_basic_entities(&out)
 }
 
-/// If `html[start..]` opens a `<style>` or `<script>` element, return the
-/// byte offset just past its closing tag (or EOF when unterminated) so the
-/// caller skips content and tags in one hop.
+/// If `html[start..]` opens a `<style>`, `<script>`, or `<head>` element,
+/// return the byte offset just past its closing tag (or EOF when
+/// unterminated) so the caller skips content and tags in one hop.
+/// `<head>` is included so its `<title>…</title>` text — which Sigil/Calibre
+/// EPUBs populate with the book title on every chapter file — does not leak
+/// into the chapter body.
 fn raw_element_end(html: &str, start: usize) -> Option<usize> {
     let rest = &html[start + 1..];
-    let name = ["style", "script"].into_iter().find(|n| {
+    let name = ["style", "script", "head"].into_iter().find(|n| {
         rest.len() > n.len()
             && rest.as_bytes()[..n.len()].eq_ignore_ascii_case(n.as_bytes())
             && matches!(
@@ -128,5 +131,18 @@ mod tests {
     fn strip_html_tags_self_closing_style_keeps_following_text() {
         let out = strip_html_tags("<style type=\"text/css\"/><p>Body text</p>");
         assert_eq!(out.trim(), "Body text");
+    }
+
+    #[test]
+    fn strip_html_tags_drops_head_title_so_book_title_does_not_leak() {
+        // Sigil/Calibre EPUBs put the book title in every chapter's
+        // `<head><title>Book Title</title></head>`. Must not appear in body.
+        let html = "<html><head><title>Roadside Picnic</title>\
+<meta charset=\"utf-8\"/></head>\
+<body><h1>Chapter 1</h1><p>Body text</p></body></html>";
+        let out = strip_html_tags(html);
+        assert!(!out.contains("Roadside Picnic"), "head title leaked: {out}");
+        assert!(out.contains("Chapter 1"));
+        assert!(out.contains("Body text"));
     }
 }
