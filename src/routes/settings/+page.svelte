@@ -27,6 +27,9 @@
   let rowBusyId = $state<string | null>(null);
   let rowErrors = $state<Record<string, string>>({});
 
+  let clearArmed = $state(false);
+  let clearTimer: ReturnType<typeof setTimeout> | null = null;
+
   let devBackend = $state<DevBackendInfo | null>(null);
   let devBackendBusy = $state(false);
   let devBackendError = $state<string | null>(null);
@@ -143,11 +146,23 @@
       void languagesStore.ensureLoaded();
       await refresh();
       justSaved = true;
-      setTimeout(() => (justSaved = false), 600);
+      setTimeout(() => (justSaved = false), 2500);
     } else {
       error = appErrorMessage(res.error);
     }
     busy = false;
+  }
+
+  function requestClear() {
+    if (!clearArmed) {
+      clearArmed = true;
+      clearTimer = setTimeout(() => (clearArmed = false), 5000);
+      return;
+    }
+    if (clearTimer != null) clearTimeout(clearTimer);
+    clearTimer = null;
+    clearArmed = false;
+    void clear();
   }
 
   async function clear() {
@@ -169,7 +184,7 @@
       const text = await navigator.clipboard.readText();
       if (text) key = text.trim();
     } catch {
-      // Browser may deny clipboard access; the input is still usable.
+      error = "Clipboard unavailable — paste the key manually.";
     }
   }
 
@@ -252,11 +267,13 @@
     <div class="mt-6 flex items-center justify-end gap-2">
       <button
         type="button"
-        onclick={clear}
+        onclick={requestClear}
         disabled={busy || !savedTail}
-        class="rounded-sm px-3 py-2 text-sm font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg disabled:opacity-40"
+        class="rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-120 hover:bg-surface-sunken disabled:opacity-40 {clearArmed
+          ? 'text-error'
+          : 'text-fg-muted hover:text-fg'}"
       >
-        Clear
+        {clearArmed ? "Really clear?" : "Clear"}
       </button>
       <button
         type="button"

@@ -304,6 +304,13 @@ export const tauriStubInitScript = `
             return null;
         },
         cmd_seed_mapping: () => null,
+        // Dev backend info — defaults to file backend, debug mode off.
+        cmd_get_dev_backend: () => ({
+            is_debug: false,
+            current: "file",
+            env_override: false,
+        }),
+        cmd_set_dev_backend: () => null,
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
         // Listeners are recorded; specs drive them via window.__emitEvent__.
