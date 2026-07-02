@@ -316,7 +316,7 @@
   >
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />
-    {:else if busy || progress.length > 0}
+    {:else if !error && (busy || progress.length > 0)}
       <ProgressPanel stage={currentStage} pct={livePct} message={liveMessage} />
     {:else}
       <!-- Destination -->
