@@ -22,6 +22,7 @@
     skippedIds: string[];
     lastSavedAt: number | null;
     saving: boolean;
+    revertEpoch: number;
     canContinue: boolean;
     onOp: (op: MappingOp) => void;
     onConfirmPair: (chapterId: string) => void;
@@ -38,6 +39,7 @@
     skippedIds,
     lastSavedAt,
     saving,
+    revertEpoch,
     canContinue,
     onOp,
     onConfirmPair,
@@ -185,6 +187,16 @@
   const savedLabel = $derived.by(() => {
     void footerTick;
     return lastSavedAt != null ? relativeFromMs(lastSavedAt) : "";
+  });
+
+  let saveFailedVisible = $state(false);
+  let seenEpoch = revertEpoch;
+  $effect(() => {
+    if (revertEpoch === seenEpoch) return;
+    seenEpoch = revertEpoch;
+    saveFailedVisible = true;
+    const t = setTimeout(() => (saveFailedVisible = false), 4000);
+    return () => clearTimeout(t);
   });
 
   const unpairedChapterIds = $derived(
@@ -398,8 +410,13 @@
     class="flex items-center justify-between border-t border-border pt-2 text-xs text-fg-muted"
     data-testid="mapping-footer"
   >
-    <span data-testid="mapping-saved-label">
-      {#if saving}
+    <span
+      data-testid="mapping-saved-label"
+      class={saveFailedVisible ? "text-error" : ""}
+    >
+      {#if saveFailedVisible}
+        Couldn't save — change reverted
+      {:else if saving}
         Saving…
       {:else if lastSavedAt != null}
         All changes saved · {savedLabel}

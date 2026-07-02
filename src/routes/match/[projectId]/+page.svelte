@@ -289,8 +289,8 @@
   }
 
   // submitOp/confirmPair reject when their flush turn fails — that is the
-  // signal for awaiting callers; fire-and-forget call sites swallow it
-  // (AD-025: the reverted row colour is the only failure surface).
+  // signal for awaiting callers; fire-and-forget call sites swallow it (the
+  // grid footer shows a transient save-failure notice off revertEpoch).
   function handleMappingOp(op: MappingOp) {
     mapping.submitOp(op).catch(() => {});
   }
@@ -307,7 +307,7 @@
       return;
     }
     // A revert during the final flush means the save failed — stay on the
-    // page and let the reverted row colour speak (AD-025: no banner).
+    // page and the footer notice explains the revert.
     if (mapping.revertEpoch !== epoch || !mapping.gateContinue()) return;
     const pid = mapping.projectId;
     if (!pid) return;
@@ -727,6 +727,7 @@
             skippedIds={mapping.skippedIds}
             lastSavedAt={mapping.lastSavedAt}
             saving={mapping.saving}
+            revertEpoch={mapping.revertEpoch}
             canContinue={mappingGateOk}
             onOp={handleMappingOp}
             onConfirmPair={handleConfirmPair}

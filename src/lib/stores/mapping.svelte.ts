@@ -19,7 +19,7 @@ type State = {
   error: string | null;
   // Ticks whenever an optimistic update is reverted by a backend error.
   // Consumers can subscribe to re-align local row state from skippedIds
-  // without re-seeding on first mount. AD-025: revert is silent.
+  // without re-seeding on first mount. The grid footer surfaces reverts via a transient notice.
   revertEpoch: number;
   // Wall-clock ms of the last successful save (selection or mapping op).
   // Footer renders "All changes saved · {relative time}" off this.
@@ -126,7 +126,7 @@ async function flushPendingOps(): Promise<void> {
     const stillCurrent = state.projectId === projectId;
     if (result.status === "error") {
       if (stillCurrent) {
-        // AD-025: silent revert.
+        // Revert optimistic state; the grid footer surfaces the failure via revertEpoch.
         state.mappingState = lastConfirmed ?? queued.snapshot;
         state.revertEpoch += 1;
       }
@@ -235,8 +235,7 @@ export const mapping = {
         const result = await commands.cmdSetSelection(projectId, skippedIds);
         if (state.projectId !== projectId) return;
         if (result.status === "error") {
-          // AD-025: silent revert. Roll back optimistic state and bump
-          // revertEpoch so consumers can re-align row state.
+          // Revert optimistic state; the grid footer surfaces the failure via revertEpoch.
           state.skippedIds = previous;
           state.revertEpoch += 1;
           // eslint-disable-next-line no-console
