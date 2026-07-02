@@ -151,8 +151,13 @@ test.describe("chapter inspector", () => {
     page,
   }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    // band t0={0,1,2}, t1={3,4}. Only t0's last row (idx:2) shows a ↓ arrow.
-    await page.getByTestId("chapter-move-down").click();
+    // band t0={0,1,2}, t1={3,4}. Arrows render on every row; only t0's last
+    // row (idx:2) has an enabled ↓ arrow.
+    const downArrow = page.locator(
+      '[data-testid="chapter-move-down"][data-chapter-id="idx:2"]',
+    );
+    await expect(downArrow).toBeEnabled();
+    await downArrow.click();
     // boundary shifts: t0 now has 2 rows, t1 has 3 — still 2 bands.
     await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
     const secondBand = page.getByTestId("mapping-bucket-band").nth(1);
@@ -163,18 +168,46 @@ test.describe("chapter inspector", () => {
     page,
   }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    // Only t1's first row (idx:3) shows a ↑ arrow.
-    await page.getByTestId("chapter-move-up").click();
+    // Only t1's first row (idx:3) has an enabled ↑ arrow.
+    const upArrow = page.locator(
+      '[data-testid="chapter-move-up"][data-chapter-id="idx:3"]',
+    );
+    await expect(upArrow).toBeEnabled();
+    await upArrow.click();
     await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
     const firstBand = page.getByTestId("mapping-bucket-band").nth(0);
     await expect(firstBand.getByTestId("mapping-chapter-row")).toHaveCount(4);
   });
 
-  test("interior chapters show no move arrows", async ({ page }) => {
+  test("move arrows render on every row, enabled only at band edges", async ({
+    page,
+  }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    // 2 bands → exactly one ↓ (t0 last) and one ↑ (t1 first); interior rows have none.
-    await expect(page.getByTestId("chapter-move-down")).toHaveCount(1);
-    await expect(page.getByTestId("chapter-move-up")).toHaveCount(1);
+    // 5 rows total, so 5 ↓ arrows and 5 ↑ arrows render — disabled unless the
+    // row sits on a band edge (t0 last = idx:2 for ↓, t1 first = idx:3 for ↑).
+    await expect(page.getByTestId("chapter-move-down")).toHaveCount(5);
+    await expect(page.getByTestId("chapter-move-up")).toHaveCount(5);
+
+    const enabledDown = new Set(["idx:2"]);
+    const enabledUp = new Set(["idx:3"]);
+    for (const id of ["idx:0", "idx:1", "idx:2", "idx:3", "idx:4"]) {
+      const downArrow = page.locator(
+        `[data-testid="chapter-move-down"][data-chapter-id="${id}"]`,
+      );
+      const upArrow = page.locator(
+        `[data-testid="chapter-move-up"][data-chapter-id="${id}"]`,
+      );
+      if (enabledDown.has(id)) {
+        await expect(downArrow).toBeEnabled();
+      } else {
+        await expect(downArrow).toBeDisabled();
+      }
+      if (enabledUp.has(id)) {
+        await expect(upArrow).toBeEnabled();
+      } else {
+        await expect(upArrow).toBeDisabled();
+      }
+    }
   });
 
   test("remove from the inspector drops the chapter", async ({ page }) => {
