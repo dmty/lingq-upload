@@ -3,9 +3,10 @@
     stage: string | null;
     pct: number;
     message: string | null;
+    onCancel?: () => void;
   }
 
-  let { stage, pct, message }: Props = $props();
+  let { stage, pct, message, onCancel }: Props = $props();
 </script>
 
 <div class="p-6">
@@ -26,5 +27,16 @@
   </div>
   {#if message}
     <p class="mt-2 text-sm text-fg-muted">{message}</p>
+  {/if}
+  {#if onCancel}
+    <div class="mt-4 flex justify-end">
+      <button
+        type="button"
+        onclick={onCancel}
+        class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-120 hover:bg-surface-sunken"
+      >
+        Cancel
+      </button>
+    </div>
   {/if}
 </div>

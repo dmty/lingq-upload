@@ -34,6 +34,7 @@
   let titleEdited = $state(false);
 
   let busy = $state(false);
+  let jobId = $state<string | null>(null);
   let progress = $state<ProgressEntry[]>([]);
   let currentStage = $state<string | null>(null);
   let error = $state<string | null>(null);
@@ -158,6 +159,7 @@
   function handleJobEvent(ev: JobEvent) {
     switch (ev.kind) {
       case "Started":
+        jobId = ev.job_id;
         currentStage = stageLabel(ev.stage.kind);
         progress = [
           ...progress,
@@ -178,7 +180,9 @@
         currentStage = ev.ok ? "Done" : "Failed";
         break;
       case "Log":
+        break;
       case "Cancelled":
+        currentStage = "Cancelled";
         break;
     }
   }
@@ -275,6 +279,10 @@
     error = null;
   }
 
+  function cancelUpload() {
+    if (jobId) void commands.cmdCancelJob(jobId);
+  }
+
   async function upload() {
     if (!canSubmit) return;
     busy = true;
@@ -282,6 +290,7 @@
     result = null;
     progress = [];
     currentStage = null;
+    jobId = null;
 
     const built = await commands.manualSourceFromFiles(
       textPath,
@@ -317,7 +326,12 @@
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />
     {:else if !error && (busy || progress.length > 0)}
-      <ProgressPanel stage={currentStage} pct={livePct} message={liveMessage} />
+      <ProgressPanel
+        stage={currentStage}
+        pct={livePct}
+        message={liveMessage}
+        onCancel={busy ? cancelUpload : undefined}
+      />
     {:else}
       <!-- Destination -->
       <div class="p-6">
