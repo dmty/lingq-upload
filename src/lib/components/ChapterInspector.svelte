@@ -25,6 +25,7 @@
   let el: HTMLAudioElement | undefined = $state();
   let playing = $state(false);
   let cur = $state(0); // seconds elapsed within the window
+  let audioError = $state(false);
   let dur = $derived(audio ? Math.max(0.001, audio.end - audio.start) : 0);
   let frac = $derived(dur > 0 ? Math.min(1, Math.max(0, cur / dur)) : 0);
 
@@ -34,24 +35,11 @@
     if (el) el.pause();
     playing = false;
     cur = 0;
+    audioError = false;
   });
 
-  function snap(tag: string) {
-    if (!el) return;
-    console.log("inspector audio " + tag, {
-      currentSrc: el.currentSrc,
-      readyState: el.readyState,
-      networkState: el.networkState,
-      duration: el.duration,
-      currentTime: el.currentTime,
-      paused: el.paused,
-      muted: el.muted,
-      volume: el.volume,
-    });
-  }
   function toggle() {
     if (!el || !audio) return;
-    snap("toggle pre");
     if (el.paused) {
       // Seek into the window BEFORE play(); mutating currentTime mid-play
       // aborts the play() promise with AbortError on WebKit.
@@ -64,15 +52,7 @@
     } else el.pause();
   }
   function onMediaError() {
-    if (!el) return;
-    const e = el.error;
-    console.warn("inspector audio error:", {
-      code: e?.code,
-      message: e?.message,
-      networkState: el.networkState,
-      readyState: el.readyState,
-      src: el.currentSrc,
-    });
+    audioError = true;
   }
   function onPlay() {
     playing = true;
@@ -205,14 +185,14 @@
             onpause={onPause}
             ontimeupdate={onTimeUpdate}
             onerror={onMediaError}
-            onloadedmetadata={() => snap("loadedmetadata")}
-            oncanplay={() => snap("canplay")}
-            onstalled={() => snap("stalled")}
-            onwaiting={() => snap("waiting")}
-            onseeked={() => snap("seeked")}
           ></audio>
         {/if}
       </div>
+      {#if audioError}
+        <p class="border-b border-border bg-surface-sunken px-5 pb-3 text-xs text-error">
+          Audio preview unavailable for this file.
+        </p>
+      {/if}
     {/if}
 
     <div
@@ -235,6 +215,13 @@
         >Remove chapter</button
       >
     </div>
+  </aside>
+{:else}
+  <aside
+    data-testid="chapter-inspector-empty"
+    class="sticky top-4 ml-5 grid max-h-[calc(100vh-2rem)] w-[360px] flex-none place-items-center rounded-lg border border-dashed border-border bg-surface p-8 text-center"
+  >
+    <p class="text-sm text-fg-muted">Select a chapter to preview its text and audio.</p>
   </aside>
 {/if}
 
