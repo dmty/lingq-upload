@@ -60,8 +60,8 @@ test.describe("mapping remove", () => {
     await expect(page.getByTestId("chapter-number").last()).toHaveText("4");
     await expect(page.getByTestId("removed-strip")).toContainText("1");
 
-    // Undo restores the chapter
-    await page.getByTestId("removed-undo").click();
+    // Per-item restore brings the chapter back.
+    await page.getByTestId("removed-restore").click();
     await expect(page.getByTestId("mapping-chapter-row")).toHaveCount(5);
   });
 });

@@ -732,8 +732,8 @@
             onConfirmPair={handleConfirmPair}
             onRemove={(id) => mapping.removeChapter(id)}
             onMove={(id, trackId) => mapping.moveChapter(id, trackId)}
-            onUndoRemove={() =>
-              mapping.setSkipped(mapping.skippedIds.slice(0, -1))}
+            onRestore={(id) =>
+              void mapping.setSkipped(mapping.skippedIds.filter((x) => x !== id))}
             onContinue={handleMappingContinue}
           />
         </div>

@@ -27,7 +27,7 @@
     onConfirmPair: (chapterId: string) => void;
     onRemove: (chapterId: string) => void;
     onMove: (chapterId: string, trackId: string) => void;
-    onUndoRemove: () => void;
+    onRestore: (chapterId: string) => void;
     onContinue: () => void;
   };
 
@@ -43,7 +43,7 @@
     onConfirmPair,
     onRemove,
     onMove,
-    onUndoRemove,
+    onRestore,
     onContinue,
   }: Props = $props();
 
@@ -366,15 +366,21 @@
       data-testid="removed-strip"
       class="rounded-md border border-dashed border-border-strong px-3 py-2 text-xs text-fg-muted"
     >
-      Removed ({removedChapters.length}): {removedChapters
-        .map((c) => c.title)
-        .join(" · ")}
-      <button
-        type="button"
-        data-testid="removed-undo"
-        class="ml-2 text-accent"
-        onclick={() => onUndoRemove()}>undo</button
-      >
+      <span class="font-medium">Removed ({removedChapters.length})</span>
+      <span class="mt-1.5 flex flex-wrap gap-1.5">
+        {#each removedChapters as c (c.id)}
+          <button
+            type="button"
+            data-testid="removed-restore"
+            data-chapter-id={c.id}
+            title="Restore this chapter"
+            class="rounded-sm border border-border bg-surface px-1.5 py-0.5 hover:bg-surface-sunken hover:text-fg"
+            onclick={() => onRestore(c.id)}
+          >
+            {c.title} ↩
+          </button>
+        {/each}
+      </span>
     </div>
   {/if}
 
