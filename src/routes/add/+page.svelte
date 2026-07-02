@@ -35,6 +35,7 @@
   let title = $state("");
   let busy = $state(false);
   let error = $state<string | null>(null);
+  let dropNotice = $state<string | null>(null);
   let pickedCandidate = $state<Candidate | null>(null);
   let conflict = $state<{
     existing: ProjectId;
@@ -62,8 +63,11 @@
     if (lang || defaultApplied || languages.length === 0) return;
     defaultApplied = true;
     const saved = getSavedLanguage();
+    // getSavedLanguage() returns "" (not null) when unset — "" is falsy but
+    // not nullish, so `saved && ...` short-circuits to "" and defeats the ??
+    // fallback chain below unless we normalize it to undefined first.
     const match =
-      (saved && languages.find((l) => l.code === saved)) ??
+      (saved ? languages.find((l) => l.code === saved) : undefined) ??
       visibleLanguages[0] ??
       languages[0];
     if (!match) return;
@@ -168,6 +172,8 @@
 
   async function handleDrop(paths: string[]) {
     if (!paths.length) return;
+    dropNotice = null;
+    const before = `${textPath}|${audioPaths.length}`;
     const leftover: string[] = [];
     for (const p of paths) {
       const ext = extOf(p);
@@ -179,24 +185,34 @@
       }
     }
     if (leftover.length) assignDropped(leftover);
+    if (`${textPath}|${audioPaths.length}` === before) {
+      dropNotice =
+        "Nothing usable in that drop — text: EPUB/HTML/TXT, audio: M4B/M4A/MP3.";
+    }
   }
 
   async function handleDropOnZone(zone: "text" | "audio", paths: string[]) {
+    dropNotice = null;
+    const before = `${textPath}|${audioPaths.length}`;
     if (zone !== "audio") {
       assignToZone(zone, paths);
-      return;
-    }
-    const leftover: string[] = [];
-    for (const p of paths) {
-      const ext = extOf(p);
-      if (!ext) {
-        const expanded = await expandFolderDrop(p);
-        if (!expanded) leftover.push(p);
-      } else {
-        leftover.push(p);
+    } else {
+      const leftover: string[] = [];
+      for (const p of paths) {
+        const ext = extOf(p);
+        if (!ext) {
+          const expanded = await expandFolderDrop(p);
+          if (!expanded) leftover.push(p);
+        } else {
+          leftover.push(p);
+        }
       }
+      if (leftover.length) assignToZone("audio", leftover);
     }
-    if (leftover.length) assignToZone("audio", leftover);
+    if (`${textPath}|${audioPaths.length}` === before) {
+      dropNotice =
+        "Nothing usable in that drop — text: EPUB/HTML/TXT, audio: M4B/M4A/MP3.";
+    }
   }
 
   function removeAudio(p: string) {
@@ -268,6 +284,16 @@
         ? !!textPath && audioPaths.length > 0 && !!lang.trim() && !!title.trim()
         : pickedCandidate !== null,
   );
+
+  const createLabel = $derived.by(() => {
+    if (busy) return "Creating…";
+    if (!isManual) return pickedCandidate ? "Create" : "Pick a book to continue";
+    if (!textPath) return "Add the book file";
+    if (audioPaths.length === 0) return "Add the audio";
+    if (!lang.trim()) return "Choose a language";
+    if (!title.trim()) return "Name the project";
+    return "Create";
+  });
 
   async function pickText() {
     const sel = await open({
@@ -472,7 +498,16 @@
           {/each}
         </select>
         {#if languagesError}
-          <span class="block text-xs text-error">{languagesError}</span>
+          <span class="block text-xs text-error">
+            {languagesError}
+            <button
+              type="button"
+              class="ml-1 font-medium text-accent hover:underline"
+              onclick={() => void languagesStore.ensureLoaded()}
+            >
+              Retry
+            </button>
+          </span>
         {:else if languages.length > 0}
           <label
             class="flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted"
@@ -501,6 +536,15 @@
     </div>
   {/if}
 
+  {#if dropNotice}
+    <p
+      role="status"
+      class="rounded-sm border border-border bg-surface-sunken px-4 py-2 text-sm text-fg-muted"
+    >
+      {dropNotice}
+    </p>
+  {/if}
+
   {#if error}
     <p
       class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm text-fg"
@@ -522,7 +566,7 @@
           type="button"
           disabled={busy}
           onclick={() => resolve("replace")}
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
+          class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:bg-fg-subtle"
         >
           Replace
         </button>
@@ -561,7 +605,7 @@
       onclick={onCreate}
       class="rounded-sm bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
     >
-      {busy ? "Creating…" : "Create"}
+      {createLabel}
     </button>
   </div>
 </section>
