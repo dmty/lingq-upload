@@ -92,6 +92,13 @@
     languageFilter = "";
   }
 
+  // A focusIndex that survives re-filtering targets the wrong row.
+  $effect(() => {
+    search;
+    languageFilter;
+    focusIndex = null;
+  });
+
   function isFormField(el: EventTarget | null): boolean {
     if (!(el instanceof HTMLElement)) return false;
     const tag = el.tagName;
