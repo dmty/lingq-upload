@@ -215,6 +215,15 @@
 
   const driftMedian = $derived(median(buckets.map((b) => b.charsPerSec)));
 
+  const blockingCount = $derived(
+    (mappingState?.pairs ?? []).filter(
+      (p) =>
+        p.track_id &&
+        !(p.touched ?? false) &&
+        (p.original_confidence ?? p.confidence) < 0.6,
+    ).length,
+  );
+
   function isDrift(cps: number): boolean {
     return (
       driftMedian > 0 &&
@@ -277,7 +286,8 @@
             aria-selected={mapping.selectedChapterId === row.chapter.id}
             data-testid="mapping-chapter-row"
             data-chapter-id={row.chapter.id}
-            class="flex flex-col gap-1 px-3 py-1.5 text-sm {pair && confBand
+            class="flex cursor-pointer flex-col gap-1 px-3 py-1.5 text-sm transition-colors hover:bg-surface-sunken/60 {pair &&
+            confBand
               ? confBand.borderClass
               : 'border-l-4 border-l-transparent'}"
             class:selected={mapping.selectedChapterId === row.chapter.id}
@@ -313,26 +323,30 @@
                   Confirm
                 </button>
               {/if}
-              {#if upTrack}
-                <button
-                  type="button"
-                  data-testid="chapter-move-up"
-                  data-chapter-id={row.chapter.id}
-                  aria-label={`Move ${row.chapter.title} up to the previous audio`}
-                  class="leading-none text-fg-subtle transition hover:text-accent"
-                  onclick={() => onMove(row.chapter.id, upTrack!)}>↑</button
-                >
-              {/if}
-              {#if downTrack}
-                <button
-                  type="button"
-                  data-testid="chapter-move-down"
-                  data-chapter-id={row.chapter.id}
-                  aria-label={`Move ${row.chapter.title} down to the next audio`}
-                  class="leading-none text-fg-subtle transition hover:text-accent"
-                  onclick={() => onMove(row.chapter.id, downTrack!)}>↓</button
-                >
-              {/if}
+              <button
+                type="button"
+                data-testid="chapter-move-up"
+                data-chapter-id={row.chapter.id}
+                aria-label={`Move ${row.chapter.title} up to the previous audio`}
+                title={upTrack
+                  ? "Move to the previous audio"
+                  : "Only the first chapter of a group can move up"}
+                disabled={!upTrack}
+                class="rounded-sm px-1 leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+                onclick={() => onMove(row.chapter.id, upTrack!)}>↑</button
+              >
+              <button
+                type="button"
+                data-testid="chapter-move-down"
+                data-chapter-id={row.chapter.id}
+                aria-label={`Move ${row.chapter.title} down to the next audio`}
+                title={downTrack
+                  ? "Move to the next audio"
+                  : "Only the last chapter of a group can move down"}
+                disabled={!downTrack}
+                class="rounded-sm px-1 leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+                onclick={() => onMove(row.chapter.id, downTrack!)}>↓</button
+              >
               <button
                 type="button"
                 data-testid="chapter-remove"
@@ -385,12 +399,14 @@
         All changes saved · {savedLabel}
       {/if}
     </span>
-    <span
-      class="group relative"
-      title={canContinue
-        ? undefined
-        : "Confirm or swap the rows with low confidence to continue."}
-    >
+    <span class="flex items-center gap-3">
+      {#if !canContinue && blockingCount > 0}
+        <span data-testid="continue-blockers" class="text-warning">
+          {blockingCount} low-confidence {blockingCount === 1
+            ? "pair needs"
+            : "pairs need"} review
+        </span>
+      {/if}
       <button
         type="button"
         onclick={onContinue}

@@ -384,18 +384,24 @@ test.describe("banded bucket list", () => {
     await expect(page.getByTestId("bucket-band-meta").nth(1)).toContainText(
       "Audio 2",
     );
-    // Tail-band chapter (Chapter 2) gets a ↑ arrow targeting the orphan t1;
-    // paired Chapter 1 gets a ↓ arrow targeting the orphan as well.
-    await expect(page.getByTestId("chapter-move-up")).toHaveCount(1);
-    await expect(page.getByTestId("chapter-move-up")).toHaveAttribute(
+    // Arrows render on every row now, disabled where illegal. Tail-band
+    // chapter (Chapter 2) gets an enabled ↑ targeting the orphan t1, and its
+    // ↓ is disabled (last band). Paired Chapter 1's ↑ is disabled (first
+    // band); its ↓ is enabled, targeting the orphan.
+    await expect(page.getByTestId("chapter-move-up")).toHaveCount(2);
+    await expect(page.getByTestId("chapter-move-up").nth(0)).toBeDisabled();
+    await expect(page.getByTestId("chapter-move-up").nth(1)).toBeEnabled();
+    await expect(page.getByTestId("chapter-move-up").nth(1)).toHaveAttribute(
       "data-chapter-id",
       "or:1",
     );
-    await expect(page.getByTestId("chapter-move-down")).toHaveCount(1);
-    await expect(page.getByTestId("chapter-move-down")).toHaveAttribute(
+    await expect(page.getByTestId("chapter-move-down")).toHaveCount(2);
+    await expect(page.getByTestId("chapter-move-down").nth(0)).toBeEnabled();
+    await expect(page.getByTestId("chapter-move-down").nth(0)).toHaveAttribute(
       "data-chapter-id",
       "or:0",
     );
+    await expect(page.getByTestId("chapter-move-down").nth(1)).toBeDisabled();
   });
 
   test("orphan bucket stays in audio-order position between paired buckets", async ({
