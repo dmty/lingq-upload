@@ -71,6 +71,17 @@ export const tauriStubInitScript = `
         },
     };
 
+    window.__invokeLog__ = [];
+    window.__eventHandlers__ = window.__eventHandlers__ || {};
+    // Test seam: fire a Tauri event into every listener the app registered.
+    window.__emitEvent__ = (event, payload) => {
+        const ids = window.__eventHandlers__[event] || [];
+        for (const id of ids) {
+            const cb = window["_" + id];
+            if (cb) cb({ event, id, payload });
+        }
+    };
+
     const handlers = {
         // Library list returns entries from window.__libraryEntries__ if set,
         // else empty index so the empty-state CTA renders.
@@ -81,9 +92,8 @@ export const tauriStubInitScript = `
         }),
         // Account/profile probe — empty placeholder keeps the layout calm.
         cmd_account_profile: () => ({ username: null, known_words: {} }),
-        // No LingQ key in the test env — surfaces the dismissable banner,
-        // never any recovery-event copy.
-        cmd_load_lingq_key: () => null,
+        // Load LingQ key, defaulting to null if not set in the test env.
+        cmd_load_lingq_key: () => window.__lingqKey__ ?? null,
         // Project load for the run screen. Returns a minimal project with
         // no receipts so the chapter list renders empty and the start
         // button shows "Start" (not "Resume" — which would tax the
@@ -150,6 +160,10 @@ export const tauriStubInitScript = `
         cmd_set_cover: () => null,
         "plugin:dialog|open": () => window.__dialogPickPath__ ?? null,
         cmd_apply_mapping_op: (args) => {
+            if (window.__failNextMappingOp__) {
+                window.__failNextMappingOp__ = false;
+                throw { kind: "MappingStaleOp", message: { server: 9, expected: 1 } };
+            }
             const pid = args && args.projectId;
             const key = (pid && pid.content_hash) || "stub-project";
             const op = args && args.op;
@@ -270,13 +284,35 @@ export const tauriStubInitScript = `
             return null;
         },
         cmd_confirm_mapping: () => null,
+        cmd_start_project_job: () => "job-1",
+        cmd_project_cancel: () => 1,
+        cmd_cancel_job: () => null,
+        cmd_list_languages: () => window.__languages__ || [],
+        cmd_list_collections: () => window.__collections__ || [],
+        manual_source_from_files: () => ({ stub: true }),
+        upload_one_shot: async () => {
+            if (window.__uploadOneShotGate__) await window.__uploadOneShotGate__;
+            if (window.__uploadOneShotError__) throw window.__uploadOneShotError__;
+            return window.__uploadOneShotResult__ ?? { lesson_id: 101, collection_id: 7 };
+        },
+        cmd_save_lingq_key: (args) => {
+            window.__lingqKey__ = (args && args.key) || null;
+            return null;
+        },
+        cmd_clear_lingq_key: () => {
+            window.__lingqKey__ = null;
+            return null;
+        },
         cmd_seed_mapping: () => null,
         // Trash list for the /settings route. Empty list keeps the panel quiet.
         cmd_list_trash: () => [],
-        // Event plugin: register a listener, return a numeric id. We don't
-        // emit anything from the stub yet — specs that need driven events
-        // stay skipped until this grows.
-        "plugin:event|listen": () => 1,
+        // Listeners are recorded; specs drive them via window.__emitEvent__.
+        "plugin:event|listen": (args) => {
+            const id = (args && args.handler) || 0;
+            const ev = args && args.event;
+            (window.__eventHandlers__[ev] = window.__eventHandlers__[ev] || []).push(id);
+            return id;
+        },
         "plugin:event|unlisten": () => null,
     };
 
@@ -288,6 +324,7 @@ export const tauriStubInitScript = `
             currentWebview: { label: "main" },
         },
         invoke: async (cmd, _args) => {
+            window.__invokeLog__.push(cmd);
             const fn = handlers[cmd];
             if (!fn) {
                 throw new Error('tauri-stub: unmocked command ' + cmd);
