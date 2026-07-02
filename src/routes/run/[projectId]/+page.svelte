@@ -10,6 +10,8 @@
     type Project,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import { lingqCollectionUrl } from "$lib/lingq";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
 
   type Row = {
@@ -36,6 +38,8 @@
   // by reloadProject() on terminal events.
   let jobId = $state<string | null>(null);
   let starting = $state(false);
+  let cancelling = $state(false);
+  let completed = $state(false);
 
   function receiptRow(r: ChapterReceipt): Row {
     const uploaded = r.lesson_id != null;
@@ -82,6 +86,7 @@
   }
 
   async function start() {
+    completed = false;
     error = null;
     info = null;
     starting = true;
@@ -109,13 +114,12 @@
   }
 
   async function cancel() {
-    if (!project) {
-      error = "No project loaded — cannot cancel.";
-      return;
-    }
+    if (!project || cancelling) return;
+    cancelling = true;
     const res = await commands.cmdProjectCancel(project.id);
     if (res.status === "error") {
       error = appErrorMessage(res.error);
+      cancelling = false;
     }
   }
 
@@ -142,6 +146,7 @@
   }
 
   const hasReceipts = $derived((project?.receipts?.length ?? 0) > 0);
+  const doneCount = $derived(rows.filter((r) => r.status === "done").length);
 
   onMount(async () => {
     await reloadProject();
@@ -163,7 +168,9 @@
         });
       } else if (ev.kind === "Result") {
         running = false;
+        cancelling = false;
         if (ev.ok) {
+          completed = true;
           await reloadProject();
         }
       } else if (ev.kind === "NeedsMatch") {
@@ -171,6 +178,7 @@
         goToMatch(ev);
       } else if (ev.kind === "Cancelled") {
         running = false;
+        cancelling = false;
         await reloadProject();
       }
     });
@@ -188,6 +196,7 @@
 <section class="col-wide space-y-4 pt-6">
   <header class="flex items-center justify-between">
     <div>
+      <a href="/library" class="text-xs text-fg-muted hover:text-fg">← Library</a>
       <h1 class="text-lg font-semibold text-fg">
         {project?.settings.collection_title ?? "Run"}
       </h1>
@@ -198,16 +207,17 @@
     <div class="flex items-center gap-2">
       {#if running}
         <span
-          class="rounded-sm bg-accent-soft px-2 py-1 text-xs font-medium text-accent"
+          class="rounded-sm bg-accent-soft px-2 py-1 text-xs font-medium text-accent tabular"
         >
-          running
+          running{rows.length > 0 ? ` · ${doneCount}/${rows.length}` : ""}
         </span>
         <button
           type="button"
           onclick={cancel}
-          class="rounded-sm border border-border bg-surface px-3 py-1 text-xs font-medium text-fg hover:bg-surface-sunken"
+          disabled={cancelling}
+          class="rounded-sm border border-border bg-surface px-3 py-1 text-xs font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
         >
-          Cancel
+          {cancelling ? "Cancelling…" : "Cancel"}
         </button>
       {:else if project && (project.confirmed_at != null || hasReceipts)}
         <button
@@ -221,6 +231,34 @@
       {/if}
     </div>
   </header>
+
+  {#if completed}
+    <div
+      role="status"
+      data-testid="run-complete"
+      class="flex items-center justify-between gap-3 rounded-sm border-l-[3px] border-success bg-success-soft px-4 py-3 text-sm text-fg"
+    >
+      <span>All chapters uploaded.</span>
+      <span class="flex items-center gap-3">
+        {#if project?.lingq_collection_id != null}
+          <button
+            type="button"
+            class="font-medium text-accent hover:underline"
+            onclick={() =>
+              void openUrl(
+                lingqCollectionUrl(
+                  project!.settings.language,
+                  project!.lingq_collection_id!,
+                ),
+              )}
+          >
+            Open in LingQ
+          </button>
+        {/if}
+        <a href="/library" class="text-fg-muted hover:text-fg">Back to Library</a>
+      </span>
+    </div>
+  {/if}
 
   {#if error}
     <p
