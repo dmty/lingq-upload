@@ -504,8 +504,8 @@
   }
 
   async function clearCover() {
-    if (busyReplace || !projectIdValue) return;
-    busyReplace = true;
+    if (coverBusy || !projectIdValue) return;
+    coverBusy = true;
     try {
       const res = await commands.cmdSetCover(projectIdValue, null);
       if (res.status === "ok") {
@@ -514,7 +514,7 @@
         await commands.cmdSetCoverUse(projectIdValue, false);
       }
     } finally {
-      busyReplace = false;
+      coverBusy = false;
     }
   }
 
@@ -634,7 +634,7 @@
                 <input
                   type="checkbox"
                   bind:checked={coverUse}
-                  disabled={coverPath === null || busyReplace}
+                  disabled={coverPath === null || coverBusy}
                   onchange={onToggleCoverUse}
                 />
                 Use this cover for LingQ course
@@ -644,7 +644,7 @@
                   type="button"
                   data-testid="cover-replace"
                   class="text-xs text-accent hover:underline disabled:opacity-50"
-                  disabled={busyReplace}
+                  disabled={coverBusy}
                   onclick={replaceCover}
                 >
                   {coverPath ? "Replace cover" : "Add cover"}
@@ -653,7 +653,7 @@
                   type="button"
                   data-testid="cover-clear"
                   class="text-xs text-fg-muted hover:underline disabled:opacity-50"
-                  disabled={busyReplace || coverPath === null}
+                  disabled={coverBusy || coverPath === null}
                   onclick={clearCover}
                 >
                   Clear
