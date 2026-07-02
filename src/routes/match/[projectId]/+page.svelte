@@ -42,6 +42,7 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let strategy = $state<MismatchResponse>("split_proportional");
+  let fromRun = $state(false);
 
   // Project-scope settings (absorb policy) live here so the user can adjust
   // them before locking the mapping in. ProjectSettings owns the debounced
@@ -162,6 +163,7 @@
     bucketPreview = null;
     selected = "cancel";
     strategy = "split_proportional";
+    fromRun = false;
     hydrating = true;
     busy = false;
     error = null;
@@ -204,6 +206,7 @@
         }
       }
     }
+    fromRun = true;
     return true;
   }
 
@@ -744,6 +747,14 @@
       {#if hydrating}
         <p class="text-sm text-fg-muted">Re-probing project sources…</p>
       {:else}
+        {#if fromRun}
+          <p
+            data-testid="paused-notice"
+            class="rounded-sm border border-accent-soft bg-accent-soft/40 px-4 py-2 text-sm text-fg"
+          >
+            Upload paused — resolve this mismatch to continue.
+          </p>
+        {/if}
         {#if receiptCount === 0 && error === null}
           <div class="space-y-2">
             <button
