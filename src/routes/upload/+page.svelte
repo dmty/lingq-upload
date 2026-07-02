@@ -10,7 +10,7 @@
     type Stage,
     type UploadResult,
   } from "$lib/ipc/bindings";
-  import { appErrorMessage } from "$lib/errors";
+  import { appErrorMessage, isMissingApiKey } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
   import {
     formatLanguageOption,
@@ -38,6 +38,7 @@
   let progress = $state<ProgressEntry[]>([]);
   let currentStage = $state<string | null>(null);
   let error = $state<string | null>(null);
+  let errorNeedsKey = $state(false);
   let result = $state<UploadResult | null>(null);
 
   const languages = $derived(languagesStore.languages);
@@ -287,6 +288,7 @@
     if (!canSubmit) return;
     busy = true;
     error = null;
+    errorNeedsKey = false;
     result = null;
     progress = [];
     currentStage = null;
@@ -300,6 +302,7 @@
     );
     if (built.status !== "ok") {
       error = appErrorMessage(built.error);
+      errorNeedsKey = isMissingApiKey(built.error);
       busy = false;
       return;
     }
@@ -309,6 +312,7 @@
       result = res.data;
     } else {
       error = appErrorMessage(res.error);
+      errorNeedsKey = isMissingApiKey(res.error);
     }
     busy = false;
   }
@@ -461,6 +465,9 @@
             class="mt-4 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
           >
             {error}
+            {#if errorNeedsKey}
+              <a href="/settings" class="ml-1 font-medium underline">Open Settings</a>
+            {/if}
           </div>
         {/if}
 

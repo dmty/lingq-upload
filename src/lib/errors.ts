@@ -28,46 +28,47 @@ export function lingqMessage(e: LingqError): string {
     case "NotFound":
       return "LingQ resource not found (check collection ID and language).";
     case "BadRequest":
-      return `LingQ bad request: ${e.message}`;
+      return `LingQ rejected the request (${e.message}).`;
     case "Server":
-      return `LingQ server error: ${e.message}`;
+      return "LingQ had a server problem. Try again in a minute.";
     case "Schema":
-      return `LingQ response schema: ${e.message}`;
+      return "LingQ sent an unexpected response. Try again; if it keeps happening, update the app.";
     case "Transport":
-      return `Network: ${e.message}`;
+      return "Couldn't reach LingQ. Check your internet connection.";
     case "Io":
-      return `I/O: ${e.message}`;
+      return `File error: ${e.message}`;
   }
 }
 
 export function audioMessage(e: AudioError): string {
   switch (e.kind) {
     case "Decode":
+      return `Couldn't read this audio file — it may be corrupt or DRM-protected (${e.message}).`;
     case "Encode":
-      return `${e.kind} error: ${e.message}`;
+      return `Couldn't convert the audio (${e.message}).`;
     case "Probe":
-      return `Probe: ${e.message}`;
+      return `Couldn't inspect the audio file (${e.message}).`;
     case "DurationMismatch":
-      return `Transcode duration mismatch (delta ${e.message.delta_sec}s)`;
+      return `The converted audio came out ${Math.round(e.message.delta_sec)}s off the original. Try re-adding the file.`;
     case "Io":
-      return `I/O: ${e.message}`;
+      return `File error: ${e.message}`;
     case "Cancelled":
-      return "Transcode cancelled";
+      return "Upload cancelled.";
   }
 }
 
 export function textErrorMessage(e: TextError): string {
-  return `Text: ${e.message}`;
+  return `Couldn't process the book text (${e.message}).`;
 }
 
 export function ingestMessage(e: IngestError): string {
   switch (e.kind) {
     case "NotSupported":
-      return "This ingest source is not supported.";
+      return "This source type isn't supported.";
     case "Io":
     case "Parse":
     case "Other":
-      return `Ingest: ${e.message}`;
+      return `Couldn't read the book (${e.message}).`;
   }
 }
 
@@ -105,8 +106,12 @@ export function appErrorMessage(e: AppError): string {
     case "Mapping":
       return mappingMessage(e.message);
     case "MappingStaleOp":
-      return `Mapping changed since last sync (server op ${e.message.server}, expected ${e.message.expected}). Reloading.`;
+      return "This mapping was changed elsewhere. Reloading the latest version.";
     case "Other":
       return e.message;
   }
+}
+
+export function isMissingApiKey(e: AppError): boolean {
+  return e.kind === "MissingApiKey";
 }

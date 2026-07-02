@@ -9,7 +9,7 @@
     type JobEvent,
     type Project,
   } from "$lib/ipc/bindings";
-  import { appErrorMessage } from "$lib/errors";
+  import { appErrorMessage, isMissingApiKey } from "$lib/errors";
   import { lingqCollectionUrl } from "$lib/lingq";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
@@ -28,6 +28,7 @@
   let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
   let error = $state<string | null>(null);
+  let errorNeedsKey = $state(false);
   let info = $state<string | null>(null);
   let unlisten: UnlistenFn | undefined;
   let running = $state(false);
@@ -88,6 +89,7 @@
   async function start() {
     completed = false;
     error = null;
+    errorNeedsKey = false;
     info = null;
     starting = true;
     const res = await commands.cmdStartProjectJob(project!.id);
@@ -106,6 +108,7 @@
         running = true;
       } else {
         error = msg;
+        errorNeedsKey = isMissingApiKey(res.error);
       }
       return;
     }
@@ -265,6 +268,9 @@
       class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm text-fg"
     >
       {error}
+      {#if errorNeedsKey}
+        <a href="/settings" class="ml-1 font-medium text-accent underline">Open Settings</a>
+      {/if}
     </p>
   {/if}
 
