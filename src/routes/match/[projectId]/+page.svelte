@@ -614,7 +614,9 @@
             <CoverThumb {coverPath} title={bookTitle} />
           </div>
           <div class="min-w-0">
-            <p class="text-xs text-fg-muted">Confirm pairing</p>
+            <p class="text-xs text-fg-muted">
+              <a href="/library" class="hover:text-fg">← Library</a> · Confirm pairing
+            </p>
             <h1
               data-testid="match-title"
               class="truncate text-lg font-semibold text-fg"
