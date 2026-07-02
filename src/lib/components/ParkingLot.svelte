@@ -1,14 +1,15 @@
 <script lang="ts">
   /**
-   * Drop target + visible list of parked tracks. Dragging a track row onto
-   * the lot emits `Park`; clicking a parked track focuses a chapter picker
-   * (a small inline list of unpaired chapter ids) which on selection emits
-   * `Unpark`.
+   * Visible list of parked tracks (excluded from upload). Tracks arrive via
+   * the Park button on a band header (`Park` op); clicking a parked track
+   * opens a chapter picker which on selection emits `Unpark`. The section is
+   * also a drop target for future drag support.
    */
   type Props = {
     parked: string[];
     unpairedChapterIds: string[];
     chapterTitleById: Record<string, string>;
+    trackTitleById: Record<string, string>;
     onPark: (trackId: string) => void;
     onUnpark: (trackId: string, chapterId: string) => void;
   };
@@ -17,6 +18,7 @@
     parked,
     unpairedChapterIds,
     chapterTitleById,
+    trackTitleById,
     onPark,
     onUnpark,
   }: Props = $props();
@@ -67,7 +69,9 @@
   </header>
 
   {#if parked.length === 0}
-    <p class="text-xs text-fg-muted">Drop tracks here to exclude them from upload.</p>
+    <p class="text-xs text-fg-muted">
+      Nothing parked. Use Park on an audio group to exclude it from the upload.
+    </p>
   {:else}
     <ul class="space-y-1">
       {#each parked as track (track)}
@@ -77,7 +81,7 @@
           data-track-id={track}
         >
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate">{track}</span>
+            <span class="truncate">{trackTitleById[track] ?? track}</span>
             <button
               type="button"
               class="text-[10px] uppercase tracking-wide text-fg-muted hover:text-fg"

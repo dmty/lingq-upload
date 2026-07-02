@@ -195,6 +195,9 @@
   const chapterTitleById = $derived(
     Object.fromEntries(chapters.map((c) => [c.id, c.title])),
   );
+  const trackTitleById = $derived(
+    Object.fromEntries(buckets.map((b) => [b.trackId, b.atomTitle ?? "Audio"])),
+  );
 
   function onChapterKeydown(ev: KeyboardEvent, chapterId: string) {
     if (ev.key === "Enter" || ev.key === " ") {
@@ -227,17 +230,17 @@
       data-testid="mapping-bucket-band"
       class="overflow-hidden rounded-md border border-border bg-surface"
     >
-      {#if band.meta}
+      {#if band.trackId != null}
         <header
           data-testid="bucket-band-meta"
           class="flex items-center gap-2 border-b border-border bg-surface-sunken px-3 py-1.5 text-xs"
         >
           <span class="font-medium text-fg">
-            {band.meta.atomTitle ?? "Audio"} · {fmtDur(
-              band.meta.atomDurationSec,
-            )}
+            {band.meta
+              ? `${band.meta.atomTitle ?? "Audio"} · ${fmtDur(band.meta.atomDurationSec)}`
+              : "Audio"}
           </span>
-          {#if isDrift(band.meta.charsPerSec)}
+          {#if band.meta && isDrift(band.meta.charsPerSec)}
             <span
               data-testid="bucket-drift"
               title="chars/sec deviates >±30% from the median — the narrator may have added or skipped material here."
@@ -245,6 +248,15 @@
               >drift</span
             >
           {/if}
+          <button
+            type="button"
+            data-testid="band-park"
+            title="Exclude this audio from the upload"
+            class="ml-auto rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-sunken hover:text-fg"
+            onclick={() => onOp({ kind: "park", track_id: band.trackId! })}
+          >
+            Park
+          </button>
         </header>
       {/if}
       <ul role="listbox" aria-label="Chapter rows">
@@ -356,6 +368,7 @@
     parked={mappingState?.parking_lot ?? []}
     {unpairedChapterIds}
     {chapterTitleById}
+    {trackTitleById}
     onPark={(tid) => onOp({ kind: "park", track_id: tid })}
     onUnpark={(tid, cid) =>
       onOp({ kind: "unpark", track_id: tid, chapter_id: cid })}
