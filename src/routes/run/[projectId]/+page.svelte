@@ -123,6 +123,14 @@
     if (res.status === "error") {
       error = appErrorMessage(res.error);
       cancelling = false;
+      return;
+    }
+    // Started before this page mounted ("already running"): no jobId means
+    // no event stream will deliver Cancelled — reset directly.
+    if (jobId === null) {
+      running = false;
+      cancelling = false;
+      await reloadProject();
     }
   }
 

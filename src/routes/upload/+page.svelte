@@ -158,9 +158,10 @@
   }
 
   function handleJobEvent(ev: JobEvent) {
+    if (jobId !== null && ev.job_id !== jobId) return;
     switch (ev.kind) {
       case "Started":
-        jobId = ev.job_id;
+        if (jobId === null) jobId = ev.job_id;
         currentStage = stageLabel(ev.stage.kind);
         progress = [
           ...progress,
