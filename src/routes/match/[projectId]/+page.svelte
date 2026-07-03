@@ -26,6 +26,7 @@
   import CoverThumb from "$lib/components/CoverThumb.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import StepIndicator from "$lib/components/StepIndicator.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -616,6 +617,7 @@
             <CoverThumb {coverPath} title={bookTitle} />
           </div>
           <div class="min-w-0">
+            <StepIndicator current={2} />
             <p class="text-xs text-fg-muted">
               <a href="/library" class="hover:text-fg">← Library</a> · Confirm pairing
             </p>

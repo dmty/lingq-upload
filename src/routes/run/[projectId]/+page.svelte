@@ -15,6 +15,7 @@
   import ChapterRow from "$lib/components/ChapterRow.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import StepIndicator from "$lib/components/StepIndicator.svelte";
 
   type Row = {
     index: number;
@@ -209,6 +210,7 @@
 <section class="col-wide space-y-4 pt-6">
   <header class="flex items-center justify-between">
     <div>
+      <StepIndicator current={3} />
       <a href="/library" class="text-xs text-fg-muted hover:text-fg">← Library</a>
       <h1 class="font-serif text-lg font-semibold text-fg">
         {project?.settings.collection_title ?? "Run"}

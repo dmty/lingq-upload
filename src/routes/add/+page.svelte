@@ -26,6 +26,7 @@
   import BookPicker from "$lib/components/BookPicker.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import StepIndicator from "$lib/components/StepIndicator.svelte";
 
   type Source = "manual" | "calibre" | "libation";
 
@@ -423,6 +424,7 @@
 
 <section class="col-form space-y-6 pt-6">
   <header>
+    <StepIndicator current={1} />
     <h1 class="text-lg font-semibold text-fg">Add Project</h1>
     <p class="mt-1 text-sm text-fg-muted">
       Pick a source, a book, and audio. Collection is created automatically.
