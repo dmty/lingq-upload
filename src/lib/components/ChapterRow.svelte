@@ -44,7 +44,7 @@
       ✓
     </span>
   {:else if status === "in_flight"}
-    <Spinner aria-label="in flight" class="border-fg-subtle border-t-accent" />
+    <Spinner tone="muted" aria-label="in flight" />
   {:else}
     <span class="inline-block h-4 w-4 rounded-full border border-fg-subtle"
     ></span>

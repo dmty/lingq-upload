@@ -11,7 +11,7 @@
   } = $props();
 
   type Spec = {
-    icon: string;
+    icon?: string;
     label: string;
     classes: string;
     tooltip: string;
@@ -26,7 +26,6 @@
       tooltip: "Upload complete",
     },
     running: {
-      icon: "⟳",
       label: "uploading",
       classes: "bg-accent-soft text-accent",
       tooltip: "Upload in progress",
@@ -68,7 +67,7 @@
     title={tooltip}
   >
     {#if spec.spinIcon}
-      <Spinner class="h-3 w-3 border-[1.5px]" aria-hidden="true" />
+      <Spinner size="sm" aria-hidden="true" />
     {:else}
       <span>{spec.icon}</span>
     {/if}

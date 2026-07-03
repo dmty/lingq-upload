@@ -102,7 +102,7 @@
     <div
       class="flex items-center gap-2 rounded-sm border border-border bg-surface-sunken p-3 text-sm text-fg-muted"
     >
-      <Spinner class="h-3 w-3" aria-hidden="true" />
+      <Spinner size="sm" aria-hidden="true" />
       Scanning {rootPath}…
     </div>
   {/if}

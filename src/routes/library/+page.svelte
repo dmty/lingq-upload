@@ -190,7 +190,7 @@
               : ""}
           </span>
           {#if runningCount > 0}
-            <Spinner class="h-3 w-3" aria-hidden="true" />
+            <Spinner size="sm" aria-hidden="true" />
           {/if}
         </p>
       {/if}
