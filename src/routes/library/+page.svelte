@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import LibraryList from "$lib/components/LibraryList.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
   import { library } from "$lib/stores/library.svelte";
   import { libraryBanner } from "$lib/stores/library-banner.svelte";
   import { appErrorMessage } from "$lib/errors";
@@ -189,7 +190,7 @@
               : ""}
           </span>
           {#if runningCount > 0}
-            <span class="inline-block animate-spin text-accent">⟳</span>
+            <Spinner class="h-3 w-3" aria-hidden="true" />
           {/if}
         </p>
       {/if}

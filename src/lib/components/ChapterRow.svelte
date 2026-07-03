@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Spinner from "$lib/components/Spinner.svelte";
+
   type Status = "queued" | "in_flight" | "done";
   let {
     index,
@@ -42,10 +44,7 @@
       ✓
     </span>
   {:else if status === "in_flight"}
-    <span
-      class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-fg-subtle border-t-accent"
-      aria-label="in flight"
-    ></span>
+    <Spinner aria-label="in flight" class="border-fg-subtle border-t-accent" />
   {:else}
     <span class="inline-block h-4 w-4 rounded-full border border-fg-subtle"
     ></span>

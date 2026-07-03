@@ -2,6 +2,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { commands, type Candidate } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import Spinner from "$lib/components/Spinner.svelte";
 
   type Source = "calibre" | "libation";
 
@@ -101,10 +102,7 @@
     <div
       class="flex items-center gap-2 rounded-sm border border-border bg-surface-sunken p-3 text-sm text-fg-muted"
     >
-      <span
-        class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent"
-        aria-hidden="true"
-      ></span>
+      <Spinner class="h-3 w-3" aria-hidden="true" />
       Scanning {rootPath}…
     </div>
   {/if}

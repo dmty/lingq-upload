@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Spinner from "$lib/components/Spinner.svelte";
   import type { LibraryStatus } from "$lib/ipc/bindings";
 
   let {
@@ -66,9 +67,11 @@
     class="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] font-medium {spec.classes}"
     title={tooltip}
   >
-    <span class={spec.spinIcon ? "inline-block animate-spin" : ""}>
-      {spec.icon}
-    </span>
+    {#if spec.spinIcon}
+      <Spinner class="h-3 w-3 border-[1.5px]" aria-hidden="true" />
+    {:else}
+      <span>{spec.icon}</span>
+    {/if}
     {spec.label}
   </span>
 {/if}
