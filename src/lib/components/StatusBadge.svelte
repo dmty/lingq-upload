@@ -21,19 +21,19 @@
   const specs: Record<Exclude<LibraryStatus, "idle">, Spec> = {
     done: {
       icon: "✓",
-      label: "done",
+      label: "Done",
       classes: "bg-success-soft text-success",
       tooltip: "Upload complete",
     },
     running: {
-      label: "uploading",
+      label: "Uploading",
       classes: "bg-accent-soft text-accent",
       tooltip: "Upload in progress",
       spinIcon: true,
     },
     paused: {
       icon: "⏸",
-      label: "paused",
+      label: "Paused",
       classes: "bg-surface-sunken text-fg-muted",
       tooltip: "Upload paused — resume to continue",
     },
@@ -45,7 +45,7 @@
     },
     failed: {
       icon: "✕",
-      label: "failed",
+      label: "Failed",
       classes: "bg-error-soft text-error",
       tooltip: "Upload failed",
     },

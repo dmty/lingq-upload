@@ -39,6 +39,15 @@
     return s.normalize("NFC").toLowerCase();
   }
 
+  const languageDisplay = new Intl.DisplayNames(["en"], { type: "language" });
+  function languageLabel(code: string): string {
+    try {
+      return languageDisplay.of(code) ?? code;
+    } catch {
+      return code;
+    }
+  }
+
   const entries = $derived(library.index?.entries ?? []);
   const languages = $derived(
     [...new Set(entries.map((e) => e.language))].sort(),
@@ -266,7 +275,7 @@
       >
         <option value="">All languages</option>
         {#each languages as lang (lang)}
-          <option value={lang}>{lang}</option>
+          <option value={lang}>{languageLabel(lang)}</option>
         {/each}
       </select>
     </div>
