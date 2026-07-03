@@ -24,6 +24,7 @@
   import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import BookPicker from "$lib/components/BookPicker.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   type Source = "manual" | "calibre" | "libation";
 
@@ -562,50 +563,30 @@
         you want to do?
       </p>
       <div class="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onclick={() => resolve("replace")}
-          class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:bg-fg-subtle"
-        >
+        <Button variant="danger" disabled={busy} onclick={() => resolve("replace")}>
           Replace
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onclick={() => resolve("skip")}
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-        >
+        </Button>
+        <Button disabled={busy} onclick={() => resolve("skip")}>
           Skip and open existing
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onclick={() => resolve("new_project")}
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-        >
+        </Button>
+        <Button disabled={busy} onclick={() => resolve("new_project")}>
           Create a copy
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          class="ml-auto"
           disabled={busy}
           onclick={() => (conflict = null)}
-          class="ml-auto rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-fg hover:bg-surface-sunken disabled:text-fg-subtle"
         >
           Back
-        </button>
+        </Button>
       </div>
     </div>
   {/if}
 
   <div class="flex justify-end">
-    <button
-      type="button"
-      disabled={!canCreate}
-      onclick={onCreate}
-      class="rounded-sm bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-    >
+    <Button size="lg" disabled={!canCreate} onclick={onCreate}>
       {createLabel}
-    </button>
+    </Button>
   </div>
 </section>

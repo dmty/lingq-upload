@@ -3,6 +3,7 @@
   import { commands, type Candidate } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import Spinner from "$lib/components/Spinner.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   type Source = "calibre" | "libation";
 
@@ -79,14 +80,7 @@
 
 <div class="space-y-3">
   <div class="flex items-center gap-2">
-    <button
-      type="button"
-      onclick={chooseFolder}
-      disabled={loading}
-      class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-    >
-      Choose folder
-    </button>
+    <Button onclick={chooseFolder} disabled={loading}>Choose folder</Button>
     {#if rootPath}
       <span class="truncate text-xs text-fg-muted" title={rootPath}>
         {rootPath}

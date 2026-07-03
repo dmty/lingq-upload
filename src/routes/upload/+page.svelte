@@ -19,6 +19,7 @@
   import DropZone from "$lib/components/DropZone.svelte";
   import ProgressPanel from "$lib/components/ProgressPanel.svelte";
   import ResultPanel from "$lib/components/ResultPanel.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -472,14 +473,9 @@
           </div>
         {/if}
 
-        <button
-          type="button"
-          onclick={upload}
-          disabled={!canSubmit}
-          class="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-accent text-base font-medium text-white transition-colors duration-180 ease-snappy hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-fg-subtle"
-        >
+        <Button size="xl" class="mt-6" onclick={upload} disabled={!canSubmit}>
           {submitLabel}
-        </button>
+        </Button>
       </div>
     {/if}
   </div>

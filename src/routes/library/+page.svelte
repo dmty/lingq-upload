@@ -12,6 +12,7 @@
     type LibraryEntry,
     type ProjectId,
   } from "$lib/ipc/bindings";
+  import Button from "$lib/components/Button.svelte";
 
   onMount(() => {
     library.load();
@@ -195,12 +196,7 @@
         </p>
       {/if}
     </div>
-    <a
-      href="/add"
-      class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors duration-120 hover:bg-accent-hover"
-    >
-      + Add
-    </a>
+    <Button href="/add">+ Add</Button>
   </header>
 
   {#if lingqKeyMissing && !libraryBanner.dismissed}
@@ -242,13 +238,7 @@
             2,
           )}</pre>
       </details>
-      <button
-        type="button"
-        class="mt-3 rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white"
-        onclick={() => library.load()}
-      >
-        Retry
-      </button>
+      <Button class="mt-3" onclick={() => library.load()}>Retry</Button>
     </div>
   {:else if entries.length === 0}
     <div
@@ -260,12 +250,7 @@
         Point me at your Calibre library or a Libation folder and I'll show you
         what's there.
       </p>
-      <a
-        href="/add"
-        class="mt-4 inline-block rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
-      >
-        + Add a book
-      </a>
+      <Button href="/add" class="mt-4">+ Add a book</Button>
     </div>
   {:else}
     <div class="mb-3 flex gap-2">

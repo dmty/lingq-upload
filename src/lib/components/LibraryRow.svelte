@@ -6,6 +6,7 @@
   import { primaryActionFor } from "$lib/library-actions";
   import CoverThumb from "./CoverThumb.svelte";
   import StatusBadge from "./StatusBadge.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   let {
     entry,
@@ -200,14 +201,9 @@
         >
           Cancel
         </button>
-        <button
-          type="button"
-          class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-60"
-          disabled={trashBusy}
-          onclick={handleConfirmTrash}
-        >
+        <Button variant="danger" disabled={trashBusy} onclick={handleConfirmTrash}>
           {trashBusy ? "Moving…" : "Move to trash"}
-        </button>
+        </Button>
       </div>
     </div>
     {#if trashError}

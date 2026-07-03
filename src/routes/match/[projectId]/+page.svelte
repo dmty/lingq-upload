@@ -24,6 +24,7 @@
   import DropZone from "$lib/components/DropZone.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
   import CoverThumb from "$lib/components/CoverThumb.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -865,20 +866,8 @@
       {/if}
 
       <div class="flex justify-end gap-2">
-        <a
-          href="/library"
-          class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken"
-        >
-          Back
-        </a>
-        <button
-          type="button"
-          onclick={confirm}
-          disabled={busy || hydrating}
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-        >
-          Confirm
-        </button>
+        <Button variant="secondary" href="/library">Back</Button>
+        <Button disabled={busy || hydrating} onclick={confirm}>Confirm</Button>
       </div>
     {/if}
   </section>

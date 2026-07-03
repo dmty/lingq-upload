@@ -13,6 +13,7 @@
   import { lingqCollectionUrl } from "$lib/lingq";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   type Row = {
     index: number;
@@ -222,23 +223,18 @@
         >
           running{rows.length > 0 ? ` · ${doneCount}/${rows.length}` : ""}
         </span>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onclick={cancel}
           disabled={cancelling}
-          class="rounded-sm border border-border bg-surface px-3 py-1 text-xs font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
         >
           {cancelling ? "Cancelling…" : "Cancel"}
-        </button>
+        </Button>
       {:else if project && (project.confirmed_at != null || hasReceipts)}
-        <button
-          type="button"
-          onclick={start}
-          disabled={starting}
-          class="rounded-sm bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
-        >
+        <Button size="sm" onclick={start} disabled={starting}>
           {starting ? "Starting..." : hasReceipts ? "Resume" : "Start"}
-        </button>
+        </Button>
       {/if}
     </div>
   </header>

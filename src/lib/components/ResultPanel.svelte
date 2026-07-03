@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { UploadResult } from "$lib/ipc/bindings";
+  import Button from "$lib/components/Button.svelte";
 
   interface Props {
     title: string;
@@ -38,11 +39,11 @@
         <code class="tabular text-fg">{result.lesson_id}</code>
       </p>
       <div class="mt-4 flex items-center gap-2">
-        <a
+        <Button
           href={result.lesson_url}
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white no-underline transition-colors duration-180 ease-snappy hover:bg-accent-hover hover:no-underline"
+          class="h-9"
         >
           Open in LingQ
           <svg
@@ -59,7 +60,7 @@
             <path d="M7 17L17 7" />
             <path d="M8 7h9v9" />
           </svg>
-        </a>
+        </Button>
         <button
           type="button"
           onclick={onUploadAnother}

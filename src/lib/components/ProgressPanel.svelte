@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from "$lib/components/Button.svelte";
+
   interface Props {
     stage: string | null;
     pct: number;
@@ -30,13 +32,7 @@
   {/if}
   {#if onCancel}
     <div class="mt-4 flex justify-end">
-      <button
-        type="button"
-        onclick={onCancel}
-        class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-120 hover:bg-surface-sunken"
-      >
-        Cancel
-      </button>
+      <Button variant="secondary" onclick={onCancel}>Cancel</Button>
     </div>
   {/if}
 </div>

@@ -12,6 +12,7 @@
     clearSavedLanguage,
     languagesStore,
   } from "$lib/stores/languages.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
@@ -275,12 +276,7 @@
       >
         {clearArmed ? "Really clear?" : "Clear"}
       </button>
-      <button
-        type="button"
-        onclick={save}
-        disabled={busy || key.length === 0}
-        class="inline-flex h-9 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white transition-colors duration-180 ease-snappy hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-      >
+      <Button disabled={busy || key.length === 0} onclick={save}>
         {#if justSaved}
           <svg
             width="14"
@@ -299,7 +295,7 @@
         {:else}
           {busy ? "Saving…" : "Save"}
         {/if}
-      </button>
+      </Button>
     </div>
   </div>
 
@@ -354,14 +350,13 @@
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
+                  <Button
+                    variant="danger"
                     onclick={() => purge(entry)}
                     disabled={rowBusyId === entry.trash_id}
-                    class="rounded-sm bg-error px-3 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-50"
                   >
                     Delete permanently
-                  </button>
+                  </Button>
                 </div>
               </div>
             {:else}

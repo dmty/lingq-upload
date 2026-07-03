@@ -7,6 +7,7 @@
     MappingState,
   } from "$lib/ipc/bindings";
   import { mapping } from "$lib/stores/mapping.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   /**
    * Banded bucket list. Included chapters (non-skipped) are numbered 1..N and
@@ -430,16 +431,14 @@
             : "pairs need"} review
         </span>
       {/if}
-      <button
-        type="button"
-        onclick={onContinue}
-        disabled={!canContinue}
-        class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:bg-fg-subtle"
+      <Button
         data-testid="mapping-continue"
         aria-disabled={!canContinue}
+        disabled={!canContinue}
+        onclick={onContinue}
       >
         Continue
-      </button>
+      </Button>
     </span>
   </footer>
 </div>
