@@ -222,7 +222,11 @@
     <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
 
     <div class="min-w-0">
-      <div class="truncate text-sm font-medium text-fg" title={entry.title}>
+      <div
+        class="truncate font-serif text-sm font-medium text-fg"
+        data-testid="library-title"
+        title={entry.title}
+      >
         {entry.title}
       </div>
       {#if authorLine}
