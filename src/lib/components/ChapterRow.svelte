@@ -39,7 +39,7 @@
   </span>
   {#if status === "done"}
     <span
-      class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success text-white text-[10px]"
+      class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success text-canvas text-[10px]"
     >
       ✓
     </span>

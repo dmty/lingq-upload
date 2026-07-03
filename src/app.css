@@ -39,9 +39,30 @@
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 0 rgb(0 0 0 / 0.02);
 }
 
-/* Dark-mode hooks declared but not implemented in this pass. */
+/* Dark palette: warm near-blacks mirroring the warm light neutrals; accent
+   and status colors lift ~2 steps for contrast on dark surfaces. Utilities
+   read var(--color-*), so overriding the vars is the whole implementation. */
 @media (prefers-color-scheme: dark) {
-  /* TODO: dark palette */
+  :root {
+    --color-canvas: #161513;
+    --color-surface: #1e1d1a;
+    --color-surface-sunken: #262420;
+    --color-border: #34322b;
+    --color-border-strong: #4c4940;
+    --color-fg: #e9e7e2;
+    --color-fg-muted: #a29d94;
+    --color-fg-subtle: #737067;
+    --color-accent: #818cf8;
+    --color-accent-hover: #99a2fa;
+    --color-accent-soft: #272a4a;
+    --color-success: #4ade80;
+    --color-success-soft: #12291a;
+    --color-warning: #fbbf24;
+    --color-warning-soft: #2d2410;
+    --color-error: #f87171;
+    --color-error-soft: #301b19;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 0 rgb(0 0 0 / 0.3);
+  }
 }
 
 @layer base {
