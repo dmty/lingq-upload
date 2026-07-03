@@ -35,6 +35,9 @@
   let title = $state<string>("");
   let titleEdited = $state(false);
 
+  const STAGE_ORDER: Stage["kind"][] = ["parsing", "transcoding", "uploading"];
+  let stageIndex = $state(0);
+
   let busy = $state(false);
   let jobId = $state<string | null>(null);
   let progress = $state<ProgressEntry[]>([]);
@@ -136,6 +139,7 @@
 
   // Latest progress percent for the bar (always reflects most recent emit).
   const livePct = $derived(progress.at(-1)?.pct ?? 0);
+  const aggregatePct = $derived((stageIndex + livePct) / STAGE_ORDER.length);
   const liveMessage = $derived(progress.at(-1)?.message ?? null);
 
   const submitLabel = $derived.by(() => {
@@ -164,7 +168,8 @@
     switch (ev.kind) {
       case "Started":
         if (jobId === null) jobId = ev.job_id;
-        currentStage = stageLabel(ev.stage.kind);
+        stageIndex = Math.max(STAGE_ORDER.indexOf(ev.stage.kind), 0);
+        currentStage = `Step ${stageIndex + 1} of 3 · ${stageLabel(ev.stage.kind)}`;
         progress = [
           ...progress,
           { stage: ev.stage.kind, pct: 0, message: null },
@@ -278,6 +283,7 @@
     title = "";
     titleEdited = false;
     progress = [];
+    stageIndex = 0;
     currentStage = null;
     result = null;
     error = null;
@@ -294,6 +300,7 @@
     errorNeedsKey = false;
     result = null;
     progress = [];
+    stageIndex = 0;
     currentStage = null;
     jobId = null;
 
@@ -335,7 +342,7 @@
     {:else if !error && (busy || progress.length > 0)}
       <ProgressPanel
         stage={currentStage}
-        pct={livePct}
+        pct={aggregatePct}
         message={liveMessage}
         onCancel={busy ? cancelUpload : undefined}
       />
