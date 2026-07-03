@@ -163,17 +163,21 @@
     }
   }
 
+  function advanceStage(stage: Stage["kind"]) {
+    stageIndex = Math.max(STAGE_ORDER.indexOf(stage), 0);
+    currentStage = `Step ${stageIndex + 1} of 3 · ${stageLabel(stage)}`;
+    progress = [...progress, { stage, pct: 0, message: null }];
+  }
+
   function handleJobEvent(ev: JobEvent) {
     if (jobId !== null && ev.job_id !== jobId) return;
     switch (ev.kind) {
       case "Started":
         if (jobId === null) jobId = ev.job_id;
-        stageIndex = Math.max(STAGE_ORDER.indexOf(ev.stage.kind), 0);
-        currentStage = `Step ${stageIndex + 1} of 3 · ${stageLabel(ev.stage.kind)}`;
-        progress = [
-          ...progress,
-          { stage: ev.stage.kind, pct: 0, message: null },
-        ];
+        advanceStage(ev.stage.kind);
+        break;
+      case "StageChanged":
+        advanceStage(ev.stage.kind);
         break;
       case "Progress":
         progress = [

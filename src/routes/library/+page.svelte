@@ -234,7 +234,7 @@
   {#if library.status === "loading"}
     <p class="text-sm text-fg-muted">Loading library…</p>
   {:else if library.status === "error"}
-    <Alert body class="p-4">
+    <Alert body class="px-4 py-4">
       <p class="font-medium">Library is unreadable</p>
       <p class="mt-1 text-fg-muted">{appErrorMessage(library.error!)}</p>
       <details class="mt-2 text-xs text-fg-muted">

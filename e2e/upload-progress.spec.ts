@@ -44,8 +44,9 @@ test.describe("aggregate upload progress", () => {
     await expect(page.getByText("17%")).toBeVisible();
 
     // New stage must not reset the bar to 0 — it jumps to the stage floor.
+    // Real jobs emit StageChanged (not another Started) for stage 2+.
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "j1", stage: { kind: "transcoding" } }),
+      window.__emitEvent__("job", { kind: "StageChanged", job_id: "j1", stage: { kind: "transcoding" } }),
     );
     await expect(page.getByText("Step 2 of 3 · Transcoding audio")).toBeVisible();
     await expect(page.getByText("33%")).toBeVisible();

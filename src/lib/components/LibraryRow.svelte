@@ -4,6 +4,7 @@
   import { appErrorMessage } from "$lib/errors";
   import { formatRelative } from "$lib/format";
   import { primaryActionFor } from "$lib/library-actions";
+  import { statusLabel } from "$lib/status-labels";
   import CoverThumb from "./CoverThumb.svelte";
   import StatusBadge from "./StatusBadge.svelte";
   import Button from "$lib/components/Button.svelte";
@@ -75,23 +76,7 @@
     }
   });
 
-  const statusHumanLabel = $derived.by(() => {
-    switch (status) {
-      case "done":
-        return "done";
-      case "running":
-        return "uploading";
-      case "paused":
-        return "paused";
-      case "needs_match":
-        return "Needs review";
-      case "failed":
-        return "failed";
-      case "idle":
-      default:
-        return "idle";
-    }
-  });
+  const statusHumanLabel = $derived(statusLabel(status));
 
   const action = $derived(primaryActionFor(entry));
   const rowDisabled = $derived(action.disabled);

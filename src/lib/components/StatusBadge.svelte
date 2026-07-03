@@ -1,6 +1,7 @@
 <script lang="ts">
   import Spinner from "$lib/components/Spinner.svelte";
   import type { LibraryStatus } from "$lib/ipc/bindings";
+  import { statusLabel } from "$lib/status-labels";
 
   let {
     status,
@@ -21,31 +22,31 @@
   const specs: Record<Exclude<LibraryStatus, "idle">, Spec> = {
     done: {
       icon: "✓",
-      label: "Done",
+      label: statusLabel("done"),
       classes: "bg-success-soft text-success",
       tooltip: "Upload complete",
     },
     running: {
-      label: "Uploading",
+      label: statusLabel("running"),
       classes: "bg-accent-soft text-accent",
       tooltip: "Upload in progress",
       spinIcon: true,
     },
     paused: {
       icon: "⏸",
-      label: "Paused",
+      label: statusLabel("paused"),
       classes: "bg-surface-sunken text-fg-muted",
       tooltip: "Upload paused — resume to continue",
     },
     needs_match: {
       icon: "⚠",
-      label: "Needs review",
+      label: statusLabel("needs_match"),
       classes: "bg-warning-soft text-warning",
       tooltip: "Mapping not confirmed — review and confirm before uploading",
     },
     failed: {
       icon: "✕",
-      label: "Failed",
+      label: statusLabel("failed"),
       classes: "bg-error-soft text-error",
       tooltip: "Upload failed",
     },
