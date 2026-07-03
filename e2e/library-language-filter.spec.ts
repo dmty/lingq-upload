@@ -41,6 +41,8 @@ test.describe("library filter language names + badge casing", () => {
     await page.goto("/library");
     // Wait for entries to load (we have 2)
     await expect(page.locator('li[role="option"]')).toHaveCount(2);
-    await expect(page.getByText("Done")).toBeVisible();
+    // Case-sensitive regex: plain getByText("Done") matches lowercase "done"
+    // too; exact:true fails because the badge also contains the icon glyph.
+    await expect(page.getByText(/Done/).first()).toBeVisible();
   });
 });
