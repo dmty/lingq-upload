@@ -54,6 +54,16 @@
       Add
     </a>
     <a
+      href="/upload"
+      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
+        '/upload',
+      )
+        ? 'bg-accent-soft text-fg'
+        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
+    >
+      Quick upload
+    </a>
+    <a
       href="/settings"
       class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
         '/settings',
