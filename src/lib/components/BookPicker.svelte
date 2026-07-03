@@ -4,6 +4,7 @@
   import { appErrorMessage } from "$lib/errors";
   import Spinner from "$lib/components/Spinner.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   type Source = "calibre" | "libation";
 
@@ -102,11 +103,7 @@
   {/if}
 
   {#if error}
-    <p
-      class="rounded-sm border border-error-soft bg-error-soft/30 px-3 py-2 text-sm text-fg"
-    >
-      {error}
-    </p>
+    <Alert body class="px-3 py-2">{error}</Alert>
   {/if}
 
   {#if !loading && !error && rootPath && candidates.length === 0}

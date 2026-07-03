@@ -20,6 +20,7 @@
   import ProgressPanel from "$lib/components/ProgressPanel.svelte";
   import ResultPanel from "$lib/components/ResultPanel.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -462,15 +463,12 @@
         </div>
 
         {#if error}
-          <div
-            role="alert"
-            class="mt-4 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
-          >
+          <Alert class="mt-4">
             {error}
             {#if errorNeedsKey}
               <a href="/settings" class="ml-1 font-medium underline">Open Settings</a>
             {/if}
-          </div>
+          </Alert>
         {/if}
 
         <Button size="xl" class="mt-6" onclick={upload} disabled={!canSubmit}>

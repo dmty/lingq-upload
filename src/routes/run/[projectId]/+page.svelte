@@ -14,6 +14,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   type Row = {
     index: number;
@@ -240,10 +241,10 @@
   </header>
 
   {#if completed}
-    <div
-      role="status"
+    <Alert
+      variant="success"
       data-testid="run-complete"
-      class="flex items-center justify-between gap-3 rounded-sm border-l-[3px] border-success bg-success-soft px-4 py-3 text-sm text-fg"
+      class="flex items-center justify-between gap-3 px-4 py-3"
     >
       <span>All chapters uploaded.</span>
       <span class="flex items-center gap-3">
@@ -264,18 +265,16 @@
         {/if}
         <a href="/library" class="text-fg-muted hover:text-fg">Back to Library</a>
       </span>
-    </div>
+    </Alert>
   {/if}
 
   {#if error}
-    <p
-      class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm text-fg"
-    >
+    <Alert body class="px-4 py-2">
       {error}
       {#if errorNeedsKey}
         <a href="/settings" class="ml-1 font-medium text-accent underline">Open Settings</a>
       {/if}
-    </p>
+    </Alert>
   {/if}
 
   {#if info}

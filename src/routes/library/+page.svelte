@@ -13,6 +13,7 @@
     type ProjectId,
   } from "$lib/ipc/bindings";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   onMount(() => {
     library.load();
@@ -200,10 +201,10 @@
   </header>
 
   {#if lingqKeyMissing && !libraryBanner.dismissed}
-    <div
-      role="status"
+    <Alert
+      variant="warning"
       aria-live="polite"
-      class="mb-3 flex items-center justify-between gap-3 rounded-sm border-l-2 border-warning bg-warning-soft px-3 py-2 text-sm text-fg"
+      class="mb-3 flex items-center justify-between gap-3 px-3 py-2"
     >
       <span> Add your LingQ API key in Settings to start uploading. </span>
       <span class="flex items-center gap-3 text-xs">
@@ -218,15 +219,13 @@
           Dismiss
         </button>
       </span>
-    </div>
+    </Alert>
   {/if}
 
   {#if library.status === "loading"}
     <p class="text-sm text-fg-muted">Loading library…</p>
   {:else if library.status === "error"}
-    <div
-      class="rounded-sm border border-error-soft bg-error-soft/30 p-4 text-sm text-fg"
-    >
+    <Alert body class="p-4">
       <p class="font-medium">Library is unreadable</p>
       <p class="mt-1 text-fg-muted">{appErrorMessage(library.error!)}</p>
       <details class="mt-2 text-xs text-fg-muted">
@@ -239,7 +238,7 @@
           )}</pre>
       </details>
       <Button class="mt-3" onclick={() => library.load()}>Retry</Button>
-    </div>
+    </Alert>
   {:else if entries.length === 0}
     <div
       class="mx-auto mt-10 max-w-sm rounded-sm border border-border bg-surface p-8 text-center"

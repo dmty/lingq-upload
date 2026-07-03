@@ -25,6 +25,7 @@
   import DropZone from "$lib/components/DropZone.svelte";
   import BookPicker from "$lib/components/BookPicker.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   type Source = "manual" | "calibre" | "libation";
 
@@ -547,11 +548,7 @@
   {/if}
 
   {#if error}
-    <p
-      class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm text-fg"
-    >
-      {error}
-    </p>
+    <Alert body>{error}</Alert>
   {/if}
 
   {#if conflict !== null}

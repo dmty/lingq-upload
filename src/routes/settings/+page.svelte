@@ -13,6 +13,7 @@
     languagesStore,
   } from "$lib/stores/languages.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
@@ -257,12 +258,7 @@
     </div>
 
     {#if error}
-      <div
-        role="alert"
-        class="mt-4 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
-      >
-        {error}
-      </div>
+      <Alert class="mt-4">{error}</Alert>
     {/if}
 
     <div class="mt-6 flex items-center justify-end gap-2">
@@ -316,12 +312,7 @@
     </p>
 
     {#if trashError}
-      <div
-        role="alert"
-        class="mt-3 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
-      >
-        {trashError}
-      </div>
+      <Alert class="mt-3">{trashError}</Alert>
     {/if}
 
     {#if !trashLoaded}
@@ -473,12 +464,7 @@
         {/if}
 
         {#if devBackendError}
-          <div
-            role="alert"
-            class="mt-3 rounded-sm border-l-[3px] border-error bg-error-soft p-3 text-sm text-error"
-          >
-            {devBackendError}
-          </div>
+          <Alert class="mt-3">{devBackendError}</Alert>
         {/if}
 
         <p class="mt-4 text-xs text-fg-subtle">

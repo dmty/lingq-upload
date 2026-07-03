@@ -25,6 +25,7 @@
   import { mapping } from "$lib/stores/mapping.svelte";
   import CoverThumb from "$lib/components/CoverThumb.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -799,11 +800,9 @@
                   </button>
                 </div>
                 {#if replaceError}
-                  <p
-                    class="rounded-sm border border-error-soft bg-error-soft/30 px-3 py-2 text-xs text-fg"
-                  >
+                  <Alert body class="px-3 py-2">
                     {replaceError}
-                  </p>
+                  </Alert>
                 {/if}
               </div>
             {/if}
@@ -858,11 +857,7 @@
       {/if}
 
       {#if error}
-        <p
-          class="rounded-sm border border-error-soft bg-error-soft/30 px-4 py-2 text-sm"
-        >
-          {error}
-        </p>
+        <Alert body class="px-4 py-2">{error}</Alert>
       {/if}
 
       <div class="flex justify-end gap-2">
