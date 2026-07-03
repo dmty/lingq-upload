@@ -843,7 +843,7 @@
                 </span>
                 {#if drift}
                   <span
-                    class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-warning/10 text-[10px] font-semibold text-warning"
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-warning-soft text-[10px] font-semibold text-warning"
                     title="This bucket's chars/sec deviates more than ±30% from the median — the narrator may have skipped or added material at this boundary."
                     aria-label="Drift warning"
                   >

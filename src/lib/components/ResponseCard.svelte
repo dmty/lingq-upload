@@ -52,7 +52,7 @@
     <span class="text-sm font-medium text-fg">{COPY[response].title}</span>
     {#if isDegraded}
       <span
-        class="rounded-sm bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning"
+        class="rounded-sm bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning"
       >
         audio not chapter-aligned
       </span>

@@ -326,7 +326,7 @@
   </p>
 
   <div
-    class="mt-8 rounded-md border border-border bg-surface shadow-(--shadow-card)"
+    class="mt-8 rounded-md border border-border bg-surface shadow-card"
   >
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />

@@ -206,7 +206,7 @@
     <div
       role="status"
       aria-live="polite"
-      class="mb-3 flex items-center justify-between gap-3 rounded-sm border-l-2 border-warning bg-warning/10 px-3 py-2 text-sm text-fg"
+      class="mb-3 flex items-center justify-between gap-3 rounded-sm border-l-2 border-warning bg-warning-soft px-3 py-2 text-sm text-fg"
     >
       <span> Add your LingQ API key in Settings to start uploading. </span>
       <span class="flex items-center gap-3 text-xs">

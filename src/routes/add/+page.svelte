@@ -555,7 +555,7 @@
 
   {#if conflict !== null}
     <div
-      class="rounded-md border border-warning/40 bg-warning/10 p-4 space-y-3"
+      class="rounded-md border border-warning/40 bg-warning-soft p-4 space-y-3"
     >
       <p class="text-sm text-fg">
         A project already exists for <em>{conflict.conflict_title}</em>. What do

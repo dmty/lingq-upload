@@ -265,7 +265,7 @@
             <span
               data-testid="bucket-drift"
               title="chars/sec deviates >±30% from the median — the narrator may have added or skipped material here."
-              class="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+              class="rounded-sm bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold text-warning"
               >drift</span
             >
           {/if}

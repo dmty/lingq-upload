@@ -88,7 +88,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    border: 1px solid var(--border, #ccc);
+    border: 1px solid var(--color-border);
     padding: 0.75rem 1rem;
     border-radius: 0.5rem;
   }
@@ -109,7 +109,7 @@
   }
   .pending-note {
     margin: 0;
-    color: var(--muted, #666);
+    color: var(--color-fg-muted);
     font-size: 0.85em;
     font-style: italic;
   }
@@ -117,7 +117,7 @@
     font-weight: 500;
   }
   .hint {
-    color: var(--muted, #666);
+    color: var(--color-fg-muted);
     font-size: 0.9em;
   }
 </style>

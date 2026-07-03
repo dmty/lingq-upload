@@ -202,7 +202,7 @@
   </p>
 
   <div
-    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
+    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
   >
     <h2 class="text-md font-semibold text-fg">LingQ API key</h2>
     <p class="mt-1 text-sm text-fg-subtle">
@@ -304,7 +304,7 @@
   </div>
 
   <details
-    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
+    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
     open={trashEntries.length > 0}
   >
     <summary class="cursor-pointer text-md font-semibold text-fg">
@@ -409,7 +409,7 @@
 
   {#if devBackend?.is_debug}
     <details
-      class="mt-8 rounded-md border border-border bg-surface p-6 shadow-(--shadow-card)"
+      class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
     >
       <summary class="cursor-pointer text-md font-semibold text-fg">
         Developer

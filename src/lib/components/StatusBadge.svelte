@@ -40,7 +40,7 @@
     needs_match: {
       icon: "⚠",
       label: "Needs review",
-      classes: "bg-warning/10 text-warning",
+      classes: "bg-warning-soft text-warning",
       tooltip: "Mapping not confirmed — review and confirm before uploading",
     },
     failed: {

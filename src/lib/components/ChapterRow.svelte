@@ -54,7 +54,7 @@
   <span class="flex-1 text-sm text-fg">{title}</span>
   {#if degraded}
     <span
-      class="rounded-sm bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning"
+      class="rounded-sm bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning"
     >
       degraded
     </span>
