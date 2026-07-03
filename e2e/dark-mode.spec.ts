@@ -30,14 +30,9 @@ test.describe("light color scheme stays default", () => {
   test("canvas stays light", async ({ page }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
-    const styles = await page.evaluate(() => {
-      const s = getComputedStyle(document.body);
-      return {
-        backgroundColor: s.backgroundColor,
-        color: s.color,
-        fontFamily: s.fontFamily,
-      };
-    });
-    expect(styles.backgroundColor).toBe("rgb(252, 252, 250)"); // #fcfcfa
+    const backgroundColor = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor,
+    );
+    expect(backgroundColor).toBe("rgb(252, 252, 250)"); // #fcfcfa
   });
 });
