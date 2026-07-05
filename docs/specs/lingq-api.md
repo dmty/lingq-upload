@@ -10,6 +10,7 @@
 - API keys are issued from the LingQ web UI under account settings.
 - Keys never expire in observed behaviour (one key in use since 2024 still valid).
 - No refresh / rotation endpoint discovered.
+- **User-Agent is required.** Requests with `python-urllib/*`, `curl/*` default, or empty UA are blocked by Cloudflare with `HTTP 403 error code: 1010` (browser signature ban). Send a real browser UA (e.g. `Mozilla/5.0 …Chrome/…`). The Rust `reqwest` default UA also passes; only headless/CLI defaults get flagged.
 
 ## Base URL & language tenancy
 
@@ -20,9 +21,16 @@
 | Op | Method | URL | Notes |
 |---|---|---|---|
 | List my languages | GET | `/api/v2/languages/` | **One of the few surviving v2 endpoints.** Not lang-scoped. Returns the catalogue with the caller's known-word counts. Response is either a flat array or `{ results: [...] }`; the client tolerates either. |
-| List my collections | GET | `/api/v3/{lang}/collections/my/?search=<title>&page_size=200` | Paginated; used to resume / dedupe by title. |
+| List my collections | GET | `/api/v3/{lang}/collections/my/?search=<title>&page_size=200` | Paginated; used to resume / dedupe by title. Entry is thin: `{id, title, imageUrl}`. |
+| Collection detail | GET | `/api/v3/{lang}/collections/{cid}/` | Full course record. Fields listed below. |
 | Create collection | POST | `/api/v3/{lang}/collections/` | JSON body `{title, description, tags?: ["books", …]}`. Returns `{id, …}`. `tags` is a JSON array (not comma-string as on lesson import). Cover-image field shape **unconfirmed** — see Open probes. There is **no `category` field**; LingQ's UI "Books" category is derived from the `books` tag. |
-| List lessons | GET | `/api/v3/{lang}/collections/{cid}/lessons/?page=N&page_size=100` | Paginated. Used to skip already-uploaded lessons by title. |
+| List lessons | GET | `/api/v3/{lang}/collections/{cid}/lessons/?page=N&page_size=100` | Paginated. Used to skip already-uploaded lessons by title. Rich per-entry fields (see below). |
+| Lesson detail | GET | `/api/v3/{lang}/lessons/{lid}/` | Full reader payload: `tokenizedText`, `translation`, `cards`, `words`, `bookmark`, reader/audio counters. |
+| Lesson text | GET | `/api/v3/{lang}/lessons/{lid}/text/` | `{is_legacy, text, words}`. `words` is a dict of `{text, tags, importance, readings}`. |
+| Lesson sentences | GET | `/api/v3/{lang}/lessons/{lid}/sentences/` | Array of `{index, text, cleanText, translations[], timestamp: [start,end], phrases, notes}`. Audio-aligned when audio is present. |
+| Lesson words | GET | `/api/v3/{lang}/lessons/{lid}/words/` | `{cards: {…}}` — just the LingQ cards on the lesson, without the tokenized text. |
+| Lesson bookmark | GET | `/api/v3/{lang}/lessons/{lid}/bookmark/` | `{wordIndex, completedWordIndex, audioPosition, client, timestamp}`. |
+| List cards | GET | `/api/v3/{lang}/cards/?lesson={lid}&page_size=N` | Paginated. Card fields: `pk, term, fragment, status, extended_status, hints, notes, srs_due_date, last_reviewed_correct, readings, transliteration, audio, tags, url`. Without `lesson` filter, returns every card in the language (huge). |
 | Import lesson | POST | `/api/v3/{lang}/lessons/import/` | multipart/form-data. Confirmed shape below. |
 
 ### `/api/v2/languages/` response (observed/permissive)
@@ -36,6 +44,108 @@ Per-entry fields, parsed permissively with these aliases:
 | `known_words` | `known_words`, `knownWords`, `words_known`, `wordsKnown` |
 
 Confirm exact field names on first manual smoke; tighten the parser if the surface stabilises.
+
+Full observed per-entry keys (v2/languages/): `id, url, code, title, supported, knownWords, lastUsed, grammar…`.
+
+## Collection detail response (observed)
+
+`GET /api/v3/{lang}/collections/{cid}/` — fields observed on a private user-owned course:
+
+```
+id                int
+title             string
+description       string
+date              "YYYY-MM-DD"
+level             string, e.g. "Intermediate 2"
+difficulty        float
+duration          int, sum of lesson durations in seconds
+lessonsCount      int
+newWordsCount     int
+imageUrl          webp cover
+originalImageUrl  orig-size cover
+tags              string[], e.g. ["books"]
+status            "private" | "public"
+folders           int[]
+sharedById        int
+sharedByName      string
+sharedByImageUrl  string
+sharedByRole      string | null
+type              "collection"
+url               relative API url
+isFeatured        bool
+isTaken           bool
+isSubscribed      bool
+isLocked          bool | null
+audioPending      bool
+rosesCount        int
+viewsCount        int
+price             int
+metadata          object | null
+providerId        string | null
+providerImageUrl  string | null
+providerName      string | null
+lessonsSortBy     string | null
+source            string | null
+accent            string | null
+progress          object | null
+```
+
+## Lesson list / detail responses (observed)
+
+**List entry** (`/collections/{cid}/lessons/`) — per lesson:
+
+```
+id, title, level, duration, wordCount, uniqueWordCount, newWordsCount,
+audio (mp3 URL), imageUrl, originalImageUrl,
+percentCompleted, listenTimes, viewsCount, canEdit, isProtected,
+tags, shelves, status, date, collectionId, collectionTitle,
+sharedById, sharedByName, providerImageUrl,
+source: {type, name, url}, sourceType, sourceUrl,
+type: "content", url, folders, accent, difficulty, price,
+isFeatured, isOverLimit, lessonsSortBy, providerName, providerId, videoUrl
+```
+
+**Detail** (`/lessons/{lid}/`) — superset of list, adds the reader payload:
+
+```
+tokenizedText        [[{tokens: [{text, wordId, indexInSentence, transliteration, opentag?, closetag?}, …]}], …]
+translation          {method: "chatgpt", language: "en", sentences: [...]}
+cards                {pk: {pk, term, fragment, notes, status, hints, transliteration, gTags, importance, …}, …}
+words                {wordId: {text, tags, importance, readings, status: "known"|…, hints: [...]}, …}
+bookmark             {wordIndex, completedWordIndex, audioPosition, client, timestamp}
+completed            bool
+opened               bool
+isFavorite           bool
+lastOpenTime         ISO-8601
+readTimes            float
+listenTimes          float
+percentCompleted     float
+newWordsCount        int
+uniqueWordCount      int
+wordCount            int
+cardsCount           int
+audioUrl             final CDN URL (S3)
+imageUrl             webp cover
+originalImageUrl     orig-size cover
+collection           {id, type, title, status, source, …}
+nextLessonId, nextLesson: {id, title, image}
+previousLessonId, previousLesson
+pos                  int, position in collection
+pubDate              "YYYY-MM-DD"
+classicUrl           string   legacy reader URL
+printUrl             string   printable URL
+giveRoseUrl          string
+canEdit, canEditSentence, isLegacy, isLocked, isOverLimit, isProtected,
+audioPending, audioRating, audioVotes, lessonRating, lessonVotes,
+scheduledForDeletion, roseGiven, rosesCount, viewsCount,
+sharedById, sharedByName, sharedByImageUrl, sharedByIsFriend, sharedByRole,
+promotedCourse, providerDescription, providerImageUrl, providerName, providerUrl,
+simplifiedBy, simplifiedTo, external_type, videoUrl, metadata,
+copyright, description, difficulty, duration, folders, level, price,
+status: "D" (draft?) | …, tags, title, type: "lesson", url
+```
+
+Cover URLs (`imageUrl`, `originalImageUrl`) come back on both collection and lesson detail — no separate fetch endpoint is needed to display a cover once uploaded. Cover **upload** shape is still open (see below).
 
 ## `lessons/import/` multipart shape (confirmed)
 
@@ -59,6 +169,11 @@ Returns `{id, …}` on success. Lesson ID is the integer to thread into subseque
 |---|---|
 | `/api/v3/contexts/` | 404. **Do not use** as an auth-check probe; use `/api/v3/{lang}/collections/my/?page_size=1` instead. |
 | `/api/v2/*` | `400 {"detail": "API is obsolete. Use v3 instead."}` — **except** `/api/v2/languages/` (see above). |
+| `/api/v3/languages/` | 404. Use `/api/v2/languages/`. |
+| `/api/v3/{lang}/stats/` | 404. No language-level stats endpoint. |
+| `/api/v3/{lang}/collections/{cid}/{stats,progress,statistics,counters}/` | 404. No dedicated collection stats — counters are inline on the collection detail (`newWordsCount`, `lessonsCount`, `duration`, `viewsCount`, `rosesCount`). |
+| `/api/v3/{lang}/lessons/{lid}/{stats,progress,statistics,counters,timings,audio,cards,translations,tokens}/` | 404. Reader progress lives on lesson detail (`percentCompleted`, `readTimes`, `listenTimes`, `bookmark`); text/translation/cards live on the confirmed sub-endpoints above. |
+| `/api/v3/{lang}/cards/counters/` | 404 `{"detail":"Not found."}`. |
 
 ## Open probes
 
