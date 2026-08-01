@@ -882,7 +882,7 @@ fn build_plan(
     // resolve and then edited in the mapping screen). The decision is only a
     // fallback for projects that resolved to no mapping (Cancel / legacy).
     if let Some(mapping) = &project.mapping {
-        return plan_from_mapping(mapping, chapters, tracks);
+        return plan_from_mapping(mapping, chapters, tracks, leftover_base);
     }
     if let Some(decision) = &project.matcher_decision {
         return plan_from_decision(decision, chapters, tracks, leftover_base);
@@ -922,6 +922,7 @@ fn plan_from_mapping(
     mapping: &MappingState,
     chapters: &[Chapter],
     tracks: &[AudioTrack],
+    leftover_base: usize,
 ) -> PlanOrPause {
     let mut steps: Vec<Step> = Vec::new();
     let mut used_tracks: std::collections::HashSet<TrackId> = std::collections::HashSet::new();
@@ -984,7 +985,11 @@ fn plan_from_mapping(
         }
     }
     // Tracks referenced by no pair (including pairs to skipped chapters)
-    // and not parked -> audio-only degraded.
+    // and not parked -> audio-only degraded. Offset from `leftover_base`
+    // (the full, unfiltered chapter count), not `chapters.len()` (the
+    // eligible slice) — a skipped, not-yet-uploaded chapter shrinks
+    // `chapters` without shrinking real chapter `order` values, so basing
+    // this on the eligible count can collide with a real chapter's index.
     for (k, track) in tracks.iter().enumerate() {
         let tid = track_id_for(track);
         if used_tracks.contains(&tid)
@@ -994,7 +999,7 @@ fn plan_from_mapping(
             continue;
         }
         steps.push(Step {
-            chapter_index: chapters.len() + k,
+            chapter_index: leftover_base + k,
             track_index: k,
             degraded: true,
             title: audio_only_title(track, k),
@@ -1438,7 +1443,7 @@ mod tests {
             buckets: Vec::new(),
         };
 
-        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks, chapters.len()) {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
@@ -1463,7 +1468,7 @@ mod tests {
             buckets: Vec::new(),
         };
         assert!(matches!(
-            plan_from_mapping(&mapping, &chapters, &tracks),
+            plan_from_mapping(&mapping, &chapters, &tracks, chapters.len()),
             PlanOrPause::Failed(_)
         ));
     }
@@ -1492,7 +1497,7 @@ mod tests {
             op_id: 0,
             buckets: Vec::new(),
         };
-        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks, chapters.len()) {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
@@ -1520,7 +1525,7 @@ mod tests {
             op_id: 0,
             buckets: Vec::new(),
         };
-        let plan = match plan_from_mapping(&mapping, &chapters, &tracks) {
+        let plan = match plan_from_mapping(&mapping, &chapters, &tracks, chapters.len()) {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };

@@ -107,3 +107,70 @@ async fn plan_preview_propagates_a_broken_mapping_as_an_error() {
         "a mapping referencing a moved/renamed track must propagate as an error, not an empty preview: {err:?}",
     );
 }
+
+#[tokio::test]
+async fn plan_preview_leftover_index_does_not_collide_with_a_skipped_chapter() {
+    let text_dir = TempDir::new().unwrap();
+    let audio_dir = TempDir::new().unwrap();
+    let store = InMemoryProjectStore::default();
+    let mut project = make_project(text_dir.path(), audio_dir.path());
+    let project_id = project.id.clone();
+
+    // Chapter 0 is skipped and not yet uploaded, so `plan_from_mapping` only
+    // walks chapters 1 and 2 (eligible len 2). `a_01` is left unclaimed
+    // (chapter 0's pair carries no track) so it ships as a leftover
+    // audio-only step. Before `leftover_base` was threaded through,
+    // `plan_from_mapping` based the leftover index on the eligible count
+    // (2) instead of the full chapter count (3), so this leftover's index
+    // collided with chapter 2's own real order.
+    let track_id = |name: &str| audio_dir.path().join(format!("{name}.m4a")).display().to_string();
+    project.mapping = Some(MappingState {
+        pairs: vec![
+            MappingPair {
+                chapter_id: ChapterId::from_order(0),
+                track_id: None,
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: ChapterId::from_order(1),
+                track_id: Some(track_id("a_02")),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+            MappingPair {
+                chapter_id: ChapterId::from_order(2),
+                track_id: Some(track_id("a_03")),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            },
+        ],
+        parking_lot: vec![],
+        op_id: 0,
+        buckets: vec![],
+    });
+    project.skipped_chapters = vec![ChapterId::from_order(0)];
+    store.put(&project).unwrap();
+
+    let steps = plan_preview(&store, &project_id).await.unwrap();
+
+    let indices: Vec<usize> = steps.iter().map(|s| s.chapter_index).collect();
+    let unique: std::collections::HashSet<usize> = indices.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        indices.len(),
+        "every chapter_index in a seeded plan must be distinct: {indices:?}"
+    );
+
+    let leftover = steps
+        .iter()
+        .find(|s| s.degraded)
+        .expect("the unclaimed a_01 track must produce one leftover step");
+    assert_eq!(
+        leftover.chapter_index, 3,
+        "leftover index must start past the full chapter count (3), not the eligible count (2)"
+    );
+}
