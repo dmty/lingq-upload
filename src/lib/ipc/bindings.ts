@@ -331,6 +331,19 @@ async cmdChapterText(projectId: ProjectId, chapterId: ChapterId) : Promise<Resul
 }
 },
 /**
+ * The upload queue for a project, so the run screen can show every chapter
+ * it will upload before the first one finishes. Read-only; re-resolves the
+ * sources on each call the same way `cmd_project_chapters` does.
+ */
+async cmdProjectPlanPreview(projectId: ProjectId) : Promise<Result<PlanStep[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_project_plan_preview", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Replace the project's skipped-chapter set wholesale.
  * 
  * The picker UI debounces user edits and flushes the resulting selection
@@ -575,6 +588,14 @@ export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | 
  */
 export type MismatchInspection = { title: string; chapter_count: number; track_count: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview: BucketPreview[] | null }
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
+/**
+ * One planned upload step, projected for the UI.
+ * 
+ * `chapter_index` is the receipt key, so it joins directly against
+ * [`ChapterReceipt::chapter_index`] — see `Step::chapter_index` for why
+ * it is not a chapter order.
+ */
+export type PlanStep = { chapter_index: number; title: string; degraded: boolean }
 export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
 /**
  * Chapter ids the user opted out of uploading. Replaced wholesale

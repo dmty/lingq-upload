@@ -6,6 +6,7 @@ use specta::Type;
 use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
+use crate::core::job::{plan_preview, PlanStep};
 use crate::core::project::{filter_cover_chapter, Project};
 use crate::core::store::{ProjectStore, StoreError};
 use crate::core::text::read_text_for_upload;
@@ -136,6 +137,18 @@ pub async fn cmd_chapter_text(
     chapter_id: ChapterId,
 ) -> Result<String, AppError> {
     chapter_text(&**store, &project_id, &chapter_id).await
+}
+
+/// The upload queue for a project, so the run screen can show every chapter
+/// it will upload before the first one finishes. Read-only; re-resolves the
+/// sources on each call the same way `cmd_project_chapters` does.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_project_plan_preview(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<Vec<PlanStep>, AppError> {
+    plan_preview(&**store, &project_id).await
 }
 
 /// Tauri-agnostic core: takes a store reference directly so integration tests

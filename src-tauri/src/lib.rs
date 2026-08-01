@@ -49,6 +49,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::project::cmd_project_load,
             commands::project::cmd_project_chapters,
             commands::project::cmd_chapter_text,
+            commands::project::cmd_project_plan_preview,
             commands::project::cmd_set_selection,
             commands::project::cmd_set_absorb_policy,
             commands::project::cmd_set_cover,
