@@ -210,6 +210,12 @@
 
   const hasReceipts = $derived((project?.receipts?.length ?? 0) > 0);
   const doneCount = $derived(rows.filter((r) => r.status === "done").length);
+  // The run loop uploads sequentially (queue_cursor), so the first row that
+  // isn't done yet is the one currently in flight. No backend event marks a
+  // chapter as started, and none is needed.
+  const liveIndex = $derived(
+    running ? rows.find((r) => r.status !== "done")?.index : undefined,
+  );
 
   onMount(async () => {
     await reloadProject();
@@ -270,11 +276,32 @@
     </div>
     <div class="flex items-center gap-2">
       {#if running}
-        <span
-          class="rounded-sm bg-accent-soft px-2 py-1 text-xs font-medium text-accent tabular"
-        >
-          running{rows.length > 0 ? ` · ${doneCount}/${rows.length}` : ""}
-        </span>
+        {#if rows.length > 0}
+          <div class="flex items-center gap-2.5" data-testid="run-progress">
+            <div
+              class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-sunken"
+              role="progressbar"
+              aria-label="Chapters uploaded"
+              aria-valuemin={0}
+              aria-valuemax={rows.length}
+              aria-valuenow={doneCount}
+            >
+              <div
+                class="h-full rounded-full bg-accent transition-[width] duration-180 ease-snappy motion-reduce:transition-none"
+                style:width="{(doneCount / rows.length) * 100}%"
+              ></div>
+            </div>
+            <span class="text-xs font-medium text-accent tabular">
+              {doneCount}/{rows.length}
+            </span>
+          </div>
+        {:else}
+          <span
+            class="rounded-sm bg-accent-soft px-2 py-1 text-xs font-medium text-accent"
+          >
+            running
+          </span>
+        {/if}
         <Button
           variant="secondary"
           size="sm"
@@ -352,7 +379,7 @@
         <ChapterRow
           index={r.index}
           title={r.title}
-          status={r.status}
+          status={r.index === liveIndex ? "in_flight" : r.status}
           timestamp={r.timestamp}
           degraded={r.degraded}
           dimmed={r.dimmed}
