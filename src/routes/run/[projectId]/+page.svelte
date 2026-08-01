@@ -277,7 +277,7 @@
     <div class="flex items-center gap-2">
       {#if running}
         {#if rows.length > 0}
-          <div class="flex items-center gap-2.5" data-testid="run-progress">
+          <div class="flex items-center gap-2.5">
             <div
               class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-sunken"
               role="progressbar"

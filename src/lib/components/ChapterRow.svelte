@@ -50,7 +50,9 @@
       ✓
     </span>
   {:else if status === "in_flight"}
-    <Spinner tone="muted" aria-label="Uploading" />
+    <!-- aria-label is ignored on a bare span; name it from a sibling instead. -->
+    <Spinner tone="muted" aria-hidden="true" />
+    <span class="sr-only">Uploading</span>
   {:else}
     <span
       role="img"
