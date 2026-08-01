@@ -7,6 +7,7 @@
     commands,
     type ChapterReceipt,
     type JobEvent,
+    type PlanStep,
     type Project,
   } from "$lib/ipc/bindings";
   import { appErrorMessage, isMissingApiKey } from "$lib/errors";
@@ -30,6 +31,7 @@
 
   let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
+  let planSteps = $state<PlanStep[]>([]);
   let error = $state<string | null>(null);
   let errorNeedsKey = $state(false);
   let info = $state<string | null>(null);
@@ -63,8 +65,47 @@
       error = appErrorMessage(result.error);
       return;
     }
-    project = result.data;
-    rows = (project.receipts ?? []).map(receiptRow);
+    const loaded = result.data;
+    project = loaded;
+
+    // Fetch once per mount. reloadProject also runs on Result and Cancelled,
+    // and the preview probes every audio file — re-running it as a 30-file
+    // upload finishes would stall the completion banner. A finished or
+    // cancelled run cannot change the plan; a mapping edit remounts the page.
+    if (planSteps.length === 0) {
+      // cmd_project_load keys by string; every other project command takes
+      // the structured ProjectId, which exists only once loaded.
+      const preview = await commands.cmdProjectPlanPreview(loaded.id);
+      planSteps = preview.status === "ok" ? preview.data : [];
+    }
+
+    const receipts = loaded.receipts ?? [];
+    if (planSteps.length === 0) {
+      // No plan yet (counts unmatched, or no audio source): receipts are the
+      // only honest row source.
+      rows = receipts.map(receiptRow).sort((a, b) => a.index - b.index);
+      return;
+    }
+
+    // Explicit tuple annotation: without it TS widens the pair to an array
+    // and the Map constructor overload stops matching.
+    const byIndex = new Map(
+      receipts.map((r): [number, ChapterReceipt] => [r.chapter_index, r]),
+    );
+    // Plan order is upload order; leftover and bucket steps are not in
+    // numeric index order, so never re-sort a seeded queue.
+    rows = planSteps.map((s) => {
+      const receipt = byIndex.get(s.chapter_index);
+      const uploaded = receipt?.lesson_id != null;
+      return {
+        index: s.chapter_index,
+        title: s.title,
+        status: uploaded ? "done" : "queued",
+        timestamp: uploaded ? (receipt?.uploaded_at ?? null) : null,
+        degraded: receipt?.degraded ?? s.degraded,
+        dimmed: false,
+      };
+    });
   }
 
   function upsertRow(
@@ -72,6 +113,8 @@
     patch: Partial<Row> & { title?: string },
   ): void {
     const idx = rows.findIndex((r) => r.index === index);
+    // Seeded queues cover every planned index, so this branch means the
+    // plan moved under us. Show the upload rather than hide it.
     if (idx === -1) {
       rows = [
         ...rows,
@@ -291,8 +334,11 @@
     <p
       class="rounded-sm border border-border bg-surface p-4 text-sm text-fg-muted"
     >
-      No chapter receipts yet. Press Start to begin uploading; per-chapter rows
-      will stream here in order.
+      {#if running}
+        Preparing the queue… chapter rows appear as each one finishes.
+      {:else}
+        No chapters queued yet. Press Start to begin uploading.
+      {/if}
     </p>
   {:else}
     <ul>
