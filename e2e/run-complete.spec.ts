@@ -1,37 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "run-fixture";
 
-function projectScript(): string {
-  const receipt = (i: number) => ({
-    chapter_index: i,
-    lesson_id: null,
-    uploaded_at: null,
-    degraded: false,
+// No plan hook: this spec covers the receipts-only fallback path.
+const projectScript = () =>
+  runFixtureScript({
+    key: KEY,
+    title: "Run Fixture",
+    receipts: [{ chapter_index: 0 }, { chapter_index: 1 }, { chapter_index: 2 }],
   });
-  const project = {
-    schema_version: 1,
-    id: { content_hash: KEY, audible_asin: null, isbn13: null, calibre_uuid: null },
-    sources: { text: null, audio: null },
-    settings: { language: "en", collection_title: "Run Fixture", level: 1, tags: [] },
-    receipts: [receipt(0), receipt(1), receipt(2)],
-    queue_cursor: 0,
-    completed_lesson_ids: [],
-    matcher_decision: null,
-    cover_path: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 42,
-    last_activity_at: null,
-    stage: "mapped",
-    last_transition_at: null,
-    skipped_chapters: [],
-    mapping: null,
-    confirmed_at: "2026-01-01T00:00:00Z",
-  };
-  return `window.__projectByKey__ = { ${JSON.stringify(KEY)}: ${JSON.stringify(project)} };`;
-}
 
 test.describe("run completion and cancel states", () => {
   test.beforeEach(async ({ page }, testInfo) => {

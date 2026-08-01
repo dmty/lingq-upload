@@ -1,42 +1,22 @@
 import { expect, test } from "@playwright/test";
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "seed-fixture";
 
 // A fresh confirmed project: a plan exists, but nothing has uploaded yet.
 // This is the state the old code rendered as "Press Start" while running,
 // with a 1/1 counter once the first chapter landed.
-function fixtureScript(): string {
-  const project = {
-    schema_version: 1,
-    id: { content_hash: KEY, audible_asin: null, isbn13: null, calibre_uuid: null },
-    sources: { text: null, audio: null },
-    settings: { language: "en", collection_title: "Seed Fixture", level: 1, tags: [] },
-    receipts: [],
-    queue_cursor: 0,
-    completed_lesson_ids: [],
-    matcher_decision: null,
-    cover_path: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 42,
-    last_activity_at: null,
-    stage: "mapped",
-    last_transition_at: null,
-    skipped_chapters: [],
-    mapping: null,
-    confirmed_at: "2026-01-01T00:00:00Z",
-  };
-  const plan = [
-    { chapter_index: 0, title: "The Wind on the Heath", degraded: false },
-    { chapter_index: 1, title: "A Night in Sussex", degraded: false },
-    { chapter_index: 2, title: "Bonus Track", degraded: true },
-  ];
-  return (
-    `window.__projectByKey__ = { ${JSON.stringify(KEY)}: ${JSON.stringify(project)} };` +
-    `window.__planByKey__ = { ${JSON.stringify(KEY)}: ${JSON.stringify(plan)} };`
-  );
-}
+const fixtureScript = () =>
+  runFixtureScript({
+    key: KEY,
+    title: "Seed Fixture",
+    plan: [
+      { chapter_index: 0, title: "The Wind on the Heath" },
+      { chapter_index: 1, title: "A Night in Sussex" },
+      { chapter_index: 2, title: "Bonus Track", degraded: true },
+    ],
+  });
 
 test.describe("run queue seeding", () => {
   test.beforeEach(async ({ page }, testInfo) => {
