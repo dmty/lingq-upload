@@ -585,20 +585,16 @@ pub async fn plan_preview(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
 ) -> Result<Vec<PlanStep>, AppError> {
-    let Some(project) = store
+    let project = store
         .get(project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
-    else {
-        return Err(AppError::Other("project not found".into()));
-    };
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
     if project.sources.audio.is_none() {
         return Ok(Vec::new());
     }
 
-    let (epub_bytes, strategy) = epub_inputs(&project);
     let tracks = resolve_audio_tracks(&project).await?;
-    let chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
-    let chapters = filter_cover_chapter(chapters, project.cover_source_href.as_deref());
+    let chapters = project_chapters(&project)?;
 
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let full_chapter_count = chapters.len();

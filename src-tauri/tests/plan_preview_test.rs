@@ -5,7 +5,7 @@ mod support;
 
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::plan_preview;
-use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
+use lingq_upload_lib::core::project::Project;
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use std::path::{Path, PathBuf};
@@ -26,39 +26,14 @@ fn make_project(text_dir: &Path, audio_dir: &Path) -> Project {
     for name in ["a_01", "a_02", "a_03"] {
         write_silence_m4a_like(&audio_dir.join(format!("{name}.m4a")), 2);
     }
-    Project {
-        schema_version: SCHEMA_V1,
-        id: ProjectId::from_title_author("PlanPreview", "Author"),
-        sources: ProjectSources {
-            text: TextSource::LooseFiles { paths: text_paths },
-            audio: Some(AudioSource::Folder(audio_dir.to_path_buf())),
-            chapter_manifest: None,
-        },
-        settings: ProjectSettings {
-            language: "en".into(),
-            collection_title: "PlanPreview".into(),
-            level: 1,
-            tags: vec![],
-        },
-        receipts: vec![],
-        queue_cursor: 0,
-        completed_lesson_ids: vec![],
-        matcher_decision: None,
-        cover_path: None,
-        authors: vec![],
-        series: None,
-        lingq_collection_id: None,
-        last_activity_at: None,
-        stage: Default::default(),
-        last_transition_at: None,
-        skipped_chapters: vec![],
-        absorb_policy: Default::default(),
-        mapping: None,
-        confirmed_at: None,
-        cover_use: true,
-        cover_uploaded_to_lingq: false,
-        cover_source_href: None,
-    }
+    let mut project = Project::new_test(
+        ProjectId::from_title_author("PlanPreview", "Author"),
+        "PlanPreview",
+    );
+    project.sources.text = TextSource::LooseFiles { paths: text_paths };
+    project.sources.audio = Some(AudioSource::Folder(audio_dir.to_path_buf()));
+    project.settings.language = "en".into();
+    project
 }
 
 #[tokio::test]
