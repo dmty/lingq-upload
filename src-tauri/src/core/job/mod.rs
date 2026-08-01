@@ -555,7 +555,7 @@ struct Step {
 /// One planned upload step, projected for the UI.
 ///
 /// `chapter_index` is the receipt key, so it joins directly against
-/// [`ChapterReceipt::chapter_index`] — see [`Step::chapter_index`] for why
+/// [`ChapterReceipt::chapter_index`] — see `Step::chapter_index` for why
 /// it is not a chapter order.
 #[derive(serde::Serialize, specta::Type, Clone, Debug, PartialEq)]
 pub struct PlanStep {
@@ -577,15 +577,21 @@ impl From<&Step> for PlanStep {
 /// The upload queue a run would produce right now, in execution order.
 ///
 /// Resolves the same inputs as [`run_project_job`] and calls the same
-/// [`build_plan`], so the UI's row set cannot drift from what the job will
-/// actually upload. Returns empty when no plan exists yet (counts still
-/// unmatched, decision cancelled, no audio source) — callers fall back to
-/// receipts rather than showing a fabricated queue.
+/// `build_plan`, so the UI's row set cannot drift from what the job will
+/// actually upload — including `run_project_job`'s own mapping seeding, which
+/// this function reproduces in memory (never persisted) so a project with no
+/// mapping yet still previews the pairing the job would seed and use. Returns
+/// empty for the pause states that never reach an upload (mismatched counts
+/// with no recorded decision, or a `Cancel` decision) and for projects with
+/// no audio source — callers fall back to receipts rather than showing a
+/// fabricated queue. A plan that fails to build (e.g. a mapping referencing a
+/// track the user has since moved or renamed) propagates as `AppError`, same
+/// as the job.
 pub async fn plan_preview(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
 ) -> Result<Vec<PlanStep>, AppError> {
-    let project = store
+    let mut project = store
         .get(project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
@@ -596,13 +602,25 @@ pub async fn plan_preview(
     let tracks = resolve_audio_tracks(&project).await?;
     let chapters = project_chapters(&project)?;
 
+    // Mirrors `run_project_job`'s seeding step: auto-match the FULL chapter
+    // set, before skips are dropped, so a skipped-but-not-yet-uploaded
+    // chapter can't make counts look mismatched here when the job itself
+    // would pair cleanly and upload. In-memory only — this function must
+    // never write to the store.
+    if project.matcher_decision.is_none() && project.mapping.is_none() {
+        if let MatchOutcome::Paired { pairs } = auto_match(&chapters, &tracks) {
+            project.mapping = Some(seed_mapping_state(&pairs, &chapters, &tracks));
+        }
+    }
+
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let full_chapter_count = chapters.len();
     let chapters = eligible_chapters(&chapters, &skipped, &project.receipts);
 
     match build_plan(&project, &chapters, &tracks, full_chapter_count) {
         PlanOrPause::Plan(p) => Ok(p.steps.iter().map(PlanStep::from).collect()),
-        _ => Ok(Vec::new()),
+        PlanOrPause::Failed(msg) => Err(AppError::Other(msg)),
+        PlanOrPause::NeedsMatch { .. } | PlanOrPause::Cancelled => Ok(Vec::new()),
     }
 }
 

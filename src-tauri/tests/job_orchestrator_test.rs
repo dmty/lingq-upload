@@ -10,8 +10,9 @@ use mockito::{Matcher, Server, ServerGuard};
 use secrecy::SecretString;
 use tokio_util::sync::CancellationToken;
 
+use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
-use lingq_upload_lib::core::job::{run_project_job, JobSink};
+use lingq_upload_lib::core::job::{plan_preview, run_project_job, JobSink};
 use lingq_upload_lib::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 use lingq_upload_lib::core::project::{
     ChapterReceipt, MatcherDecision, Project, ProjectSettings, ProjectSources, ProjectStage,
@@ -674,5 +675,102 @@ async fn cover_uploaded_to_lingq_set_after_collection_create() {
         after.cover_uploaded_to_lingq,
         "cover_uploaded_to_lingq must be true after successful upload"
     );
+    let _ = fixture.audio_dir;
+}
+
+/// Headline invariant: `plan_preview`, called before any upload, lists
+/// exactly the chapters the run then actually uploads.
+#[tokio::test]
+async fn plan_preview_matches_actual_uploads_for_happy_path() {
+    let mut fixture = make_fixture(3).await;
+    mock_collection(&mut fixture.server, 4242);
+    mock_imports(&mut fixture.server, 3, 1000);
+
+    let preview = plan_preview(fixture.store.as_ref(), &fixture.project_id)
+        .await
+        .expect("plan preview");
+    assert!(!preview.is_empty(), "preview must not be empty before upload");
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").expect("valid lang"),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    let mut uploaded: Vec<usize> = project.receipts.iter().map(|r| r.chapter_index).collect();
+    uploaded.sort();
+    let mut previewed: Vec<usize> = preview.iter().map(|s| s.chapter_index).collect();
+    previewed.sort();
+    assert_eq!(
+        previewed, uploaded,
+        "preview step set must equal what the job actually uploaded"
+    );
+
+    let _ = fixture.audio_dir;
+}
+
+/// A skipped, not-yet-uploaded chapter with no mapping and no
+/// `matcher_decision` recorded yet: `run_project_job` seeds its mapping by
+/// auto-matching the FULL chapter set (3 chapters, 3 tracks — pairs cleanly)
+/// before dropping the skip, then uploads the 2 eligible chapters.
+/// `plan_preview` must resolve the same seeding decision instead of
+/// auto-matching the already-reduced 2-chapter, 3-track eligible set, which
+/// would read as a count mismatch and preview nothing.
+#[tokio::test]
+async fn plan_preview_matches_actual_uploads_with_a_skipped_chapter() {
+    let mut fixture = make_fixture(3).await;
+    mock_collection(&mut fixture.server, 4242);
+    mock_imports(&mut fixture.server, 2, 2000);
+
+    let mut project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    project.skipped_chapters = vec![ChapterId::from_order(1)];
+    fixture.store.put(&project).unwrap();
+
+    let preview = plan_preview(fixture.store.as_ref(), &fixture.project_id)
+        .await
+        .expect("plan preview");
+    assert!(
+        !preview.is_empty(),
+        "a skip that still pairs cleanly must not preview as empty"
+    );
+    assert_eq!(preview.len(), 2, "one step per eligible chapter");
+
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").expect("valid lang"),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .expect("orchestrator run");
+
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    let mut uploaded: Vec<usize> = project.receipts.iter().map(|r| r.chapter_index).collect();
+    uploaded.sort();
+    let mut previewed: Vec<usize> = preview.iter().map(|s| s.chapter_index).collect();
+    previewed.sort();
+    assert_eq!(
+        previewed, uploaded,
+        "preview must match what the job actually uploaded despite the skip"
+    );
+
     let _ = fixture.audio_dir;
 }

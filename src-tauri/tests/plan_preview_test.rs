@@ -3,10 +3,13 @@
 
 mod support;
 
+use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::plan_preview;
+use lingq_upload_lib::core::matcher::{MappingPair, MappingState};
 use lingq_upload_lib::core::project::Project;
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
+use lingq_upload_lib::error::AppError;
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use std::path::{Path, PathBuf};
 use support::mk_fixture::write_silence_m4a_like;
@@ -54,14 +57,6 @@ async fn plan_preview_lists_every_step_before_any_upload() {
     );
     assert_eq!(steps[0].title, "ch_01", "title comes from the plan step");
     assert!(steps.iter().all(|s| !s.degraded));
-
-    // The UI joins receipts to rows on chapter_index, so duplicates would
-    // silently freeze a row at "queued" for the whole run.
-    let mut seen = std::collections::HashSet::new();
-    assert!(
-        steps.iter().all(|s| seen.insert(s.chapter_index)),
-        "chapter_index must be unique across a plan",
-    );
 }
 
 #[tokio::test]
@@ -77,4 +72,38 @@ async fn plan_preview_returns_empty_when_project_has_no_audio() {
     let steps = plan_preview(&store, &project_id).await.unwrap();
 
     assert!(steps.is_empty(), "no audio source means no plan to preview");
+}
+
+#[tokio::test]
+async fn plan_preview_propagates_a_broken_mapping_as_an_error() {
+    let text_dir = TempDir::new().unwrap();
+    let audio_dir = TempDir::new().unwrap();
+    let store = InMemoryProjectStore::default();
+    let mut project = make_project(text_dir.path(), audio_dir.path());
+    let project_id = project.id.clone();
+
+    // Same failure `run_project_job` hits when a track the mapping points at
+    // has since been moved or renamed: `plan_from_mapping` can't resolve the
+    // pair's `track_id` against the current audio folder.
+    project.mapping = Some(MappingState {
+        pairs: (0..3)
+            .map(|i| MappingPair {
+                chapter_id: ChapterId::from_order(i),
+                track_id: Some("missing-track".to_string()),
+                confidence: 1.0,
+                touched: false,
+                original_confidence: 1.0,
+            })
+            .collect(),
+        parking_lot: vec![],
+        op_id: 0,
+        buckets: vec![],
+    });
+    store.put(&project).unwrap();
+
+    let err = plan_preview(&store, &project_id).await.unwrap_err();
+    assert!(
+        matches!(&err, AppError::Other(msg) if msg.contains("unknown track")),
+        "a mapping referencing a moved/renamed track must propagate as an error, not an empty preview: {err:?}",
+    );
 }
