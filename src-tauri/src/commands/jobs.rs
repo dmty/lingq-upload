@@ -232,7 +232,11 @@ struct EmitterSink<'a, 'b> {
 
 impl<'a, 'b> JobSink for EmitterSink<'a, 'b> {
     fn started(&mut self, strategy: Option<crate::core::epub::EpubVendor>) {
-        self.inner.started(Stage::Uploading, strategy);
+        // Resolving inputs, not uploading yet — `uploading()` reports the flip.
+        self.inner.started(Stage::Parsing, strategy);
+    }
+    fn uploading(&mut self) {
+        self.inner.stage(Stage::Uploading);
     }
     fn progress(&mut self, pct: f32, message: Option<String>) {
         self.inner.progress(pct, message);

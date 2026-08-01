@@ -30,6 +30,7 @@ struct RecordingSink {
 #[derive(Debug, Clone, PartialEq)]
 enum RecordedEvent {
     Started,
+    Uploading,
     Progress(f32),
     ChapterDone {
         chapter_index: usize,
@@ -44,6 +45,9 @@ enum RecordedEvent {
 impl JobSink for RecordingSink {
     fn started(&mut self, _strategy: Option<lingq_upload_lib::core::epub::EpubVendor>) {
         self.events.lock().unwrap().push(RecordedEvent::Started);
+    }
+    fn uploading(&mut self) {
+        self.events.lock().unwrap().push(RecordedEvent::Uploading);
     }
     fn progress(&mut self, pct: f32, _message: Option<String>) {
         self.events
@@ -244,6 +248,22 @@ async fn happy_path_three_chapters_three_tracks() {
         events.last(),
         Some(RecordedEvent::Result(true, _))
     ));
+
+    // The UI marks a row in flight only once uploading starts, so this must
+    // land after input resolution and before the first chapter.
+    let uploading_at = events
+        .iter()
+        .position(|e| matches!(e, RecordedEvent::Uploading))
+        .expect("uploading not signalled");
+    let first_done_at = events
+        .iter()
+        .position(|e| matches!(e, RecordedEvent::ChapterDone { .. }))
+        .unwrap();
+    assert!(
+        uploading_at > 0 && uploading_at < first_done_at,
+        "got events {:?}",
+        events
+    );
 
     let project = fixture
         .store
@@ -689,7 +709,10 @@ async fn plan_preview_matches_actual_uploads_for_happy_path() {
     let preview = plan_preview(fixture.store.as_ref(), &fixture.project_id)
         .await
         .expect("plan preview");
-    assert!(!preview.is_empty(), "preview must not be empty before upload");
+    assert!(
+        !preview.is_empty(),
+        "preview must not be empty before upload"
+    );
 
     let client = Arc::new(LingqClient::with_base_url(
         SecretString::new("test-key".into()),

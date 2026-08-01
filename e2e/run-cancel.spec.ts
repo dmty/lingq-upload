@@ -1,41 +1,21 @@
 import { expect, test } from "@playwright/test";
 
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "cancel-fixture";
 
 // Three planned chapters, none uploaded yet.
-function fixtureScript(): string {
-  const project = {
-    schema_version: 1,
-    id: { content_hash: KEY, audible_asin: null, isbn13: null, calibre_uuid: null },
-    sources: { text: null, audio: null },
-    settings: { language: "en", collection_title: "Cancel Fixture", level: 1, tags: [] },
-    receipts: [],
-    queue_cursor: 0,
-    completed_lesson_ids: [],
-    matcher_decision: null,
-    cover_path: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 42,
-    last_activity_at: null,
-    stage: "mapped",
-    last_transition_at: null,
-    skipped_chapters: [],
-    mapping: null,
-    confirmed_at: "2026-01-01T00:00:00Z",
-  };
-  const plan = [
-    { chapter_index: 0, title: "Approach to Dunwich", degraded: false },
-    { chapter_index: 1, title: "The Fields Beyond", degraded: false },
-    { chapter_index: 2, title: "Return by Night", degraded: false },
-  ];
-  return (
-    `window.__projectByKey__ = { ${JSON.stringify(KEY)}: ${JSON.stringify(project)} };` +
-    `window.__planByKey__ = { ${JSON.stringify(KEY)}: ${JSON.stringify(plan)} };`
-  );
-}
+const fixtureScript = () =>
+  runFixtureScript({
+    key: KEY,
+    title: "Cancel Fixture",
+    plan: [
+      { chapter_index: 0, title: "Approach to Dunwich" },
+      { chapter_index: 1, title: "The Fields Beyond" },
+      { chapter_index: 2, title: "Return by Night" },
+    ],
+  });
 
 const rows = (page: import("@playwright/test").Page) =>
   page.locator("[data-testid='chapter-row']");
@@ -53,6 +33,35 @@ test.describe("run screen cancel flow", () => {
     for (let i = 0; i < 3; i += 1) {
       await expect(rows(page).nth(i)).toHaveAttribute("data-status", "queued");
     }
+  });
+
+  test("no row claims to be in flight while inputs are still resolving", async ({
+    page,
+  }) => {
+    await page.goto(`/run/${KEY}`);
+    await page.getByRole("button", { name: "Start" }).click();
+
+    await page.evaluate(() =>
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "parsing" },
+      }),
+    );
+
+    await expect(
+      page.locator("[data-testid='chapter-row'][data-status='in_flight']"),
+    ).toHaveCount(0);
+
+    await page.evaluate(() =>
+      window.__emitEvent__("job", {
+        kind: "StageChanged",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
+    );
+
+    await expect(rows(page).nth(0)).toHaveAttribute("data-status", "in_flight");
   });
 
   test("the chapter being uploaded is marked in flight, and Cancel clears it", async ({

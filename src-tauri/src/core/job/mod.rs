@@ -49,6 +49,11 @@ pub fn next_stage(p: &Project) -> Option<ProjectStage> {
 /// an in-memory recorder.
 pub trait JobSink: Send {
     fn started(&mut self, strategy: Option<EpubVendor>);
+    /// Input resolution (audio probing, text parsing, collection creation) is
+    /// done and chapters are about to be uploaded. Without this the UI cannot
+    /// tell "probing 30 audio files" from "uploading chapter 1" — both look
+    /// identical from `Started` alone. Advisory, so sinks may ignore it.
+    fn uploading(&mut self) {}
     fn progress(&mut self, pct: f32, message: Option<String>);
     fn chapter_done(&mut self, chapter_index: usize, lesson_id: i64, degraded: bool);
     fn cancelled(&mut self);
@@ -266,6 +271,8 @@ pub async fn run_project_job(
     let staging = tempfile::tempdir()?;
     let enc = EncoderSettings::default();
     let total = plan.steps.len();
+
+    sink.uploading();
 
     for (step_pos, step) in plan.steps.iter().enumerate() {
         if cancel.is_cancelled() {

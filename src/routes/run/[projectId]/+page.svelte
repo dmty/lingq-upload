@@ -9,6 +9,7 @@
     type JobEvent,
     type PlanStep,
     type Project,
+    type Stage,
   } from "$lib/ipc/bindings";
   import { appErrorMessage, isMissingApiKey } from "$lib/errors";
   import { lingqCollectionUrl } from "$lib/lingq";
@@ -47,6 +48,7 @@
   let starting = $state(false);
   let cancelling = $state(false);
   let completed = $state(false);
+  let stage = $state<Stage["kind"] | null>(null);
 
   function uploadStatus(
     receipt: ChapterReceipt | undefined,
@@ -155,8 +157,9 @@
         res.error.kind === "Other" &&
         msg.toLowerCase().includes("already running")
       ) {
+        // No jobId means no event stream: this page can't follow that run.
         info =
-          "This project is already running. Watch the chapter list update below.";
+          "This project is already running elsewhere. Progress won't update here — press Cancel to stop it, or reopen from Library once it finishes.";
         running = true;
       } else {
         error = msg;
@@ -210,11 +213,17 @@
 
   const hasReceipts = $derived((project?.receipts?.length ?? 0) > 0);
   const doneCount = $derived(rows.filter((r) => r.status === "done").length);
+  // Without a server-issued jobId every event is dropped, so nothing below
+  // can advance. Progress UI must not imply otherwise.
+  const attached = $derived(jobId !== null);
   // The run loop uploads sequentially (queue_cursor), so the first row that
-  // isn't done yet is the one currently in flight. No backend event marks a
-  // chapter as started, and none is needed.
+  // isn't done yet is the one currently in flight. Gated on the uploading
+  // stage: before it, the backend is still probing audio and parsing text,
+  // and no chapter is in flight yet.
   const liveIndex = $derived(
-    running ? rows.find((r) => r.status !== "done")?.index : undefined,
+    running && attached && stage === "uploading"
+      ? rows.find((r) => r.status !== "done")?.index
+      : undefined,
   );
 
   onMount(async () => {
@@ -229,6 +238,9 @@
 
       if (ev.kind === "Started") {
         running = true;
+        stage = ev.stage.kind;
+      } else if (ev.kind === "StageChanged") {
+        stage = ev.stage.kind;
       } else if (ev.kind === "ChapterDone") {
         upsertRow(ev.chapter_index, {
           status: "done",
@@ -276,7 +288,7 @@
     </div>
     <div class="flex items-center gap-2">
       {#if running}
-        {#if rows.length > 0}
+        {#if attached && rows.length > 0}
           <div class="flex items-center gap-2.5">
             <div
               class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-sunken"
