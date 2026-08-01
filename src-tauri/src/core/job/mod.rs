@@ -552,6 +552,64 @@ struct Step {
     text: String,
 }
 
+/// One planned upload step, projected for the UI.
+///
+/// `chapter_index` is the receipt key, so it joins directly against
+/// [`ChapterReceipt::chapter_index`] — see [`Step::chapter_index`] for why
+/// it is not a chapter order.
+#[derive(serde::Serialize, specta::Type, Clone, Debug, PartialEq)]
+pub struct PlanStep {
+    pub chapter_index: usize,
+    pub title: String,
+    pub degraded: bool,
+}
+
+impl From<&Step> for PlanStep {
+    fn from(s: &Step) -> Self {
+        Self {
+            chapter_index: s.chapter_index,
+            title: s.title.clone(),
+            degraded: s.degraded,
+        }
+    }
+}
+
+/// The upload queue a run would produce right now, in execution order.
+///
+/// Resolves the same inputs as [`run_project_job`] and calls the same
+/// [`build_plan`], so the UI's row set cannot drift from what the job will
+/// actually upload. Returns empty when no plan exists yet (counts still
+/// unmatched, decision cancelled, no audio source) — callers fall back to
+/// receipts rather than showing a fabricated queue.
+pub async fn plan_preview(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<Vec<PlanStep>, AppError> {
+    let Some(project) = store
+        .get(project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+    else {
+        return Err(AppError::Other("project not found".into()));
+    };
+    if project.sources.audio.is_none() {
+        return Ok(Vec::new());
+    }
+
+    let (epub_bytes, strategy) = epub_inputs(&project);
+    let tracks = resolve_audio_tracks(&project).await?;
+    let chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
+    let chapters = filter_cover_chapter(chapters, project.cover_source_href.as_deref());
+
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    let full_chapter_count = chapters.len();
+    let chapters = eligible_chapters(&chapters, &skipped, &project.receipts);
+
+    match build_plan(&project, &chapters, &tracks, full_chapter_count) {
+        PlanOrPause::Plan(p) => Ok(p.steps.iter().map(PlanStep::from).collect()),
+        _ => Ok(Vec::new()),
+    }
+}
+
 fn step_for_chapter(chapter: &Chapter, track_index: usize) -> Step {
     Step {
         chapter_index: chapter.order,
