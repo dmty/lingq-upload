@@ -3,6 +3,7 @@
 
 mod support;
 
+use lingq_upload_lib::commands::project::project_chapters_impl;
 use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::job::plan_preview;
@@ -172,5 +173,74 @@ async fn plan_preview_leftover_index_does_not_collide_with_a_skipped_chapter() {
     assert_eq!(
         leftover.chapter_index, 3,
         "leftover index must start past the full chapter count (3), not the eligible count (2)"
+    );
+}
+
+/// `guide-xhtml-img.epub` has `cover.xhtml` then `chapter1.xhtml` in the
+/// spine. With the cover suppressed, the surviving chapter keeps `order` 1
+/// while the chapter list is one entry long — chapter orders are no longer
+/// contiguous, so a leftover index derived from the chapter *count* lands on
+/// a real chapter's order.
+#[tokio::test]
+async fn plan_preview_leftover_index_survives_a_cover_filtered_chapter_set() {
+    let audio_dir = TempDir::new().unwrap();
+    for name in ["a_01", "a_02"] {
+        write_silence_m4a_like(&audio_dir.path().join(format!("{name}.m4a")), 2);
+    }
+    let store = InMemoryProjectStore::default();
+    let mut project = Project::new_test(
+        ProjectId::from_title_author("PlanPreviewCover", "Author"),
+        "PlanPreviewCover",
+    );
+    project.sources.text = TextSource::Epub(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epub-covers/guide-xhtml-img.epub"),
+    );
+    project.sources.audio = Some(AudioSource::Folder(audio_dir.path().to_path_buf()));
+    project.settings.language = "en".into();
+    project.cover_source_href = Some("cover.xhtml".into());
+    let project_id = project.id.clone();
+    store.put(&project).unwrap();
+
+    let chapters = project_chapters_impl(&store, &project_id).unwrap();
+    assert_eq!(chapters.len(), 1, "cover.xhtml must be filtered out");
+    assert_eq!(
+        chapters[0].order, 1,
+        "the cover filter must not reindex the surviving chapter"
+    );
+
+    // Pair the surviving chapter with the SECOND track, leaving `a_01`
+    // (track index 0) unclaimed: its leftover index is `base + 0`, which is
+    // exactly the value a count-derived base collides on.
+    let track_id = |name: &str| audio_dir.path().join(format!("{name}.m4a")).display().to_string();
+    project.mapping = Some(MappingState {
+        pairs: vec![MappingPair {
+            chapter_id: chapters[0].id.clone(),
+            track_id: Some(track_id("a_02")),
+            confidence: 1.0,
+            touched: false,
+            original_confidence: 1.0,
+        }],
+        parking_lot: vec![],
+        op_id: 0,
+        buckets: vec![],
+    });
+    store.put(&project).unwrap();
+
+    let steps = plan_preview(&store, &project_id).await.unwrap();
+
+    let leftover = steps
+        .iter()
+        .find(|s| s.degraded)
+        .expect("the unclaimed a_01 track must produce one leftover step");
+    assert_ne!(
+        leftover.chapter_index, chapters[0].order,
+        "leftover index must not reuse a real chapter's order"
+    );
+    let indices: Vec<usize> = steps.iter().map(|s| s.chapter_index).collect();
+    let unique: std::collections::HashSet<usize> = indices.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        indices.len(),
+        "every chapter_index in a seeded plan must be distinct: {indices:?}"
     );
 }

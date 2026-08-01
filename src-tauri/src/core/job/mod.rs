@@ -164,6 +164,7 @@ pub async fn run_project_job(
     // enters the chapter set, so merged-text plans exclude its body and
     // per-chapter steps for it are never created.
     let full_chapter_count = chapters.len();
+    let leftover_base = leftover_index_base(&chapters);
     let chapters = eligible_chapters(&chapters, &skipped_set, &project.receipts);
 
     tracing::info!(
@@ -179,7 +180,7 @@ pub async fn run_project_job(
     // via the dedicated `NeedsMatch` terminal event. Don't reuse
     // `Result { ok: false }` — that's reserved for "job finished" and
     // breaks downstream consumers that key off the terminal kind.
-    let plan = match build_plan(&project, &chapters, &tracks, full_chapter_count) {
+    let plan = match build_plan(&project, &chapters, &tracks, leftover_base) {
         PlanOrPause::Plan(p) => p,
         PlanOrPause::NeedsMatch {
             condition,
@@ -614,10 +615,10 @@ pub async fn plan_preview(
     }
 
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
-    let full_chapter_count = chapters.len();
+    let leftover_base = leftover_index_base(&chapters);
     let chapters = eligible_chapters(&chapters, &skipped, &project.receipts);
 
-    match build_plan(&project, &chapters, &tracks, full_chapter_count) {
+    match build_plan(&project, &chapters, &tracks, leftover_base) {
         PlanOrPause::Plan(p) => Ok(p.steps.iter().map(PlanStep::from).collect()),
         PlanOrPause::Failed(msg) => Err(AppError::Other(msg)),
         PlanOrPause::NeedsMatch { .. } | PlanOrPause::Cancelled => Ok(Vec::new()),
@@ -681,7 +682,7 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
     let all_chapters = project_chapters(project)?;
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
-    match build_plan(project, &chapters, &tracks, all_chapters.len()) {
+    match build_plan(project, &chapters, &tracks, leftover_index_base(&all_chapters)) {
         PlanOrPause::NeedsMatch {
             condition,
             options,
@@ -872,6 +873,16 @@ fn proportional_split_pairs(chapters: &[Chapter], tracks: &[AudioTrack]) -> Vec<
     pairs
 }
 
+/// First `chapter_index` free for synthetic (audio-only) receipt keys.
+///
+/// Derived from the highest `order` present, not the chapter count: the cover
+/// filter drops a chapter without reindexing the survivors, so a set of n
+/// chapters can carry orders up to n. Callers pass the FULL chapter set —
+/// skips shrink the eligible slice without shrinking real chapter orders.
+fn leftover_index_base(chapters: &[Chapter]) -> usize {
+    chapters.iter().map(|c| c.order).max().map_or(0, |m| m + 1)
+}
+
 fn build_plan(
     project: &Project,
     chapters: &[Chapter],
@@ -986,10 +997,9 @@ fn plan_from_mapping(
     }
     // Tracks referenced by no pair (including pairs to skipped chapters)
     // and not parked -> audio-only degraded. Offset from `leftover_base`
-    // (the full, unfiltered chapter count), not `chapters.len()` (the
-    // eligible slice) — a skipped, not-yet-uploaded chapter shrinks
-    // `chapters` without shrinking real chapter `order` values, so basing
-    // this on the eligible count can collide with a real chapter's index.
+    // (past the highest real chapter `order`), not `chapters.len()` — the
+    // eligible slice is neither the full set nor contiguously ordered, so a
+    // count-derived offset can land on a real chapter's index.
     for (k, track) in tracks.iter().enumerate() {
         let tid = track_id_for(track);
         if used_tracks.contains(&tid)
@@ -1070,10 +1080,10 @@ fn plan_from_decision(
             // Pair chapters[i] ↔ tracks[i] for i in 0..chapters.len().
             // Any extra tracks beyond chapters.len() ship as audio-only
             // lessons (degraded). Leftover receipts get a synthetic
-            // `chapter_index` starting at `leftover_base` (the full,
-            // unfiltered chapter count) — past every real chapter order, so
-            // resume-skip keys stay unique even when skips shrank the
-            // eligible set. Future refactor: model leftover receipts with
+            // `chapter_index` starting at `leftover_base` — past every real
+            // chapter order, so resume-skip keys stay unique even when skips
+            // shrank the eligible set or the cover filter left a gap in the
+            // orders. Future refactor: model leftover receipts with
             // `chapter_index: Option<usize>`.
             let mut steps: Vec<Step> = chapters
                 .iter()
@@ -1557,7 +1567,7 @@ mod tests {
             buckets: Vec::new(),
         });
 
-        let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {
+        let plan = match build_plan(&project, &chapters, &tracks, leftover_index_base(&chapters)) {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
@@ -1891,7 +1901,7 @@ mod tests {
             op_id: 1,
             buckets: Vec::new(),
         });
-        let plan = match build_plan(&project, &chapters, &tracks, chapters.len()) {
+        let plan = match build_plan(&project, &chapters, &tracks, leftover_index_base(&chapters)) {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
