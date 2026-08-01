@@ -56,8 +56,14 @@ fn build_sigil_style_epub(path: &std::path::Path) {
     .unwrap();
 
     for (name, body) in [
-        ("Text/ch1.xhtml", "<h1>Chapter One</h1><p>Body of chapter one.</p>"),
-        ("Text/ch2.xhtml", "<h1>Chapter Two</h1><p>Body of chapter two.</p>"),
+        (
+            "Text/ch1.xhtml",
+            "<h1>Chapter One</h1><p>Body of chapter one.</p>",
+        ),
+        (
+            "Text/ch2.xhtml",
+            "<h1>Chapter Two</h1><p>Body of chapter two.</p>",
+        ),
     ] {
         zw.start_file(name, SimpleFileOptions::default()).unwrap();
         let xhtml = format!(
@@ -136,7 +142,8 @@ fn build_sigil_style_epub_with_cover(path: &std::path::Path) {
 
     // Tiny 1x1 JPEG (same byte payload as the cover-extract fixtures).
     let jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9";
-    zw.start_file("Images/Cover.jpg", SimpleFileOptions::default()).unwrap();
+    zw.start_file("Images/Cover.jpg", SimpleFileOptions::default())
+        .unwrap();
     zw.write_all(jpeg).unwrap();
 
     for (name, body) in [

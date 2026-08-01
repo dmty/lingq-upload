@@ -1,5 +1,5 @@
-use std::path::Path;
 use lingq_upload_lib::core::epub::cover::{extract_to_dir, ExtractedCover};
+use std::path::Path;
 
 fn fixture(name: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -10,10 +10,13 @@ fn fixture(name: &str) -> std::path::PathBuf {
 #[test]
 fn extracts_via_epub3_properties() {
     let dir = tempfile::tempdir().unwrap();
-    let ExtractedCover { path, mime, source_spine_href } =
-        extract_to_dir(&fixture("epub3-properties.epub"), dir.path())
-            .unwrap()
-            .expect("cover present");
+    let ExtractedCover {
+        path,
+        mime,
+        source_spine_href,
+    } = extract_to_dir(&fixture("epub3-properties.epub"), dir.path())
+        .unwrap()
+        .expect("cover present");
     assert!(path.starts_with(dir.path()));
     assert_eq!(path.file_name().unwrap().to_string_lossy(), "cover.jpg");
     assert_eq!(mime, "image/jpeg");
@@ -50,15 +53,23 @@ fn returns_none_when_no_cover() {
     let epub_path = dir.path().join("nocov.epub");
     let mut zw = zip::ZipWriter::new(std::fs::File::create(&epub_path).unwrap());
     use zip::write::SimpleFileOptions;
-    zw.start_file("mimetype", SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored)).unwrap();
+    zw.start_file(
+        "mimetype",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+    )
+    .unwrap();
     use std::io::Write;
     zw.write_all(b"application/epub+zip").unwrap();
-    zw.start_file("META-INF/container.xml", SimpleFileOptions::default()).unwrap();
+    zw.start_file("META-INF/container.xml", SimpleFileOptions::default())
+        .unwrap();
     zw.write_all(br#"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#).unwrap();
-    zw.start_file("content.opf", SimpleFileOptions::default()).unwrap();
+    zw.start_file("content.opf", SimpleFileOptions::default())
+        .unwrap();
     zw.write_all(br#"<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier><dc:title>t</dc:title><dc:language>en</dc:language></metadata><manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="ch1"/></spine></package>"#).unwrap();
-    zw.start_file("ch1.xhtml", SimpleFileOptions::default()).unwrap();
-    zw.write_all(b"<html><body><p>hi</p></body></html>").unwrap();
+    zw.start_file("ch1.xhtml", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(b"<html><body><p>hi</p></body></html>")
+        .unwrap();
     zw.finish().unwrap();
 
     let out_dir = tempfile::tempdir().unwrap();

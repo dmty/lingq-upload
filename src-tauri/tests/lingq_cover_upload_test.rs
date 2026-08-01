@@ -30,7 +30,10 @@ async fn cover_upload_cascade_and_winner_cache() {
     let lang = "ja";
 
     let probe1 = server_a
-        .mock("PATCH", format!("/api/v3/{lang}/collections/42/image/").as_str())
+        .mock(
+            "PATCH",
+            format!("/api/v3/{lang}/collections/42/image/").as_str(),
+        )
         .with_status(404)
         .expect(1)
         .create_async()
@@ -52,11 +55,8 @@ async fn cover_upload_cascade_and_winner_cache() {
         .create_async()
         .await;
 
-    let client_a = LingqClient::with_base_url(
-        SecretString::new("token".into()),
-        ja(),
-        server_a.url(),
-    );
+    let client_a =
+        LingqClient::with_base_url(SecretString::new("token".into()), ja(), server_a.url());
     let img = fixture_epub();
 
     let ok = client_a.set_collection_image(cid, &img).await.unwrap();
@@ -78,11 +78,8 @@ async fn cover_upload_cascade_and_winner_cache() {
         .create_async()
         .await;
 
-    let client_b = LingqClient::with_base_url(
-        SecretString::new("token".into()),
-        ja(),
-        server_b.url(),
-    );
+    let client_b =
+        LingqClient::with_base_url(SecretString::new("token".into()), ja(), server_b.url());
     let result = client_b
         .set_collection_image(CollectionId(9), &img)
         .await

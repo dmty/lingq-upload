@@ -29,7 +29,9 @@ pub fn handler<R: Runtime>(
 ) -> Response<Vec<u8>> {
     let uri = req.uri();
     let raw_path = uri.path().trim_start_matches('/');
-    let decoded = percent_decode_str(raw_path).decode_utf8_lossy().into_owned();
+    let decoded = percent_decode_str(raw_path)
+        .decode_utf8_lossy()
+        .into_owned();
     let path = PathBuf::from(decoded);
 
     let Ok(mut file) = File::open(&path) else {

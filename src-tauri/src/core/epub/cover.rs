@@ -19,7 +19,10 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use zip::ZipArchive;
 
-use super::{local_name, parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip, EpubError};
+use super::{
+    local_name, parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip,
+    EpubError,
+};
 
 #[derive(Debug, Clone)]
 pub struct ExtractedCover {
@@ -40,8 +43,8 @@ pub fn extract_to_dir_from_bytes(
     bytes: &[u8],
     dest_dir: &Path,
 ) -> Result<Option<ExtractedCover>, EpubError> {
-    let mut zip = ZipArchive::new(std::io::Cursor::new(bytes))
-        .map_err(|e| EpubError::Zip(e.to_string()))?;
+    let mut zip =
+        ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| EpubError::Zip(e.to_string()))?;
 
     let opf_path = read_container_opf_path(&mut zip)?;
     let opf_dir = parent_dir(&opf_path).to_string();
@@ -53,16 +56,26 @@ pub fn extract_to_dir_from_bytes(
     // Rung 1: EPUB3 properties="cover-image"
     if let Some(item) = manifest.iter().find(|m| m.is_cover_image_property) {
         let href = join_opf(&opf_dir, &item.href);
-        return write_sidecar(&mut zip, &href, &item.media_type, dest_dir,
-            host_spine_href(&spine, &manifest, &item.href));
+        return write_sidecar(
+            &mut zip,
+            &href,
+            &item.media_type,
+            dest_dir,
+            host_spine_href(&spine, &manifest, &item.href),
+        );
     }
 
     // Rung 2: EPUB2 <meta name="cover" content="ID"/>
     if let Some(meta_id) = parse_meta_cover_id(&opf_xml) {
         if let Some(item) = manifest.iter().find(|m| m.id == meta_id) {
             let href = join_opf(&opf_dir, &item.href);
-            return write_sidecar(&mut zip, &href, &item.media_type, dest_dir,
-                host_spine_href(&spine, &manifest, &item.href));
+            return write_sidecar(
+                &mut zip,
+                &href,
+                &item.media_type,
+                dest_dir,
+                host_spine_href(&spine, &manifest, &item.href),
+            );
         }
     }
 
@@ -72,13 +85,22 @@ pub fn extract_to_dir_from_bytes(
         if let Ok(xhtml) = read_to_string_from_zip(&mut zip, &xhtml_path) {
             if let Some(img_src) = first_img_src(&xhtml) {
                 let img_path = join_relative(&xhtml_path, &img_src);
-                if let Some(item) = manifest.iter().find(|m| join_opf(&opf_dir, &m.href) == img_path) {
-                    return write_sidecar(&mut zip, &img_path, &item.media_type, dest_dir,
-                        Some(guide_href));
+                if let Some(item) = manifest
+                    .iter()
+                    .find(|m| join_opf(&opf_dir, &m.href) == img_path)
+                {
+                    return write_sidecar(
+                        &mut zip,
+                        &img_path,
+                        &item.media_type,
+                        dest_dir,
+                        Some(guide_href),
+                    );
                 }
                 // Image referenced directly in zip but not declared in manifest:
                 // synth a mime from the extension.
-                let mime = guess_mime(&img_path).unwrap_or_else(|| "application/octet-stream".into());
+                let mime =
+                    guess_mime(&img_path).unwrap_or_else(|| "application/octet-stream".into());
                 return write_sidecar(&mut zip, &img_path, &mime, dest_dir, Some(guide_href));
             }
         }
@@ -94,7 +116,10 @@ pub fn extract_to_dir_from_bytes(
             continue;
         }
         if let Some(stripped) = lower.rsplit('/').next() {
-            if matches!(stripped, "cover.jpg" | "cover.jpeg" | "cover.png" | "cover.webp") {
+            if matches!(
+                stripped,
+                "cover.jpg" | "cover.jpeg" | "cover.png" | "cover.webp"
+            ) {
                 let mime = guess_mime(&name).unwrap_or_else(|| "application/octet-stream".into());
                 return write_sidecar(&mut zip, &name, &mime, dest_dir, None);
             }
@@ -112,14 +137,13 @@ fn write_sidecar<R: Read + Seek>(
     source_spine_href: Option<String>,
 ) -> Result<Option<ExtractedCover>, EpubError> {
     let bytes = read_bytes_from_zip(zip, entry_name)?;
-    let ext = ext_for_mime(media_type)
-        .unwrap_or_else(|| {
-            std::path::Path::new(entry_name)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("jpg")
-                .to_string()
-        });
+    let ext = ext_for_mime(media_type).unwrap_or_else(|| {
+        std::path::Path::new(entry_name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg")
+            .to_string()
+    });
     std::fs::create_dir_all(dest_dir).map_err(|e| EpubError::Io(e.to_string()))?;
     let out = dest_dir.join(format!("cover.{ext}"));
     // Delete any prior sidecar at a different extension.
@@ -130,7 +154,8 @@ fn write_sidecar<R: Read + Seek>(
         }
     }
     let mut f = std::fs::File::create(&out).map_err(|e| EpubError::Io(e.to_string()))?;
-    f.write_all(&bytes).map_err(|e| EpubError::Io(e.to_string()))?;
+    f.write_all(&bytes)
+        .map_err(|e| EpubError::Io(e.to_string()))?;
     Ok(Some(ExtractedCover {
         path: out,
         mime: media_type.to_string(),
@@ -153,9 +178,15 @@ fn parse_manifest(opf_xml: &str) -> Vec<ManifestItem> {
     let mut in_manifest = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"manifest" => in_manifest = true,
-            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"manifest" => in_manifest = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_manifest && local_name(e.name().as_ref()) == b"item" => {
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"manifest" => {
+                in_manifest = true
+            }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"manifest" => {
+                in_manifest = false
+            }
+            Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                if in_manifest && local_name(e.name().as_ref()) == b"item" =>
+            {
                 let mut id = String::new();
                 let mut href = String::new();
                 let mut media_type = String::new();
@@ -175,7 +206,9 @@ fn parse_manifest(opf_xml: &str) -> Vec<ManifestItem> {
                     id,
                     href,
                     media_type,
-                    is_cover_image_property: props.split_ascii_whitespace().any(|p| p == "cover-image"),
+                    is_cover_image_property: props
+                        .split_ascii_whitespace()
+                        .any(|p| p == "cover-image"),
                 });
             }
             Ok(Event::Eof) => break,
@@ -196,7 +229,9 @@ fn parse_spine(opf_xml: &str) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"spine" => in_spine = true,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"spine" => in_spine = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_spine && local_name(e.name().as_ref()) == b"itemref" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                if in_spine && local_name(e.name().as_ref()) == b"itemref" =>
+            {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"idref" {
                         out.push(attr.unescape_value().unwrap_or_default().to_string());
@@ -217,7 +252,9 @@ fn parse_meta_cover_id(opf_xml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"meta" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                if local_name(e.name().as_ref()) == b"meta" =>
+            {
                 let mut name = None;
                 let mut content = None;
                 for attr in e.attributes().flatten() {
@@ -249,7 +286,9 @@ fn parse_guide_cover_href(opf_xml: &str) -> Option<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"guide" => in_guide = true,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"guide" => in_guide = false,
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if in_guide && local_name(e.name().as_ref()) == b"reference" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                if in_guide && local_name(e.name().as_ref()) == b"reference" =>
+            {
                 let mut typ = None;
                 let mut href = None;
                 for attr in e.attributes().flatten() {
@@ -278,7 +317,9 @@ fn first_img_src(xhtml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"img" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                if local_name(e.name().as_ref()) == b"img" =>
+            {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"src" {
                         return attr.unescape_value().ok().map(|c| c.into_owned());

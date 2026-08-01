@@ -123,7 +123,10 @@ pub async fn transcode(
         encode_mp3(iter, &info, &dst, &enc)?;
 
         // Verify transcoded duration against original to catch corruption.
-        let dst_duration = <crate::codecs::SymphoniaMetadata as crate::codecs::AudioMetadata>::probe_duration(&dst)?;
+        let dst_duration =
+            <crate::codecs::SymphoniaMetadata as crate::codecs::AudioMetadata>::probe_duration(
+                &dst,
+            )?;
         let delta = dst_duration - src_duration;
         if delta.abs() > DURATION_DELTA_THRESHOLD_SEC {
             return Err(AudioError::DurationMismatch {

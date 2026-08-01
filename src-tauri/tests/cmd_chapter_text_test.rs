@@ -54,6 +54,8 @@ async fn cmd_chapter_text_returns_one_chapter_body() {
     store.put(&project).unwrap();
 
     let chapter_id = ChapterId::from_order(0);
-    let result = chapter_text(&store, &project_id, &chapter_id).await.unwrap();
+    let result = chapter_text(&store, &project_id, &chapter_id)
+        .await
+        .unwrap();
     assert!(!result.trim().is_empty(), "chapter body must be non-empty");
 }

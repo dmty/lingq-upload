@@ -54,7 +54,9 @@ fn read_box_header<R: Read + Seek>(r: &mut R) -> Result<Option<Box>, AudioError>
         .stream_position()
         .map_err(|e| AudioError::Io(e.to_string()))?;
     let mut hdr = [0u8; 8];
-    let n = r.read(&mut hdr).map_err(|e| AudioError::Io(e.to_string()))?;
+    let n = r
+        .read(&mut hdr)
+        .map_err(|e| AudioError::Io(e.to_string()))?;
     if n < 8 {
         return Ok(None);
     }
@@ -83,7 +85,11 @@ fn find_top_level_box<R: Read + Seek>(
 ) -> Result<Option<Box>, AudioError> {
     r.seek(SeekFrom::Start(0))
         .map_err(|e| AudioError::Io(e.to_string()))?;
-    while r.stream_position().map_err(|e| AudioError::Io(e.to_string()))? < end {
+    while r
+        .stream_position()
+        .map_err(|e| AudioError::Io(e.to_string()))?
+        < end
+    {
         let Some(b) = read_box_header(r)? else { break };
         if b.kind == kind {
             return Ok(Some(b));
@@ -98,15 +104,16 @@ fn find_top_level_box<R: Read + Seek>(
 }
 
 /// Iterate children of `parent`, yielding each child box.
-fn children<R: Read + Seek>(
-    r: &mut R,
-    parent: &Box,
-) -> Result<Vec<Box>, AudioError> {
+fn children<R: Read + Seek>(r: &mut R, parent: &Box) -> Result<Vec<Box>, AudioError> {
     let mut out = Vec::new();
     r.seek(SeekFrom::Start(parent.body_offset))
         .map_err(|e| AudioError::Io(e.to_string()))?;
     let end = parent.body_end();
-    while r.stream_position().map_err(|e| AudioError::Io(e.to_string()))? < end {
+    while r
+        .stream_position()
+        .map_err(|e| AudioError::Io(e.to_string()))?
+        < end
+    {
         let Some(b) = read_box_header(r)? else { break };
         if b.size < 8 || b.body_end() > end {
             break;
@@ -267,7 +274,9 @@ fn track_id<R: Read + Seek>(r: &mut R, trak: &Box) -> Result<Option<u32>, AudioE
         return Ok(None);
     }
     Ok(Some(u32::from_be_bytes(
-        body[track_id_offset..track_id_offset + 4].try_into().expect("len ok"),
+        body[track_id_offset..track_id_offset + 4]
+            .try_into()
+            .expect("len ok"),
     )))
 }
 
@@ -411,7 +420,8 @@ fn parse_stsc(body: &[u8]) -> Vec<StscEntry> {
             break;
         }
         let first_chunk = u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok"));
-        let samples_per_chunk = u32::from_be_bytes(body[off + 4..off + 8].try_into().expect("len ok"));
+        let samples_per_chunk =
+            u32::from_be_bytes(body[off + 4..off + 8].try_into().expect("len ok"));
         out.push(StscEntry {
             first_chunk,
             samples_per_chunk,
@@ -436,7 +446,9 @@ fn parse_stsz(body: &[u8]) -> Vec<u32> {
         if off + 4 > body.len() {
             break;
         }
-        out.push(u32::from_be_bytes(body[off..off + 4].try_into().expect("len ok")));
+        out.push(u32::from_be_bytes(
+            body[off..off + 4].try_into().expect("len ok"),
+        ));
         off += 4;
     }
     out
@@ -470,7 +482,9 @@ fn parse_co64(body: &[u8]) -> Vec<u64> {
         if off + 8 > body.len() {
             break;
         }
-        out.push(u64::from_be_bytes(body[off..off + 8].try_into().expect("len ok")));
+        out.push(u64::from_be_bytes(
+            body[off..off + 8].try_into().expect("len ok"),
+        ));
         off += 8;
     }
     out

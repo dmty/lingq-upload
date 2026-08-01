@@ -184,10 +184,16 @@ fn add_project_extracts_cover_from_epub_when_no_sidecar() {
     let project = add_project_impl(&store, &candidate, "ja".into(), "Meta Cover Book".into())
         .expect("add_project_impl should succeed");
 
-    assert!(project.cover_path.is_some(), "cover_path must be populated after epub extraction");
+    assert!(
+        project.cover_path.is_some(),
+        "cover_path must be populated after epub extraction"
+    );
     let cover = project.cover_path.unwrap();
     assert!(cover.exists(), "extracted cover file must exist on disk");
-    assert!(std::fs::metadata(&cover).unwrap().len() > 0, "extracted cover must not be empty");
+    assert!(
+        std::fs::metadata(&cover).unwrap().len() > 0,
+        "extracted cover must not be empty"
+    );
     // epub2-meta-cover fixture has a cover.xhtml spine entry
     assert_eq!(
         project.cover_source_href.as_deref(),

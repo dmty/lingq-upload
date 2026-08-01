@@ -85,7 +85,10 @@ impl AudioDecoder for SymphoniaDecoder {
                         let frames = buf.samples().len() / (spec.channels.count().max(1));
                         break (
                             spec,
-                            PcmFrame { samples: buf.samples().to_vec(), frames },
+                            PcmFrame {
+                                samples: buf.samples().to_vec(),
+                                frames,
+                            },
                         );
                     };
                     let sr = codec_params_sample_rate.unwrap_or(spec.rate);

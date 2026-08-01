@@ -124,7 +124,13 @@ async fn plan_preview_leftover_index_does_not_collide_with_a_skipped_chapter() {
     // `plan_from_mapping` based the leftover index on the eligible count
     // (2) instead of the full chapter count (3), so this leftover's index
     // collided with chapter 2's own real order.
-    let track_id = |name: &str| audio_dir.path().join(format!("{name}.m4a")).display().to_string();
+    let track_id = |name: &str| {
+        audio_dir
+            .path()
+            .join(format!("{name}.m4a"))
+            .display()
+            .to_string()
+    };
     project.mapping = Some(MappingState {
         pairs: vec![
             MappingPair {
@@ -193,7 +199,8 @@ async fn plan_preview_leftover_index_survives_a_cover_filtered_chapter_set() {
         "PlanPreviewCover",
     );
     project.sources.text = TextSource::Epub(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epub-covers/guide-xhtml-img.epub"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/epub-covers/guide-xhtml-img.epub"),
     );
     project.sources.audio = Some(AudioSource::Folder(audio_dir.path().to_path_buf()));
     project.settings.language = "en".into();
@@ -211,7 +218,13 @@ async fn plan_preview_leftover_index_survives_a_cover_filtered_chapter_set() {
     // Pair the surviving chapter with the SECOND track, leaving `a_01`
     // (track index 0) unclaimed: its leftover index is `base + 0`, which is
     // exactly the value a count-derived base collides on.
-    let track_id = |name: &str| audio_dir.path().join(format!("{name}.m4a")).display().to_string();
+    let track_id = |name: &str| {
+        audio_dir
+            .path()
+            .join(format!("{name}.m4a"))
+            .display()
+            .to_string()
+    };
     project.mapping = Some(MappingState {
         pairs: vec![MappingPair {
             chapter_id: chapters[0].id.clone(),

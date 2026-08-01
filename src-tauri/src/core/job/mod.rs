@@ -21,7 +21,9 @@ use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
     MatchOutcome, MismatchCondition, MismatchResponse,
 };
-use crate::core::project::{filter_cover_chapter, ChapterReceipt, MatcherDecision, Project, ProjectStage};
+use crate::core::project::{
+    filter_cover_chapter, ChapterReceipt, MatcherDecision, Project, ProjectStage,
+};
 use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
@@ -689,7 +691,12 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
     let all_chapters = project_chapters(project)?;
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
-    match build_plan(project, &chapters, &tracks, leftover_index_base(&all_chapters)) {
+    match build_plan(
+        project,
+        &chapters,
+        &tracks,
+        leftover_index_base(&all_chapters),
+    ) {
         PlanOrPause::NeedsMatch {
             condition,
             options,
@@ -1246,7 +1253,10 @@ fn resolve_chapters(
 fn project_chapters(project: &Project) -> Result<Vec<Chapter>, AppError> {
     let (epub_bytes, strategy) = epub_inputs(project);
     let chapters = resolve_chapters(&project.sources.text, epub_bytes.as_deref(), strategy)?;
-    Ok(filter_cover_chapter(chapters, project.cover_source_href.as_deref()))
+    Ok(filter_cover_chapter(
+        chapters,
+        project.cover_source_href.as_deref(),
+    ))
 }
 
 async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {

@@ -34,7 +34,10 @@ fn set_cover_copies_into_project_dir_and_resets_upload_flag() {
     let project = store.get(&id).unwrap().unwrap();
     let cover_path = project.cover_path.expect("cover_path set");
     let project_dir = store.project_dir(&id).unwrap();
-    assert!(cover_path.starts_with(&project_dir), "lives inside app-data");
+    assert!(
+        cover_path.starts_with(&project_dir),
+        "lives inside app-data"
+    );
     assert_eq!(cover_path.extension().unwrap().to_string_lossy(), "png");
     assert_eq!(fs::read(&cover_path).unwrap(), b"PNGDATA");
     assert!(!project.cover_uploaded_to_lingq, "upload flag reset");

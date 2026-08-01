@@ -6,7 +6,6 @@ use lingq_upload_lib::core::project::{Project, ProjectSettings, ProjectSources, 
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
 use lingq_upload_lib::ingest::TextSource;
 
-
 fn epub_fixture(name: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/epub-covers")
@@ -59,7 +58,9 @@ fn project_chapters_suppresses_cover_xhtml() {
     store.put(&project).unwrap();
 
     let chapters = project_chapters_impl(&store, &id).unwrap();
-    let has_cover = chapters.iter().any(|c| c.title.to_lowercase().contains("cover"));
+    let has_cover = chapters
+        .iter()
+        .any(|c| c.title.to_lowercase().contains("cover"));
     assert!(
         !has_cover,
         "cover chapter must be suppressed from chapter list; got: {:?}",

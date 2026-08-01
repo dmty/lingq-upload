@@ -44,7 +44,10 @@ fn has_audio_extension(p: &Path) -> bool {
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase);
-    matches!(ext.as_deref(), Some("m4b" | "m4a" | "mp3" | "wav" | "ogg" | "flac"))
+    matches!(
+        ext.as_deref(),
+        Some("m4b" | "m4a" | "mp3" | "wav" | "ogg" | "flac")
+    )
 }
 
 /// Resolve an `AudioSource` to the ordered list of audio file paths it
