@@ -47,13 +47,21 @@
   let cancelling = $state(false);
   let completed = $state(false);
 
+  function uploadStatus(
+    receipt: ChapterReceipt | undefined,
+  ): Pick<Row, "status" | "timestamp"> {
+    const uploaded = receipt?.lesson_id != null;
+    return {
+      status: uploaded ? "done" : "queued",
+      timestamp: uploaded ? (receipt?.uploaded_at ?? null) : null,
+    };
+  }
+
   function receiptRow(r: ChapterReceipt): Row {
-    const uploaded = r.lesson_id != null;
     return {
       index: r.chapter_index,
       title: `Chapter ${r.chapter_index + 1}`,
-      status: uploaded ? "done" : "queued",
-      timestamp: uploaded ? (r.uploaded_at ?? null) : null,
+      ...uploadStatus(r),
       degraded: !!r.degraded,
       dimmed: false,
     };
@@ -87,21 +95,15 @@
       return;
     }
 
-    // Explicit tuple annotation: without it TS widens the pair to an array
-    // and the Map constructor overload stops matching.
-    const byIndex = new Map(
-      receipts.map((r): [number, ChapterReceipt] => [r.chapter_index, r]),
-    );
+    const byIndex = new Map(receipts.map((r) => [r.chapter_index, r] as const));
     // Plan order is upload order; leftover and bucket steps are not in
     // numeric index order, so never re-sort a seeded queue.
     rows = planSteps.map((s) => {
       const receipt = byIndex.get(s.chapter_index);
-      const uploaded = receipt?.lesson_id != null;
       return {
         index: s.chapter_index,
         title: s.title,
-        status: uploaded ? "done" : "queued",
-        timestamp: uploaded ? (receipt?.uploaded_at ?? null) : null,
+        ...uploadStatus(receipt),
         degraded: receipt?.degraded ?? s.degraded,
         dimmed: false,
       };
