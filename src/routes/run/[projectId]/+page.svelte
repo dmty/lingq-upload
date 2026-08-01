@@ -347,7 +347,7 @@
       {/if}
     </p>
   {:else}
-    <ul>
+    <ul data-testid="chapter-rows">
       {#each rows as r (r.index)}
         <ChapterRow
           index={r.index}
