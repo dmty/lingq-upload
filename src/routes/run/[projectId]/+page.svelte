@@ -32,6 +32,7 @@
   let project = $state<Project | null>(null);
   let rows = $state<Row[]>([]);
   let planSteps = $state<PlanStep[]>([]);
+  let planFetched = false;
   let error = $state<string | null>(null);
   let errorNeedsKey = $state(false);
   let info = $state<string | null>(null);
@@ -76,11 +77,14 @@
     const loaded = result.data;
     project = loaded;
 
-    // Fetch once per mount. reloadProject also runs on Result and Cancelled,
-    // and the preview probes every audio file — re-running it as a 30-file
-    // upload finishes would stall the completion banner. A finished or
-    // cancelled run cannot change the plan; a mapping edit remounts the page.
-    if (planSteps.length === 0) {
+    // Fetch exactly once per mount, regardless of what it returns. The
+    // preview re-probes every audio file on every call; reloadProject also
+    // runs on Result and Cancelled, so latching only on a non-empty result
+    // would leave a genuinely plan-less project (no audio yet) re-probing on
+    // every terminal event. A finished or cancelled run cannot change the
+    // plan; a mapping edit remounts the page.
+    if (!planFetched) {
+      planFetched = true;
       // cmd_project_load keys by string; every other project command takes
       // the structured ProjectId, which exists only once loaded.
       const preview = await commands.cmdProjectPlanPreview(loaded.id);

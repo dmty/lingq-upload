@@ -143,12 +143,11 @@ export const tauriStubInitScript = `
         },
         // Mirrors the real command: a project with no audio source returns
         // an empty plan rather than an error. Specs that need a seeded
-        // queue set window.__planStepsByProject__[key].
+        // queue set window.__planByKey__[key].
         cmd_project_plan_preview: (args) => {
             const pid = args && args.projectId;
             const key = (pid && pid.content_hash) || "stub-project";
-            const byProject = window.__planStepsByProject__ || {};
-            return byProject[key] || [];
+            return (window.__planByKey__ && window.__planByKey__[key]) || [];
         },
         cmd_chapter_text: (args) => {
             const pid = args && args.projectId;
