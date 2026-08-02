@@ -10,8 +10,10 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 
 use super::{local_name, parent_dir, read_to_string_from_zip, EpubError};
 
@@ -50,13 +52,29 @@ pub(crate) fn parse_opf_refs(opf_xml: &str, opf_path: &str) -> Result<OpfRefs, E
                     let mut props: Option<String> = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"id" => id = attr.unescape_value().map(|v| v.into_owned()).ok(),
-                            b"href" => href = attr.unescape_value().map(|v| v.into_owned()).ok(),
+                            b"id" => {
+                                id = attr
+                                    .normalized_value(XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .ok()
+                            }
+                            b"href" => {
+                                href = attr
+                                    .normalized_value(XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .ok()
+                            }
                             b"media-type" => {
-                                media = attr.unescape_value().map(|v| v.into_owned()).ok()
+                                media = attr
+                                    .normalized_value(XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .ok()
                             }
                             b"properties" => {
-                                props = attr.unescape_value().map(|v| v.into_owned()).ok()
+                                props = attr
+                                    .normalized_value(XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .ok()
                             }
                             _ => {}
                         }
@@ -76,13 +94,16 @@ pub(crate) fn parse_opf_refs(opf_xml: &str, opf_path: &str) -> Result<OpfRefs, E
                 } else if local_name(name.as_ref()) == b"spine" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"toc" {
-                            ncx_id_from_spine = attr.unescape_value().map(|v| v.into_owned()).ok();
+                            ncx_id_from_spine = attr
+                                .normalized_value(XmlVersion::Implicit1_0)
+                                .map(|v| v.into_owned())
+                                .ok();
                         }
                     }
                 } else if local_name(name.as_ref()) == b"itemref" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"idref" {
-                            if let Ok(v) = attr.unescape_value() {
+                            if let Ok(v) = attr.normalized_value(XmlVersion::Implicit1_0) {
                                 spine_ids.push(v.into_owned());
                             }
                         }
@@ -240,7 +261,7 @@ pub(crate) fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, Str
                 } else if nav_depth > 0 && name.as_ref() == b"a" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"href" {
-                            if let Ok(v) = attr.unescape_value() {
+                            if let Ok(v) = attr.normalized_value(XmlVersion::Implicit1_0) {
                                 pending_href = Some(v.into_owned());
                             }
                         }
@@ -262,8 +283,10 @@ pub(crate) fn parse_nav_titles(xml: &str, nav_base: &str) -> HashMap<String, Str
             }
             Ok(Event::Text(t)) => {
                 if in_a {
-                    if let Ok(s) = t.unescape() {
-                        text_buf.push_str(&s);
+                    if let Ok(d) = t.decode() {
+                        if let Ok(s) = unescape(&d) {
+                            text_buf.push_str(&s);
+                        }
                     }
                 }
             }
@@ -360,7 +383,7 @@ pub(crate) fn parse_ncx_titles(xml: &str, ncx_base: &str) -> HashMap<String, Str
                     if let Some(top) = stack.last_mut() {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"src" {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) = attr.normalized_value(XmlVersion::Implicit1_0) {
                                     top.src = Some(v.into_owned());
                                 }
                             }
@@ -371,8 +394,10 @@ pub(crate) fn parse_ncx_titles(xml: &str, ncx_base: &str) -> HashMap<String, Str
             Ok(Event::Text(t)) => {
                 if let Some(top) = stack.last_mut() {
                     if top.in_label_text {
-                        if let Ok(s) = t.unescape() {
-                            top.label.push_str(&s);
+                        if let Ok(d) = t.decode() {
+                            if let Ok(s) = unescape(&d) {
+                                top.label.push_str(&s);
+                            }
                         }
                     }
                 }
@@ -422,7 +447,7 @@ fn nav_is_toc(e: &quick_xml::events::BytesStart) -> bool {
     e.attributes().flatten().any(|a| {
         let k = a.key.as_ref();
         (k == b"epub:type" || k.ends_with(b":type") || k == b"type")
-            && a.unescape_value()
+            && a.normalized_value(XmlVersion::Implicit1_0)
                 .map(|v| v.split_whitespace().any(|t| t == "toc"))
                 .unwrap_or(false)
     })

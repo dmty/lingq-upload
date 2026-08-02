@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 use zip::ZipArchive;
 
 use super::{
@@ -193,7 +194,10 @@ fn parse_manifest(opf_xml: &str) -> Vec<ManifestItem> {
                 let mut props = String::new();
                 for attr in e.attributes().flatten() {
                     let key = attr.key.as_ref();
-                    let val = attr.unescape_value().unwrap_or_default().to_string();
+                    let val = attr
+                        .normalized_value(XmlVersion::Implicit1_0)
+                        .unwrap_or_default()
+                        .to_string();
                     match key {
                         b"id" => id = val,
                         b"href" => href = val,
@@ -234,7 +238,11 @@ fn parse_spine(opf_xml: &str) -> Vec<String> {
             {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"idref" {
-                        out.push(attr.unescape_value().unwrap_or_default().to_string());
+                        out.push(
+                            attr.normalized_value(XmlVersion::Implicit1_0)
+                                .unwrap_or_default()
+                                .to_string(),
+                        );
                     }
                 }
             }
@@ -258,7 +266,10 @@ fn parse_meta_cover_id(opf_xml: &str) -> Option<String> {
                 let mut name = None;
                 let mut content = None;
                 for attr in e.attributes().flatten() {
-                    let v = attr.unescape_value().ok().map(|c| c.into_owned());
+                    let v = attr
+                        .normalized_value(XmlVersion::Implicit1_0)
+                        .ok()
+                        .map(|c| c.into_owned());
                     match attr.key.as_ref() {
                         b"name" => name = v,
                         b"content" => content = v,
@@ -292,7 +303,10 @@ fn parse_guide_cover_href(opf_xml: &str) -> Option<String> {
                 let mut typ = None;
                 let mut href = None;
                 for attr in e.attributes().flatten() {
-                    let v = attr.unescape_value().ok().map(|c| c.into_owned());
+                    let v = attr
+                        .normalized_value(XmlVersion::Implicit1_0)
+                        .ok()
+                        .map(|c| c.into_owned());
                     match attr.key.as_ref() {
                         b"type" => typ = v,
                         b"href" => href = v,
@@ -322,7 +336,10 @@ fn first_img_src(xhtml: &str) -> Option<String> {
             {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"src" {
-                        return attr.unescape_value().ok().map(|c| c.into_owned());
+                        return attr
+                            .normalized_value(XmlVersion::Implicit1_0)
+                            .ok()
+                            .map(|c| c.into_owned());
                     }
                 }
             }

@@ -43,7 +43,7 @@ tempfile = "3"
 sha2 = "0.10"
 hex = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
-quick-xml = { version = "0.36", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 async-trait = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 percent-encoding = "2"

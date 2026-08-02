@@ -1,5 +1,7 @@
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -111,7 +113,8 @@ pub fn parse_opf(xml: &str) -> Result<OpfMetadata, OpfError> {
                 }
             }
             Ok(Event::Text(t)) => {
-                let s = t.unescape().map_err(|e| OpfError::Xml(e.to_string()))?;
+                let d = t.decode().map_err(|e| OpfError::Xml(e.to_string()))?;
+                let s = unescape(&d).map_err(|e| OpfError::Xml(e.to_string()))?;
                 let s_trim = s.trim();
                 if s_trim.is_empty() {
                     continue;
@@ -212,7 +215,10 @@ fn attr(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
     for a in e.attributes().flatten() {
         let k = a.key.as_ref();
         if k == key || k.rsplit(|&b| b == b':').next().unwrap_or(&[]) == key {
-            return a.unescape_value().ok().map(|v| v.into_owned());
+            return a
+                .normalized_value(XmlVersion::Implicit1_0)
+                .ok()
+                .map(|v| v.into_owned());
         }
     }
     None

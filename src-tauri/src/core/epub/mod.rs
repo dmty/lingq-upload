@@ -12,6 +12,7 @@ use std::path::Path;
 
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
@@ -196,7 +197,7 @@ pub(crate) fn read_container_opf_path<R: std::io::Read + std::io::Seek>(
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"full-path" {
                             let v = attr
-                                .unescape_value()
+                                .normalized_value(XmlVersion::Implicit1_0)
                                 .map_err(|err| EpubError::Parse(err.to_string()))?;
                             return Ok(v.into_owned());
                         }
