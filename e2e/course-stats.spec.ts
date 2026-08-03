@@ -66,7 +66,13 @@ test.describe("course screen", () => {
   test("Open in LingQ points at the collection URL", async ({ page }) => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
-    await expect(page.getByTestId("open-in-lingq")).toBeVisible();
-    await expect(page.getByTestId("open-in-lingq")).toBeEnabled();
+    const button = page.getByTestId("open-in-lingq");
+    await expect(button).toBeVisible();
+    await expect(button).toBeEnabled();
+
+    await button.click();
+    await expect
+      .poll(() => page.evaluate(() => window.__openedUrl__))
+      .toBe("https://www.lingq.com/ja/learn/ja/web/library/course/7");
   });
 });

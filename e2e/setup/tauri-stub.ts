@@ -167,6 +167,12 @@ export const tauriStubInitScript = `
         },
         cmd_set_cover: () => null,
         "plugin:dialog|open": () => window.__dialogPickPath__ ?? null,
+        // Records the URL passed to openUrl() so specs can assert on it
+        // directly, rather than only checking that the trigger element exists.
+        "plugin:opener|open_url": (args) => {
+            window.__openedUrl__ = args && args.url;
+            return null;
+        },
         cmd_apply_mapping_op: (args) => {
             if (window.__failNextMappingOp__) {
                 window.__failNextMappingOp__ = false;

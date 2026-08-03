@@ -23,9 +23,9 @@ export function formatRelative(iso: string): string {
   }).format(d);
 }
 
-/// Minute-granularity age, for "how stale is this number" labels.
-/// `formatRelative` is day-granularity and would render every fresh fetch as
-/// "today", which is useless for a cache-freshness indicator.
+// Minute-granularity age, for "how stale is this number" labels.
+// `formatRelative` is day-granularity and would render every fresh fetch as
+// "today", which is useless for a cache-freshness indicator.
 export function formatAge(iso: string, now: number = Date.now()): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "unknown";
