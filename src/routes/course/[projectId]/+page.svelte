@@ -62,7 +62,14 @@
     </span>
   </header>
 
-  <CourseStats view={cached?.view ?? null} />
+  <CourseStats
+    view={cached?.view ?? null}
+    fetchedAt={cached?.fetchedAt ?? null}
+    revalidating={cached?.revalidating ?? false}
+    onrefresh={() => {
+      if (collectionId != null) void course.ensure(entry.language, collectionId, true);
+    }}
+  />
 
   {#if cached?.view}
     <section class="mt-6">

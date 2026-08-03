@@ -1,8 +1,33 @@
 <script lang="ts">
   import type { CourseView, LessonStat } from "$lib/ipc/bindings";
-  import { formatCount } from "$lib/format";
+  import { formatAge, formatCount } from "$lib/format";
+  import Button from "$lib/components/Button.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
 
-  let { view = null }: { view?: CourseView | null } = $props();
+  let {
+    view = null,
+    fetchedAt = null,
+    revalidating = false,
+    onrefresh,
+  }: {
+    view?: CourseView | null;
+    fetchedAt?: number | null;
+    revalidating?: boolean;
+    onrefresh?: () => void;
+  } = $props();
+
+  // The label is the only signal that a mount skipped its fetch, so it has to
+  // age while the screen sits open — a derived-once value would read "just
+  // now" for the full fifteen minutes.
+  let now = $state(Date.now());
+  $effect(() => {
+    const id = setInterval(() => (now = Date.now()), 30_000);
+    return () => clearInterval(id);
+  });
+
+  const freshness = $derived(
+    fetchedAt == null ? null : formatAge(new Date(fetchedAt).toISOString(), now),
+  );
 
   const lessons = $derived(
     view?.collection.lessons_count ?? view?.lessons.length ?? null,
@@ -85,6 +110,18 @@
   });
 </script>
 
+<div class="mb-2 flex items-center justify-end gap-2 text-xs text-fg-muted">
+  {#if revalidating}
+    <span data-testid="course-revalidating" class="flex items-center gap-1">
+      <Spinner size="sm" tone="muted" /> Refreshing
+    </span>
+  {:else if freshness}
+    <span data-testid="course-freshness">updated {freshness}</span>
+  {/if}
+  <Button variant="secondary" size="sm" data-testid="course-refresh" onclick={() => onrefresh?.()}>
+    Refresh
+  </Button>
+</div>
 <div data-testid="course-stat-band" class="grid grid-cols-5 gap-4">
   {#each cells as cell (cell.id)}
     <div data-testid={cell.id}>

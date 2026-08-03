@@ -37,6 +37,12 @@ export const course = {
     // `ensure`, forever. `ensure` is an imperative action, not a derivation.
     const current = untrack(() => entries[key]);
     if (current?.revalidating) return;
+
+    // Suppression exists for the come-and-go case: bouncing between the
+    // library and a course should not re-hit LingQ each time.
+    const age = current?.fetchedAt == null ? Infinity : Date.now() - current.fetchedAt;
+    if (!force && current?.view != null && age < STALE_AFTER_MS) return;
+
     entries[key] = { ...(current ?? blank()), revalidating: true };
 
     const result = await commands.cmdLingqCourse(lang, collectionId);
