@@ -2,7 +2,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use super::client::LingqClient;
+use super::client::{read_detail, LingqClient};
 use super::collections::CollectionId;
 use super::error::LingqError;
 
@@ -95,12 +95,8 @@ impl LingqClient {
             }
             StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
             StatusCode::NOT_FOUND => Err(LingqError::NotFound),
-            s if s.is_client_error() => Err(LingqError::BadRequest(
-                resp.text().await.unwrap_or_default(),
-            )),
-            s if s.is_server_error() => {
-                Err(LingqError::Server(resp.text().await.unwrap_or_default()))
-            }
+            s if s.is_client_error() => Err(LingqError::BadRequest(read_detail(resp).await)),
+            s if s.is_server_error() => Err(LingqError::Server(read_detail(resp).await)),
             other => Err(LingqError::Transport(format!("unexpected status {other}"))),
         }
     }

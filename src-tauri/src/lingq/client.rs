@@ -425,7 +425,7 @@ async fn parse_lesson_id(resp: reqwest::Response) -> Result<i64, LingqError> {
         .ok_or_else(|| LingqError::Schema(format!("`id` is not an integer: {id}")))
 }
 
-async fn read_detail(resp: reqwest::Response) -> String {
+pub(crate) async fn read_detail(resp: reqwest::Response) -> String {
     match resp.text().await {
         Ok(body) => match serde_json::from_str::<serde_json::Value>(&body) {
             Ok(v) => v
