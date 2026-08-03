@@ -39,6 +39,40 @@ const seedScript = () => `
 })();
 `;
 
+const MIXED_KEY = "course-fixture-mixed";
+const MIXED_ROUTE_KEY = encodeURIComponent(`ch:${MIXED_KEY}`);
+
+const mixedSeedScript = () => `
+;(() => {
+  window.__libraryEntries__ = [{
+    id: { content_hash: "${MIXED_KEY}", audible_asin: null, isbn13: null, calibre_uuid: null },
+    title: "Norwegian Wood",
+    language: "ja",
+    completed_lesson_count: 2,
+    receipt_count: 2,
+    mtime: null,
+    authors: ["Haruki Murakami"],
+    series: null,
+    lingq_collection_id: 8,
+    status: "done",
+  }];
+  window.__courseView__ = {
+    collection: {
+      id: 8, title: "Norwegian Wood", description: null,
+      level: "Intermediate 1", difficulty: 2.0, duration: 600,
+      lessons_count: 2, new_words_count: 100, image_url: null,
+      status: "private", roses_count: null, views_count: null,
+    },
+    lessons: [
+      { id: 20, title: "Chapter One", duration: 300, word_count: 2841,
+        unique_word_count: 800, new_words_count: 100, percent_completed: 100, has_audio: true },
+      { id: 21, title: "Chapter Two", duration: 300, word_count: null,
+        unique_word_count: null, new_words_count: null, percent_completed: 0, has_audio: false },
+    ],
+  };
+})();
+`;
+
 test.describe("course screen", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
@@ -96,5 +130,17 @@ test.describe("course screen", () => {
     // 41.5 rounds half up to 42 (Math.round), same convention as the
     // progress-strip aggregate above.
     await expect(rows.nth(1)).toContainText("42%");
+  });
+
+  test("a lesson missing a word count falls back to the sibling average, not zero weight", async ({
+    page,
+  }) => {
+    await page.addInitScript(mixedSeedScript());
+    await page.goto(`/course/${MIXED_ROUTE_KEY}`);
+
+    // Chapter One (2841 words, 100%) and Chapter Two (no word count, 0%)
+    // weight equally once the missing count falls back to the sibling
+    // average: (100*2841 + 0*2841) / (2841+2841) = 50%.
+    await expect(page.getByTestId("course-progress")).toContainText("50%");
   });
 });

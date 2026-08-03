@@ -66,6 +66,16 @@
 
   {#if cached?.view}
     <section class="mt-6">
+      <div
+        class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 text-xs uppercase text-fg-subtle"
+      >
+        <span></span>
+        <span></span>
+        <span class="text-right">Words</span>
+        <span class="text-right">New</span>
+        <span class="text-right">Time</span>
+        <span class="text-right">Progress</span>
+      </div>
       {#each cached.view.lessons as lesson, i (lesson.id)}
         <LessonStatRow index={i} {lesson} />
       {/each}

@@ -45,29 +45,33 @@
 
   const progress = $derived.by(() => {
     if (!view || view.lessons.length === 0) return null;
+    const knownWordCounts = view.lessons
+      .filter((l) => l.percent_completed != null && (l.word_count ?? 0) > 0)
+      .map((l) => l.word_count as number);
+    // Lessons missing a word count still need a weight, or they'd be
+    // dropped from the percentage while still counting toward "read". Give
+    // them the mean word count of their siblings — with no siblings that
+    // have one, every weight is 1 and this collapses to a flat mean.
+    const fallbackWeight =
+      knownWordCounts.length > 0
+        ? knownWordCounts.reduce((a, b) => a + b, 0) / knownWordCounts.length
+        : 1;
+
     let weighted = 0;
     let weight = 0;
-    let unweighted = 0;
     let counted = 0;
     let read = 0;
     for (const l of view.lessons) {
       const pct = l.percent_completed;
       if (pct == null) continue;
       counted += 1;
-      unweighted += pct;
-      const wordCount = l.word_count ?? 0;
-      if (wordCount > 0) {
-        weighted += pct * wordCount;
-        weight += wordCount;
-      }
+      const w = (l.word_count ?? 0) > 0 ? (l.word_count as number) : fallbackWeight;
+      weighted += pct * w;
+      weight += w;
       if (pct >= 100) read += 1;
     }
     if (counted === 0) return null;
-    // Weight by word count so a 3,000-word chapter at 100% does not count the
-    // same as a 200-word one; fall back to a flat mean when word counts are
-    // missing.
-    const percent = weight > 0 ? weighted / weight : unweighted / counted;
-    return { percent: Math.round(percent), read, total: view.lessons.length };
+    return { percent: Math.round(weighted / weight), read, total: view.lessons.length };
   });
 
   $effect(() => {
