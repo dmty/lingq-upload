@@ -559,7 +559,7 @@ export type Collection = { id: number; title: string }
  * silently. A renamed field must degrade to a blank cell, never to a parse
  * error that blanks the whole screen.
  */
-export type CollectionDetail = { id: number; title: string; description: string | null; level: string | null; difficulty: number | null; duration: number | null; lessons_count: number | null; new_words_count: number | null; image_url: string | null; status: string | null; roses_count: number | null; views_count: number | null }
+export type CollectionDetail = { id: number; title: string; description: string | null; level: string | null; duration: number | null; lessons_count: number | null; new_words_count: number | null; image_url: string | null; status: string | null; roses_count: number | null; views_count: number | null }
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
@@ -588,7 +588,7 @@ export type LessonOpts = { level: string; status: string; tags: string; save: st
  * Every stat the screen shows is already on the *list* entry — the per-lesson
  * detail endpoint is never called.
  */
-export type LessonStat = { id: number; title: string; duration: number | null; word_count: number | null; unique_word_count: number | null; new_words_count: number | null; percent_completed: number | null; has_audio: boolean }
+export type LessonStat = { id: number; title: string; duration: number | null; word_count: number | null; unique_word_count: number | null; new_words_count: number | null; percent_completed: number | null }
 export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; status?: LibraryStatus; failed_reason?: string | null }
 export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
 /**

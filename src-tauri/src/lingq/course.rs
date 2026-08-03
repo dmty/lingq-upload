@@ -18,7 +18,6 @@ pub struct CollectionDetail {
     pub title: String,
     pub description: Option<String>,
     pub level: Option<String>,
-    pub difficulty: Option<f64>,
     pub duration: Option<i64>,
     pub lessons_count: Option<i64>,
     pub new_words_count: Option<i64>,
@@ -50,7 +49,6 @@ fn parse_collection_detail(v: &serde_json::Value) -> Result<CollectionDetail, Li
         title: str_field(v, "title").unwrap_or_default(),
         description: str_field(v, "description"),
         level: str_field(v, "level"),
-        difficulty: v.get("difficulty").and_then(|x| x.as_f64()),
         duration: i64_field(v, "duration"),
         lessons_count: i64_field(v, "lessonsCount"),
         new_words_count: i64_field(v, "newWordsCount"),
@@ -115,7 +113,6 @@ pub struct LessonStat {
     pub unique_word_count: Option<i64>,
     pub new_words_count: Option<i64>,
     pub percent_completed: Option<f64>,
-    pub has_audio: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -137,7 +134,6 @@ fn parse_lesson_stat(v: &serde_json::Value) -> Option<LessonStat> {
         unique_word_count: i64_field(v, "uniqueWordCount"),
         new_words_count: i64_field(v, "newWordsCount"),
         percent_completed: v.get("percentCompleted").and_then(|x| x.as_f64()),
-        has_audio: str_field(v, "audio").is_some(),
     })
 }
 
