@@ -9,7 +9,7 @@
   import CourseStats from "$lib/components/CourseStats.svelte";
   import Button from "$lib/components/Button.svelte";
 
-  const projectKey = $derived(decodeURIComponent(page.params.projectId ?? ""));
+  const projectKey = $derived(page.params.projectId ?? "");
 
   const entry = $derived(
     library.index?.entries.find((e) => joinKey(e.id) === projectKey) ?? null,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CourseView } from "$lib/ipc/bindings";
+  import type { CourseView, LessonStat } from "$lib/ipc/bindings";
 
   let { view = null }: { view?: CourseView | null } = $props();
 
@@ -7,7 +7,7 @@
     view?.collection.lessons_count ?? view?.lessons.length ?? null,
   );
 
-  function sum(pick: (l: NonNullable<typeof view>["lessons"][number]) => number | null) {
+  function sum(pick: (l: LessonStat) => number | null) {
     if (!view) return null;
     let total = 0;
     let seen = false;
