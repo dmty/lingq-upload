@@ -62,7 +62,12 @@ test.describe("course stats caching", () => {
     await expect(page.getByTestId("stat-lessons")).toContainText("1");
     expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
 
+    // Proves the label ticks on a live, still-mounted screen — not just that
+    // it's computed fresh on remount.
+    await expect(page.getByTestId("course-freshness")).toContainText("just now");
     await page.clock.fastForward("05:00");
+    await expect(page.getByTestId("course-freshness")).toContainText("5 minutes ago");
+
     await leaveAndReturn(page);
     await expect(page.getByTestId("stat-lessons")).toContainText("1");
 
@@ -94,5 +99,32 @@ test.describe("course stats caching", () => {
     await page.getByTestId("course-refresh").click();
 
     await expect.poll(async () => await fetchCount(page, testInfo.workerIndex)).toBe(2);
+  });
+
+  test("Refresh shows the revalidating indicator while the fetch is held", async ({
+    page,
+  }, testInfo) => {
+    await page.goto(`/course/${ROUTE_KEY}`);
+    await expect(page.getByTestId("stat-lessons")).toContainText("1");
+    expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
+
+    await page.evaluate(() => {
+      window.__courseGate__ = new Promise((resolve) => {
+        window.__releaseCourse__ = resolve;
+      });
+    });
+    await page.getByTestId("course-refresh").click();
+
+    // Release the gate even if the visibility assertion below throws, so a
+    // failed expectation here can't leave the stub's invoke hung.
+    try {
+      await expect(page.getByTestId("course-revalidating")).toBeVisible();
+    } finally {
+      await page.evaluate(() => window.__releaseCourse__());
+    }
+
+    await expect(page.getByTestId("course-revalidating")).toBeHidden();
+    await expect(page.getByTestId("course-freshness")).toBeVisible();
+    expect(await fetchCount(page, testInfo.workerIndex)).toBe(2);
   });
 });

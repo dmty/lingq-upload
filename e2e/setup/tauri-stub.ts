@@ -309,10 +309,11 @@ export const tauriStubInitScript = `
         // The call counter lives in sessionStorage, not on window: init scripts
         // re-run on every page.goto, so a window counter would reset to 0 and a
         // "did not refetch" assertion would pass even when suppression is broken.
-        cmd_lingq_course: () => {
+        cmd_lingq_course: async () => {
             const COUNT_KEY = "__courseFetchCount__:" + WORKER_NS;
             const seen = Number(sessionStorage.getItem(COUNT_KEY) || "0");
             sessionStorage.setItem(COUNT_KEY, String(seen + 1));
+            if (window.__courseGate__) await window.__courseGate__;
             if (window.__courseError__) throw window.__courseError__;
             return window.__courseView__ ?? { collection: null, lessons: [] };
         },
