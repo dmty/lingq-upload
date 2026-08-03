@@ -322,7 +322,24 @@ export const tauriStubInitScript = `
             sessionStorage.setItem(COUNT_KEY, String(seen + 1));
             if (window.__courseGate__) await window.__courseGate__;
             if (window.__courseError__) throw window.__courseError__;
-            return window.__courseView__ ?? { collection: null, lessons: [] };
+            return (
+                window.__courseView__ ?? {
+                    collection: {
+                        id: 0,
+                        title: "",
+                        description: null,
+                        level: null,
+                        duration: null,
+                        lessons_count: null,
+                        new_words_count: null,
+                        image_url: null,
+                        status: null,
+                        roses_count: null,
+                        views_count: null,
+                    },
+                    lessons: [],
+                }
+            );
         },
         manual_source_from_files: () => ({ stub: true }),
         upload_one_shot: async () => {

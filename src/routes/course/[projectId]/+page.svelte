@@ -61,7 +61,7 @@
   <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
 {:else if entry == null && library.status === "error"}
   <p data-testid="course-library-error">
-    {library.error ? appErrorMessage(library.error) : "Couldn't read your library."}
+    {appErrorMessage(library.error!)}
   </p>
 {:else if entry == null}
   <p data-testid="course-not-found">

@@ -78,7 +78,7 @@ test.describe("course screen failures", () => {
         window.__courseView__ = {
           collection: {
             id: 7, title: "Broken Course", description: null, level: null,
-            difficulty: null, duration: 600, lessons_count: 3, new_words_count: 10,
+            duration: 600, lessons_count: 3, new_words_count: 10,
             image_url: null, status: "private", roses_count: null, views_count: null,
           },
           lessons: [],
@@ -168,7 +168,7 @@ test.describe("course screen failures", () => {
         window.__courseView__ = {
           collection: {
             id: 9, title: "Freshly Uploaded", description: null, level: null,
-            difficulty: null, duration: 0, lessons_count: 0, new_words_count: 0,
+            duration: 0, lessons_count: 0, new_words_count: 0,
             image_url: null, status: "private", roses_count: null, views_count: null,
           },
           lessons: [],
@@ -214,5 +214,14 @@ test.describe("course screen failures", () => {
 
     await expect(page.getByTestId("course-library-error")).toBeVisible();
     await expect(page.getByTestId("course-not-found")).toHaveCount(0);
+  });
+
+  test("a route key with no matching entry says the course isn't in your library", async ({
+    page,
+  }) => {
+    await page.addInitScript(`;(() => { window.__libraryEntries__ = []; })();`);
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    await expect(page.getByTestId("course-not-found")).toBeVisible();
   });
 });

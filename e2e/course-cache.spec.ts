@@ -24,12 +24,12 @@ const seedScript = () => `
   window.__courseView__ = {
     collection: {
       id: 7, title: "Cached Course", description: null, level: null,
-      difficulty: null, duration: 600, lessons_count: 1, new_words_count: 10,
+      duration: 600, lessons_count: 1, new_words_count: 10,
       image_url: null, status: "private", roses_count: null, views_count: null,
     },
     lessons: [
       { id: 10, title: "Only Chapter", duration: 600, word_count: 100,
-        unique_word_count: 80, new_words_count: 10, percent_completed: 0, has_audio: true },
+        unique_word_count: 80, new_words_count: 10, percent_completed: 0 },
     ],
   };
 })();

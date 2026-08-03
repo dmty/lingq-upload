@@ -22,7 +22,7 @@ const seedScript = () => `
   window.__courseView__ = {
     collection: {
       id: 7, title: "Finished Book", description: null, level: null,
-      difficulty: null, duration: 600, lessons_count: 2, new_words_count: 10,
+      duration: 600, lessons_count: 2, new_words_count: 10,
       image_url: null, status: "private", roses_count: null, views_count: null,
     },
     lessons: [],

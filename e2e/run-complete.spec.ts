@@ -59,3 +59,66 @@ test.describe("run completion and cancel states", () => {
     await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
   });
 });
+
+// Separate fixture: the run screen's completion banner links to
+// `/course/${projectKey}`, so the route param it lands on has to be in the
+// same joinKey form (`ch:<hash>`) the course screen expects — unlike the
+// bare hash the specs above use for `/run` directly. The project fixture is
+// keyed by that full route param (`ch:<hash>`), while the library entry
+// below holds the bare hash — joinKey adds the `ch:` prefix itself, so the
+// two need to differ for the two lookups to agree on the same identity.
+const COURSE_LINK_KEY = "run-course-link";
+const COURSE_LINK_ROUTE_KEY = encodeURIComponent(`ch:${COURSE_LINK_KEY}`);
+
+const courseLinkProjectScript = () =>
+  runFixtureScript({
+    key: `ch:${COURSE_LINK_KEY}`,
+    title: "Run Fixture",
+    receipts: [{ chapter_index: 0 }],
+    lingqCollectionId: 7,
+  });
+
+const courseLinkLibraryScript = () => `
+;(() => {
+  window.__libraryEntries__ = [{
+    id: { content_hash: "${COURSE_LINK_KEY}", audible_asin: null, isbn13: null, calibre_uuid: null },
+    title: "Run Fixture",
+    language: "en",
+    completed_lesson_count: 1,
+    receipt_count: 1,
+    mtime: null,
+    authors: [],
+    series: null,
+    lingq_collection_id: 7,
+    status: "done",
+  }];
+})();
+`;
+
+test.describe("run completion links to the course screen", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+    await page.addInitScript(courseLinkProjectScript());
+    await page.addInitScript(courseLinkLibraryScript());
+  });
+
+  test("View Course opens the course screen for the finished project", async ({
+    page,
+  }) => {
+    await page.goto(`/run/${COURSE_LINK_ROUTE_KEY}`);
+    await page.getByRole("button", { name: "Resume" }).click();
+
+    await page.evaluate(() =>
+      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+    );
+    await page.evaluate(() =>
+      window.__emitEvent__("job", { kind: "Result", job_id: "job-1", ok: true, payload: null }),
+    );
+    await expect(page.getByTestId("run-complete")).toBeVisible();
+
+    await page.getByRole("button", { name: "View Course" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/course/${COURSE_LINK_ROUTE_KEY}`));
+    await expect(page.getByTestId("course-header")).toBeVisible();
+  });
+});

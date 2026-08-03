@@ -25,15 +25,15 @@ const seedScript = () => `
   window.__courseView__ = {
     collection: {
       id: 7, title: "Kafka on the Shore", description: null,
-      level: "Intermediate 2", difficulty: 2.5, duration: 22320,
-      lessons_count: 42, new_words_count: 9204, image_url: null,
+      level: "Intermediate 2", duration: 22320,
+      lessons_count: 2, new_words_count: 9204, image_url: null,
       status: "private", roses_count: null, views_count: null,
     },
     lessons: [
       { id: 10, title: "The Boy Named Crow", duration: 512, word_count: 2841,
-        unique_word_count: 900, new_words_count: 214, percent_completed: 100, has_audio: true },
+        unique_word_count: 900, new_words_count: 214, percent_completed: 100 },
       { id: 11, title: "Chapter Two", duration: 584, word_count: 3190,
-        unique_word_count: 1010, new_words_count: 287, percent_completed: 41.5, has_audio: true },
+        unique_word_count: 1010, new_words_count: 287, percent_completed: 41.5 },
     ],
   };
 })();
@@ -59,15 +59,15 @@ const mixedSeedScript = () => `
   window.__courseView__ = {
     collection: {
       id: 8, title: "Norwegian Wood", description: null,
-      level: "Intermediate 1", difficulty: 2.0, duration: 600,
+      level: "Intermediate 1", duration: 600,
       lessons_count: 2, new_words_count: 100, image_url: null,
       status: "private", roses_count: null, views_count: null,
     },
     lessons: [
       { id: 20, title: "Chapter One", duration: 300, word_count: 2841,
-        unique_word_count: 800, new_words_count: 100, percent_completed: 100, has_audio: true },
+        unique_word_count: 800, new_words_count: 100, percent_completed: 100 },
       { id: 21, title: "Chapter Two", duration: 300, word_count: null,
-        unique_word_count: null, new_words_count: null, percent_completed: 0, has_audio: false },
+        unique_word_count: null, new_words_count: null, percent_completed: 0 },
     ],
   };
 })();
@@ -91,8 +91,12 @@ test.describe("course screen", () => {
       "Haruki Murakami",
     );
 
-    await expect(page.getByTestId("stat-lessons")).toContainText("42");
+    // Exact match, not toContainText: the fixture's lessons_count (2) must
+    // agree with its two-lesson array, or CourseStats logs a mismatch
+    // warning — toContainText("2") would still pass against a stray "42".
+    await expect(page.getByTestId("stat-lessons")).toHaveText("2 lessons");
     await expect(page.getByTestId("stat-words")).toContainText("6,031");
+    await expect(page.getByTestId("stat-unique-words")).toContainText("1,910");
     await expect(page.getByTestId("stat-new-words")).toContainText("9,204");
     await expect(page.getByTestId("stat-audio")).toContainText("6h 12m");
   });
