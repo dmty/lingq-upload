@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use specta::Type;
 use unicode_normalization::UnicodeNormalization;
 
-use super::client::LingqClient;
+use super::client::{read_detail, LingqClient};
 use super::collections::CollectionId;
 use super::error::LingqError;
 
@@ -74,12 +74,10 @@ impl LingqClient {
                 }
                 StatusCode::UNAUTHORIZED => return Err(LingqError::Unauthorized),
                 s if s.is_client_error() => {
-                    let detail = resp.text().await.unwrap_or_default();
-                    return Err(LingqError::BadRequest(detail));
+                    return Err(LingqError::BadRequest(read_detail(resp).await))
                 }
                 s if s.is_server_error() => {
-                    let detail = resp.text().await.unwrap_or_default();
-                    return Err(LingqError::Server(detail));
+                    return Err(LingqError::Server(read_detail(resp).await))
                 }
                 other => return Err(LingqError::Transport(format!("unexpected status {other}"))),
             }
@@ -90,15 +88,17 @@ impl LingqClient {
     /// Title-and-id projection used by the upload resume / dedupe path.
     pub async fn list_lessons(&self, cid: CollectionId) -> Result<Vec<LessonSummary>, LingqError> {
         let items = self.fetch_lesson_pages(cid).await?;
-        let mut out = Vec::with_capacity(items.len());
-        for v in &items {
-            let id = v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64());
-            let title = v.get("title").and_then(|x| x.as_str()).map(str::to_string);
-            if let (Some(id), Some(title)) = (id, title) {
-                out.push(LessonSummary { id, title });
-            }
-        }
-        Ok(out)
+        Ok(items
+            .iter()
+            .filter_map(|v| {
+                let id = v
+                    .get("pk")
+                    .or_else(|| v.get("id"))
+                    .and_then(|x| x.as_i64())?;
+                let title = v.get("title").and_then(|x| x.as_str())?.to_string();
+                Some(LessonSummary { id, title })
+            })
+            .collect())
     }
 }
 
