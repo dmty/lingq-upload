@@ -10,7 +10,7 @@
   import LessonStatRow from "$lib/components/LessonStatRow.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
-  import { appErrorMessage } from "$lib/errors";
+  import { appErrorMessage, isLingqNotFound, isMissingApiKey } from "$lib/errors";
 
   const projectKey = $derived(page.params.projectId ?? "");
 
@@ -40,14 +40,14 @@
   const alert = $derived.by(() => {
     const err = cached?.error;
     if (!err || cached?.view != null) return null;
-    if (err.kind === "MissingApiKey") {
+    if (isMissingApiKey(err)) {
       return {
         message: "Add your LingQ API key in Settings to see course stats.",
         settings: true,
         retry: false,
       };
     }
-    if (err.kind === "Lingq" && err.message.kind === "NotFound") {
+    if (isLingqNotFound(err)) {
       return { message: "This course is no longer on LingQ.", settings: false, retry: false };
     }
     if (err.kind === "Lingq" && err.message.kind === "Transport") {

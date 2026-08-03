@@ -115,3 +115,7 @@ export function appErrorMessage(e: AppError): string {
 export function isMissingApiKey(e: AppError): boolean {
   return e.kind === "MissingApiKey";
 }
+
+export function isLingqNotFound(e: AppError): boolean {
+  return e.kind === "Lingq" && e.message.kind === "NotFound";
+}

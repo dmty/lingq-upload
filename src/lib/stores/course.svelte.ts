@@ -4,6 +4,7 @@ import {
   type AppError,
   type CourseView,
 } from "$lib/ipc/bindings";
+import { isLingqNotFound } from "$lib/errors";
 
 export const STALE_AFTER_MS = 15 * 60 * 1000;
 
@@ -62,8 +63,7 @@ export const course = {
           error: null,
         };
       } else {
-        const notFound =
-          result.error.kind === "Lingq" && result.error.message.kind === "NotFound";
+        const notFound = isLingqNotFound(result.error);
         entries[key] = {
           // A course deleted on LingQ makes cached stats wrong, not stale.
           view: notFound ? null : entries[key].view,
