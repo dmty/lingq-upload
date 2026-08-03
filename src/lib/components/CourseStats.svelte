@@ -46,6 +46,32 @@
     { id: "stat-audio", label: "audio", value: hoursMinutes(audio) },
   ]);
 
+  const progress = $derived.by(() => {
+    if (!view || view.lessons.length === 0) return null;
+    let weighted = 0;
+    let weight = 0;
+    let unweighted = 0;
+    let counted = 0;
+    let read = 0;
+    for (const l of view.lessons) {
+      const pct = l.percent_completed;
+      if (pct == null) continue;
+      counted += 1;
+      unweighted += pct;
+      if ((l.word_count ?? 0) > 0) {
+        weighted += pct * (l.word_count as number);
+        weight += l.word_count as number;
+      }
+      if (pct >= 100) read += 1;
+    }
+    if (counted === 0) return null;
+    // Weight by word count so a 3,000-word chapter at 100% does not count the
+    // same as a 200-word one; fall back to a flat mean when word counts are
+    // missing.
+    const percent = weight > 0 ? weighted / weight : unweighted / counted;
+    return { percent: Math.round(percent), read, total: view.lessons.length };
+  });
+
   $effect(() => {
     const declared = view?.collection.lessons_count;
     const fetched = view?.lessons.length;
@@ -69,3 +95,13 @@
     </div>
   {/each}
 </div>
+{#if progress}
+  <div data-testid="course-progress" class="mt-3 flex items-center gap-3">
+    <div class="h-1 flex-1 rounded-sm bg-surface-sunken">
+      <div class="h-1 rounded-sm bg-accent" style="width: {progress.percent}%"></div>
+    </div>
+    <span class="text-xs tabular-nums text-fg-muted">
+      {progress.percent}% · {progress.read} of {progress.total} read
+    </span>
+  </div>
+{/if}

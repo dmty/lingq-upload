@@ -75,4 +75,26 @@ test.describe("course screen", () => {
       .poll(() => page.evaluate(() => window.__openedUrl__))
       .toBe("https://www.lingq.com/ja/learn/ja/web/library/course/7");
   });
+
+  test("the progress strip weights completion by word count", async ({ page }) => {
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    // 2841 words at 100% + 3190 words at 41.5% = 4164.85 of 6031 = 69%.
+    await expect(page.getByTestId("course-progress")).toContainText("69%");
+    await expect(page.getByTestId("course-progress")).toContainText("1 of 2 read");
+  });
+
+  test("each lesson gets a stat row", async ({ page }) => {
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    const rows = page.getByTestId("lesson-row");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("The Boy Named Crow");
+    await expect(rows.nth(0)).toContainText("2,841");
+    await expect(rows.nth(0)).toContainText("214");
+    await expect(rows.nth(0)).toContainText("8:32");
+    // 41.5 rounds half up to 42 (Math.round), same convention as the
+    // progress-strip aggregate above.
+    await expect(rows.nth(1)).toContainText("42%");
+  });
 });

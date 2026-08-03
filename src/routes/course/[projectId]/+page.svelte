@@ -7,6 +7,7 @@
   import { lingqCollectionUrl } from "$lib/lingq";
   import CoverThumb from "$lib/components/CoverThumb.svelte";
   import CourseStats from "$lib/components/CourseStats.svelte";
+  import LessonStatRow from "$lib/components/LessonStatRow.svelte";
   import Button from "$lib/components/Button.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
@@ -62,4 +63,12 @@
   </header>
 
   <CourseStats view={cached?.view ?? null} />
+
+  {#if cached?.view}
+    <section class="mt-6">
+      {#each cached.view.lessons as lesson, i (lesson.id)}
+        <LessonStatRow index={i} {lesson} />
+      {/each}
+    </section>
+  {/if}
 {/if}
