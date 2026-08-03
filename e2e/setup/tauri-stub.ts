@@ -297,6 +297,19 @@ export const tauriStubInitScript = `
         cmd_cancel_job: () => null,
         cmd_list_languages: () => window.__languages__ || [],
         cmd_list_collections: () => window.__collections__ || [],
+        // Course detail for the /course route. Specs pin the payload via
+        // window.__courseView__ and force failures via window.__courseError__.
+        //
+        // The call counter lives in sessionStorage, not on window: init scripts
+        // re-run on every page.goto, so a window counter would reset to 0 and a
+        // "did not refetch" assertion would pass even when suppression is broken.
+        cmd_lingq_course: () => {
+            const COUNT_KEY = "__courseFetchCount__:" + WORKER_NS;
+            const seen = Number(sessionStorage.getItem(COUNT_KEY) || "0");
+            sessionStorage.setItem(COUNT_KEY, String(seen + 1));
+            if (window.__courseError__) throw window.__courseError__;
+            return window.__courseView__ ?? { collection: null, lessons: [] };
+        },
         manual_source_from_files: () => ({ stub: true }),
         upload_one_shot: async () => {
             if (window.__uploadOneShotGate__) await window.__uploadOneShotGate__;
