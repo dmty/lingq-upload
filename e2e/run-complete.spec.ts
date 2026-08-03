@@ -18,7 +18,7 @@ test.describe("run completion and cancel states", () => {
     await page.addInitScript(projectScript());
   });
 
-  test("chapter counter, completion banner, LingQ link", async ({ page }) => {
+  test("chapter counter, completion banner, course link", async ({ page }) => {
     await page.goto(`/run/${KEY}`);
     await page.getByRole("button", { name: "Resume" }).click();
 
@@ -40,7 +40,7 @@ test.describe("run completion and cancel states", () => {
       window.__emitEvent__("job", { kind: "Result", job_id: "job-1", ok: true, payload: null }),
     );
     await expect(page.getByTestId("run-complete")).toContainText("All chapters uploaded");
-    await expect(page.getByTestId("run-complete")).toContainText("Open in LingQ");
+    await expect(page.getByTestId("run-complete")).toContainText("View Course");
   });
 
   test("Cancel shows a pending state until Cancelled arrives", async ({ page }) => {

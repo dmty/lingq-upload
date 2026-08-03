@@ -12,8 +12,6 @@
     type Stage,
   } from "$lib/ipc/bindings";
   import { appErrorMessage, isMissingApiKey } from "$lib/errors";
-  import { lingqCollectionUrl } from "$lib/lingq";
-  import { openUrl } from "@tauri-apps/plugin-opener";
   import ChapterRow from "$lib/components/ChapterRow.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
@@ -342,15 +340,9 @@
           <button
             type="button"
             class="font-medium text-accent hover:underline"
-            onclick={() =>
-              void openUrl(
-                lingqCollectionUrl(
-                  project!.settings.language,
-                  project!.lingq_collection_id!,
-                ),
-              )}
+            onclick={() => void goto(`/course/${projectKey}`)}
           >
-            Open in LingQ
+            View Course
           </button>
         {/if}
         <a href="/library" class="text-fg-muted hover:text-fg">Back to Library</a>

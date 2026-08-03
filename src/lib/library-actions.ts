@@ -1,8 +1,6 @@
 import { goto } from "$app/navigation";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LibraryEntry } from "$lib/ipc/bindings";
 import { joinKey } from "$lib/identity";
-import { lingqCollectionUrl } from "$lib/lingq";
 
 export type PrimaryAction = {
   label: string;
@@ -22,9 +20,7 @@ export function primaryActionFor(entry: LibraryEntry): PrimaryAction {
         disabled,
         run: () => {
           if (disabled) return;
-          void openUrl(
-            lingqCollectionUrl(entry.language, entry.lingq_collection_id!),
-          );
+          void goto(`/course/${key}`);
         },
       };
     }
