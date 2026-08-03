@@ -1,3 +1,7 @@
+export function formatCount(n: number | null): string {
+  return n == null ? "—" : n.toLocaleString();
+}
+
 export function formatRelative(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;

@@ -1,15 +1,12 @@
 <script lang="ts">
   import type { LessonStat } from "$lib/ipc/bindings";
+  import { formatCount } from "$lib/format";
 
   let { index, lesson }: { index: number; lesson: LessonStat } = $props();
 
   const percent = $derived(
     lesson.percent_completed == null ? null : Math.round(lesson.percent_completed),
   );
-
-  function count(n: number | null): string {
-    return n == null ? "—" : n.toLocaleString();
-  }
 
   function clock(seconds: number | null): string {
     if (seconds == null) return "—";
@@ -25,8 +22,8 @@
 >
   <span class="tabular-nums text-fg-subtle">{String(index + 1).padStart(2, "0")}</span>
   <span class="truncate">{lesson.title}</span>
-  <span class="text-right tabular-nums text-fg-muted">{count(lesson.word_count)}</span>
-  <span class="text-right tabular-nums text-fg-muted">{count(lesson.new_words_count)}</span>
+  <span class="text-right tabular-nums text-fg-muted">{formatCount(lesson.word_count)}</span>
+  <span class="text-right tabular-nums text-fg-muted">{formatCount(lesson.new_words_count)}</span>
   <span class="text-right tabular-nums text-fg-muted">{clock(lesson.duration)}</span>
   <span class="flex items-center gap-2">
     <span class="h-1 flex-1 rounded-sm bg-surface-sunken">

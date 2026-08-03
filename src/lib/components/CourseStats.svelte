@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CourseView, LessonStat } from "$lib/ipc/bindings";
+  import { formatCount } from "$lib/format";
 
   let { view = null }: { view?: CourseView | null } = $props();
 
@@ -26,10 +27,6 @@
   const newWords = $derived(view?.collection.new_words_count ?? sum((l) => l.new_words_count));
   const audio = $derived(view?.collection.duration ?? sum((l) => l.duration));
 
-  function count(n: number | null): string {
-    return n == null ? "—" : n.toLocaleString();
-  }
-
   function hoursMinutes(seconds: number | null): string {
     if (seconds == null) return "—";
     const total = Math.round(seconds / 60);
@@ -39,10 +36,10 @@
   }
 
   const cells = $derived([
-    { id: "stat-lessons", label: "lessons", value: count(lessons) },
-    { id: "stat-words", label: "words", value: count(words) },
-    { id: "stat-unique-words", label: "unique words", value: count(uniqueWords) },
-    { id: "stat-new-words", label: "new words", value: count(newWords) },
+    { id: "stat-lessons", label: "lessons", value: formatCount(lessons) },
+    { id: "stat-words", label: "words", value: formatCount(words) },
+    { id: "stat-unique-words", label: "unique words", value: formatCount(uniqueWords) },
+    { id: "stat-new-words", label: "new words", value: formatCount(newWords) },
     { id: "stat-audio", label: "audio", value: hoursMinutes(audio) },
   ]);
 
@@ -58,9 +55,10 @@
       if (pct == null) continue;
       counted += 1;
       unweighted += pct;
-      if ((l.word_count ?? 0) > 0) {
-        weighted += pct * (l.word_count as number);
-        weight += l.word_count as number;
+      const wordCount = l.word_count ?? 0;
+      if (wordCount > 0) {
+        weighted += pct * wordCount;
+        weight += wordCount;
       }
       if (pct >= 100) read += 1;
     }
