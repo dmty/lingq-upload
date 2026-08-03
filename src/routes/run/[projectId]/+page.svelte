@@ -340,7 +340,8 @@
           <button
             type="button"
             class="font-medium text-accent hover:underline"
-            onclick={() => void goto(`/course/${projectKey}`)}
+            onclick={() =>
+              void goto(`/course/${encodeURIComponent(projectKey)}`)}
           >
             View Course
           </button>
