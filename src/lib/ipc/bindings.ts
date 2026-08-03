@@ -125,6 +125,20 @@ async cmdListCollections(lang: string) : Promise<Result<Collection[], AppError>>
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Course-screen payload: collection header stats plus per-lesson stats.
+ * 
+ * Two requests, never a per-lesson fetch. `lang` comes from the project entry —
+ * cross-language calls 404 (AD-017).
+ */
+async cmdLingqCourse(lang: string, collectionId: number) : Promise<Result<CourseView, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_lingq_course", { lang, collectionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async uploadOneShot(candidate: Candidate, collectionId: number, lang: string) : Promise<Result<UploadResult, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("upload_one_shot", { candidate, collectionId, lang }) };
@@ -537,7 +551,17 @@ export type ChapterManifest = { chapters: ChapterEntry[] }
 export type ChapterMeta = { id: ChapterId; order: number; title: string; kind: ChapterKind }
 export type ChapterReceipt = { chapter_index: number; track_index?: number | null; lesson_id?: number | null; degraded?: boolean; uploaded_at?: string | null }
 export type Collection = { id: number; title: string }
+/**
+ * Course-screen projection of `GET /collections/{cid}/`.
+ * 
+ * Every field except `id`/`title` is optional: the LingQ v3 surface is
+ * observed rather than documented (`docs/specs/lingq-api.md`) and changes
+ * silently. A renamed field must degrade to a blank cell, never to a parse
+ * error that blanks the whole screen.
+ */
+export type CollectionDetail = { id: number; title: string; description: string | null; level: string | null; difficulty: number | null; duration: number | null; lessons_count: number | null; new_words_count: number | null; image_url: string | null; status: string | null; roses_count: number | null; views_count: number | null }
 export type ConflictResolution = "replace" | "skip" | "new_project"
+export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
@@ -558,6 +582,13 @@ export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type Language = { code: string; title: string; known_words: number }
 export type LessonOpts = { level: string; status: string; tags: string; save: string }
+/**
+ * Course-screen projection of one entry in the paginated lesson list.
+ * 
+ * Every stat the screen shows is already on the *list* entry — the per-lesson
+ * detail endpoint is never called.
+ */
+export type LessonStat = { id: number; title: string; duration: number | null; word_count: number | null; unique_word_count: number | null; new_words_count: number | null; percent_completed: number | null; has_audio: boolean }
 export type LibraryEntry = { id: ProjectId; title: string; language: string; completed_lesson_count: number; receipt_count: number; mtime: string | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; status?: LibraryStatus; failed_reason?: string | null }
 export type LibraryIndex = { schema_version: number; generated_at: string; entries: LibraryEntry[] }
 /**

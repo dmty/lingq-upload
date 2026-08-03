@@ -33,6 +33,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::lingq::cmd_account_profile,
             commands::lingq::cmd_list_languages,
             commands::lingq::cmd_list_collections,
+            commands::lingq::cmd_lingq_course,
             commands::upload::upload_one_shot,
             commands::library::cmd_library_list,
             commands::library::cmd_trash_project,
