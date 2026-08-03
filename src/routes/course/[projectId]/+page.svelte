@@ -9,6 +9,8 @@
   import CourseStats from "$lib/components/CourseStats.svelte";
   import LessonStatRow from "$lib/components/LessonStatRow.svelte";
   import Button from "$lib/components/Button.svelte";
+  import Alert from "$lib/components/Alert.svelte";
+  import { appErrorMessage } from "$lib/errors";
 
   const projectKey = $derived(page.params.projectId ?? "");
 
@@ -34,10 +36,33 @@
   $effect(() => {
     refresh();
   });
+
+  const alert = $derived.by(() => {
+    const err = cached?.error;
+    if (!err || cached?.view != null) return null;
+    if (err.kind === "MissingApiKey") {
+      return {
+        message: "Add your LingQ API key in Settings to see course stats.",
+        settings: true,
+        retry: false,
+      };
+    }
+    if (err.kind === "Lingq" && err.message.kind === "NotFound") {
+      return { message: "This course is no longer on LingQ.", settings: false, retry: false };
+    }
+    if (err.kind === "Lingq" && err.message.kind === "Transport") {
+      return { message: "Couldn't reach LingQ.", settings: false, retry: true };
+    }
+    return { message: appErrorMessage(err), settings: false, retry: true };
+  });
 </script>
 
-{#if entry == null}
-  <p>That course isn't in your library. <a href="/library">Back to Library</a></p>
+{#if entry == null && (library.status === "idle" || library.status === "loading")}
+  <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
+{:else if entry == null}
+  <p data-testid="course-not-found">
+    That course isn't in your library. <a href="/library">Back to Library</a>
+  </p>
 {:else}
   <header data-testid="course-header" class="flex items-start gap-4">
     <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
@@ -64,15 +89,36 @@
     </span>
   </header>
 
-  <CourseStats
-    view={cached?.view ?? null}
-    fetchedAt={cached?.fetchedAt ?? null}
-    revalidating={cached?.revalidating ?? false}
-    onrefresh={() => refresh(true)}
-  />
+  {#if collectionId == null}
+    <p data-testid="course-not-uploaded" class="mt-6 text-sm text-fg-muted">
+      This course hasn't been uploaded to LingQ yet.
+    </p>
+  {:else if alert}
+    <div class="flex items-center gap-3">
+      <Alert variant="warning" data-testid="course-alert" class="flex-1">
+        {alert.message}
+        {#if alert.settings}
+          <a href="/settings" class="ml-1 font-medium text-accent underline">Settings</a>
+        {/if}
+      </Alert>
+      {#if alert.retry}
+        <Button variant="secondary" size="sm" data-testid="course-refresh" onclick={() => refresh(true)}>
+          Retry
+        </Button>
+      {/if}
+    </div>
+  {:else}
+    <CourseStats
+      view={cached?.view ?? null}
+      fetchedAt={cached?.fetchedAt ?? null}
+      revalidating={cached?.revalidating ?? false}
+      refreshFailed={cached?.error != null}
+      onrefresh={() => refresh(true)}
+    />
+  {/if}
 
-  {#if cached?.view}
-    <section class="mt-6">
+  {#if cached?.view && cached.view.lessons.length > 0}
+    <section data-testid="course-lessons" class="mt-6">
       <div
         class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 text-xs uppercase text-fg-subtle"
       >

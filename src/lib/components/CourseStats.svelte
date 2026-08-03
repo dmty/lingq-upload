@@ -8,11 +8,13 @@
     view = null,
     fetchedAt = null,
     revalidating = false,
+    refreshFailed = false,
     onrefresh,
   }: {
     view?: CourseView | null;
     fetchedAt?: number | null;
     revalidating?: boolean;
+    refreshFailed?: boolean;
     onrefresh?: () => void;
   } = $props();
 
@@ -115,8 +117,13 @@
     <span data-testid="course-revalidating" class="flex items-center gap-1">
       <Spinner size="sm" tone="muted" /> Refreshing
     </span>
-  {:else if freshness}
-    <span data-testid="course-freshness">updated {freshness}</span>
+  {:else}
+    {#if refreshFailed}
+      <span data-testid="course-refresh-failed" class="text-warning">Couldn't refresh</span>
+    {/if}
+    {#if freshness}
+      <span data-testid="course-freshness">updated {freshness}</span>
+    {/if}
   {/if}
   <Button variant="secondary" size="sm" data-testid="course-refresh" onclick={() => onrefresh?.()}>
     Refresh

@@ -45,20 +45,38 @@ export const course = {
 
     entries[key] = { ...(current ?? blank()), revalidating: true };
 
-    const result = await commands.cmdLingqCourse(lang, collectionId);
+    // The generated binding rethrows genuine `Error` instances instead of
+    // returning them as a result (transport-level failures, not app-level
+    // ones). Without this catch, a throw here would leave `revalidating`
+    // stuck `true` forever — the mount effect and Refresh button both skip
+    // an entry that's already revalidating, so the screen would wedge with
+    // no way to retry short of restarting the app.
+    try {
+      const result = await commands.cmdLingqCourse(lang, collectionId);
 
-    if (result.status === "ok") {
-      entries[key] = {
-        view: result.data,
-        fetchedAt: Date.now(),
-        revalidating: false,
-        error: null,
-      };
-    } else {
+      if (result.status === "ok") {
+        entries[key] = {
+          view: result.data,
+          fetchedAt: Date.now(),
+          revalidating: false,
+          error: null,
+        };
+      } else {
+        const notFound =
+          result.error.kind === "Lingq" && result.error.message.kind === "NotFound";
+        entries[key] = {
+          // A course deleted on LingQ makes cached stats wrong, not stale.
+          view: notFound ? null : entries[key].view,
+          fetchedAt: notFound ? null : entries[key].fetchedAt,
+          revalidating: false,
+          error: result.error,
+        };
+      }
+    } catch (e) {
       entries[key] = {
         ...entries[key],
         revalidating: false,
-        error: result.error,
+        error: { kind: "Other", message: e instanceof Error ? e.message : String(e) },
       };
     }
   },

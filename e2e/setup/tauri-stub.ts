@@ -84,12 +84,17 @@ export const tauriStubInitScript = `
 
     const handlers = {
         // Library list returns entries from window.__libraryEntries__ if set,
-        // else empty index so the empty-state CTA renders.
-        cmd_library_list: () => ({
-            schema_version: 1,
-            generated_at: new Date().toISOString(),
-            entries: window.__libraryEntries__ || [],
-        }),
+        // else empty index so the empty-state CTA renders. Specs can hold the
+        // response open via window.__libraryGate__ to exercise the moment
+        // between navigation and the index resolving.
+        cmd_library_list: async () => {
+            if (window.__libraryGate__) await window.__libraryGate__;
+            return {
+                schema_version: 1,
+                generated_at: new Date().toISOString(),
+                entries: window.__libraryEntries__ || [],
+            };
+        },
         // Account/profile probe — empty placeholder keeps the layout calm.
         cmd_account_profile: () => ({ username: null, known_words: {} }),
         // Load LingQ key, defaulting to null if not set in the test env.
