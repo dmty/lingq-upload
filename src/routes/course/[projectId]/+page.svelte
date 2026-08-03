@@ -59,6 +59,10 @@
 
 {#if entry == null && (library.status === "idle" || library.status === "loading")}
   <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
+{:else if entry == null && library.status === "error"}
+  <p data-testid="course-library-error">
+    {library.error ? appErrorMessage(library.error) : "Couldn't read your library."}
+  </p>
 {:else if entry == null}
   <p data-testid="course-not-found">
     That course isn't in your library. <a href="/library">Back to Library</a>

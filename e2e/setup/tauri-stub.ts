@@ -86,9 +86,11 @@ export const tauriStubInitScript = `
         // Library list returns entries from window.__libraryEntries__ if set,
         // else empty index so the empty-state CTA renders. Specs can hold the
         // response open via window.__libraryGate__ to exercise the moment
-        // between navigation and the index resolving.
+        // between navigation and the index resolving, or fail it outright via
+        // window.__libraryError__.
         cmd_library_list: async () => {
             if (window.__libraryGate__) await window.__libraryGate__;
+            if (window.__libraryError__) throw window.__libraryError__;
             return {
                 schema_version: 1,
                 generated_at: new Date().toISOString(),

@@ -48,6 +48,7 @@ test.describe("course screen failures", () => {
 
     await expect(page.getByTestId("course-alert")).toContainText("API key");
     await expect(page.getByTestId("course-alert")).toContainText("Settings");
+    await expect(page.getByTestId("course-refresh")).toHaveCount(0);
     await expect(page.getByTestId("open-in-lingq")).toBeEnabled();
   });
 
@@ -110,9 +111,6 @@ test.describe("course screen failures", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toBeVisible();
-    // The direct regression guard: a throw that skipped the reset would
-    // leave this stuck true, and the click below would be a silent no-op.
-    await expect(page.getByTestId("course-revalidating")).toHaveCount(0);
     expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
 
     await page.getByTestId("course-refresh").click();
@@ -195,10 +193,26 @@ test.describe("course screen failures", () => {
     `);
     await page.goto(`/course/${ROUTE_KEY}`);
 
+    // Anchors the timing: proves the loading branch actually rendered before
+    // the library resolved, rather than the not-found check below passing
+    // vacuously because nothing had rendered yet.
+    await expect(page.getByTestId("course-loading")).toBeVisible();
     await expect(page.getByTestId("course-not-found")).toHaveCount(0);
 
     await page.evaluate(() => window.__releaseLibrary__());
 
     await expect(page.getByTestId("course-header")).toBeVisible();
+  });
+
+  test("a library read failure says so instead of calling the course missing", async ({
+    page,
+  }) => {
+    await page.addInitScript(`
+      ;(() => { window.__libraryError__ = { kind: "Io", message: "disk unreadable" }; })();
+    `);
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    await expect(page.getByTestId("course-library-error")).toBeVisible();
+    await expect(page.getByTestId("course-not-found")).toHaveCount(0);
   });
 });
