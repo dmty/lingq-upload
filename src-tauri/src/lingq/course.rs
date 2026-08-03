@@ -101,3 +101,52 @@ impl LingqClient {
         }
     }
 }
+
+/// Course-screen projection of one entry in the paginated lesson list.
+///
+/// Every stat the screen shows is already on the *list* entry — the per-lesson
+/// detail endpoint is never called.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LessonStat {
+    pub id: i64,
+    pub title: String,
+    pub duration: Option<i64>,
+    pub word_count: Option<i64>,
+    pub unique_word_count: Option<i64>,
+    pub new_words_count: Option<i64>,
+    pub percent_completed: Option<f64>,
+    pub has_audio: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct CourseView {
+    pub collection: CollectionDetail,
+    pub lessons: Vec<LessonStat>,
+}
+
+fn parse_lesson_stat(v: &serde_json::Value) -> Option<LessonStat> {
+    let id = v
+        .get("pk")
+        .or_else(|| v.get("id"))
+        .and_then(|x| x.as_i64())?;
+    Some(LessonStat {
+        id,
+        title: str_field(v, "title").unwrap_or_default(),
+        duration: i64_field(v, "duration"),
+        word_count: i64_field(v, "wordCount"),
+        unique_word_count: i64_field(v, "uniqueWordCount"),
+        new_words_count: i64_field(v, "newWordsCount"),
+        percent_completed: v.get("percentCompleted").and_then(|x| x.as_f64()),
+        has_audio: str_field(v, "audio").is_some(),
+    })
+}
+
+impl LingqClient {
+    pub async fn list_lesson_stats(
+        &self,
+        cid: CollectionId,
+    ) -> Result<Vec<LessonStat>, LingqError> {
+        let items = self.fetch_lesson_pages(cid).await?;
+        Ok(items.iter().filter_map(parse_lesson_stat).collect())
+    }
+}

@@ -15,7 +15,8 @@ pub struct LessonSummary {
 }
 
 impl LingqClient {
-    /// Paginate `/api/v3/{lang}/collections/{cid}/lessons/` and collect summaries.
+    /// Walk `/api/v3/{lang}/collections/{cid}/lessons/` and return the raw
+    /// per-lesson JSON values.
     ///
     /// Handles both response shapes the LingQ API has returned across versions:
     /// * DRF-style `{results: [...], next: "..."|null}` — paginate until `next`
@@ -26,8 +27,11 @@ impl LingqClient {
     /// Shape is detected on each response, not assumed up-front: the envelope
     /// flavour is the trigger to stop on `next == null`; the bare-array flavour
     /// stops on empty page. Either way `page=N` is incremented in lockstep.
-    pub async fn list_lessons(&self, cid: CollectionId) -> Result<Vec<LessonSummary>, LingqError> {
-        let mut out: Vec<LessonSummary> = Vec::new();
+    pub(crate) async fn fetch_lesson_pages(
+        &self,
+        cid: CollectionId,
+    ) -> Result<Vec<serde_json::Value>, LingqError> {
+        let mut out: Vec<serde_json::Value> = Vec::new();
         let mut page = 1;
         loop {
             let url = format!(
@@ -62,15 +66,7 @@ impl LingqClient {
                     if results.is_empty() {
                         break;
                     }
-                    for v in &results {
-                        let id = v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64());
-                        let title = v.get("title").and_then(|x| x.as_str()).map(str::to_string);
-                        if let (Some(id), Some(title)) = (id, title) {
-                            out.push(LessonSummary { id, title });
-                        }
-                    }
-                    // Envelope shape: trust `next`. Bare array: keep going until
-                    // an empty page comes back.
+                    out.extend(results);
                     if !is_bare_array && body.get("next").map(|v| v.is_null()).unwrap_or(true) {
                         break;
                     }
@@ -86,6 +82,20 @@ impl LingqClient {
                     return Err(LingqError::Server(detail));
                 }
                 other => return Err(LingqError::Transport(format!("unexpected status {other}"))),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Title-and-id projection used by the upload resume / dedupe path.
+    pub async fn list_lessons(&self, cid: CollectionId) -> Result<Vec<LessonSummary>, LingqError> {
+        let items = self.fetch_lesson_pages(cid).await?;
+        let mut out = Vec::with_capacity(items.len());
+        for v in &items {
+            let id = v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64());
+            let title = v.get("title").and_then(|x| x.as_str()).map(str::to_string);
+            if let (Some(id), Some(title)) = (id, title) {
+                out.push(LessonSummary { id, title });
             }
         }
         Ok(out)

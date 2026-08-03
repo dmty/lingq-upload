@@ -71,3 +71,69 @@ async fn collection_detail_maps_404_to_not_found() {
 
     assert!(matches!(err, lingq_upload_lib::lingq::LingqError::NotFound));
 }
+
+#[tokio::test]
+async fn lesson_stats_project_from_envelope_pages() {
+    let mut server = Server::new_async().await;
+    let _p1 = server
+        .mock(
+            "GET",
+            "/api/v3/ja/collections/7/lessons/?page=1&page_size=100",
+        )
+        .with_status(200)
+        .with_body(
+            r#"{"results":[
+                {"id":10,"title":"The Boy Named Crow","duration":512,"wordCount":2841,
+                 "uniqueWordCount":900,"newWordsCount":214,"percentCompleted":100.0,
+                 "audio":"https://cdn/a.mp3"},
+                {"id":11,"title":"Chapter Two","duration":584,"wordCount":3190,
+                 "uniqueWordCount":1010,"newWordsCount":287,"percentCompleted":41.5,
+                 "audio":null}
+            ],"next":null}"#,
+        )
+        .create_async()
+        .await;
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), ja(), server.url());
+
+    let stats = client.list_lesson_stats(CollectionId(7)).await.unwrap();
+
+    assert_eq!(stats.len(), 2);
+    assert_eq!(stats[0].title, "The Boy Named Crow");
+    assert_eq!(stats[0].word_count, Some(2841));
+    assert_eq!(stats[0].percent_completed, Some(100.0));
+    assert!(stats[0].has_audio);
+    assert_eq!(stats[1].new_words_count, Some(287));
+    assert!(!stats[1].has_audio, "null audio means no audio");
+}
+
+#[tokio::test]
+async fn lesson_stats_project_from_bare_array_pages() {
+    let mut server = Server::new_async().await;
+    let _p1 = server
+        .mock(
+            "GET",
+            "/api/v3/ja/collections/5/lessons/?page=1&page_size=100",
+        )
+        .with_status(200)
+        .with_body(r#"[{"pk":1,"title":"One","audio":""}]"#)
+        .create_async()
+        .await;
+    let _p2 = server
+        .mock(
+            "GET",
+            "/api/v3/ja/collections/5/lessons/?page=2&page_size=100",
+        )
+        .with_status(200)
+        .with_body("[]")
+        .create_async()
+        .await;
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), ja(), server.url());
+
+    let stats = client.list_lesson_stats(CollectionId(5)).await.unwrap();
+
+    assert_eq!(stats.len(), 1);
+    assert_eq!(stats[0].id, 1);
+    assert!(!stats[0].has_audio, "empty audio string means no audio");
+    assert_eq!(stats[0].word_count, None);
+    assert_eq!(stats[0].percent_completed, None);
+}
