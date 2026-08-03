@@ -23,14 +23,16 @@
     entry && collectionId != null ? course.entry(entry.language, collectionId) : null,
   );
 
+  function refresh(force = false) {
+    if (entry && collectionId != null) void course.ensure(entry.language, collectionId, force);
+  }
+
   $effect(() => {
     if (library.status === "idle") void library.load();
   });
 
   $effect(() => {
-    if (entry && collectionId != null) {
-      void course.ensure(entry.language, collectionId);
-    }
+    refresh();
   });
 </script>
 
@@ -66,9 +68,7 @@
     view={cached?.view ?? null}
     fetchedAt={cached?.fetchedAt ?? null}
     revalidating={cached?.revalidating ?? false}
-    onrefresh={() => {
-      if (collectionId != null) void course.ensure(entry.language, collectionId, true);
-    }}
+    onrefresh={() => refresh(true)}
   />
 
   {#if cached?.view}
