@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0](https://github.com/dmty/lingq-upload/compare/v0.3.0...v0.4.0) (2026-08-04)
+
+
+### Features
+
+* add course detail command and surface missing-key as a typed error ([8c5fc31](https://github.com/dmty/lingq-upload/commit/8c5fc312554b93cda637915e4ecd47991e79adf2))
+* add course detail screen with LingQ corpus stats ([e9bc6ce](https://github.com/dmty/lingq-upload/commit/e9bc6ce9451db0b276ed5e564736aa7f39af87a5))
+* cache course stats for fifteen minutes with an explicit refresh ([7679adf](https://github.com/dmty/lingq-upload/commit/7679adf1f9301dcadfc45a481511e0a6e2aee3de))
+* fetch LingQ collection detail ([3b98f67](https://github.com/dmty/lingq-upload/commit/3b98f67625f4731cdffcc5f92bfd14cf1404bd02))
+* open finished courses in the app instead of the browser ([81d6858](https://github.com/dmty/lingq-upload/commit/81d685822fec93a2ef06e512855b429f9c502215))
+* project per-lesson stats from the LingQ lesson list ([5c90042](https://github.com/dmty/lingq-upload/commit/5c90042d57b87fd2c00b29a0aacb9cfab5a6f6af))
+* show weighted course progress and per-lesson stat rows ([346677c](https://github.com/dmty/lingq-upload/commit/346677c6df4161e12ca1212aa21397f3d573b7c7))
+
+
+### Bug Fixes
+
+* assert the LingQ URL, correct duration rounding, drop doc-comment slashes ([cfc9693](https://github.com/dmty/lingq-upload/commit/cfc9693debb192db3c9ec813504ae2f5d93320e8))
+* distinguish a library read failure from a missing course, tighten error-path tests ([a937a87](https://github.com/dmty/lingq-upload/commit/a937a878206e60925d068436f940e91957bf3cb0))
+* keep the course screen usable when LingQ is unreachable ([935e357](https://github.com/dmty/lingq-upload/commit/935e3578e70631c0fe4f3d8f16201fc276235c14))
+* weight lessons without a word count instead of dropping them, add lesson row headers ([61dd157](https://github.com/dmty/lingq-upload/commit/61dd1575c9cca57fa74acd39436fe59164e3d256))
+
 ## [0.3.0](https://github.com/dmty/lingq-upload/compare/v0.2.0...v0.3.0) (2026-08-02)
 
 
