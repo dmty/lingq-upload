@@ -17,8 +17,12 @@ mod provider;
 pub mod sample;
 mod whisper_like;
 
+pub use align::{
+    normalize_for_alignment, title_match, transcript_match_head, transcript_match_tail,
+    AlignSource, AlignmentMatch, BoundaryResult, ChapterCandidate, DetectedRange,
+};
 pub use error::{TranscribeError, TranscribeErrorKind};
-pub use provider::{PricingHint, ProviderCatalog, ProviderDescriptor};
+pub use provider::{provider_language_hint, PricingHint, ProviderCatalog, ProviderDescriptor};
 pub use sample::{
     AlignmentConfig, NoTranscriptReason, SamplePlan, SampleSide, SampleWindow, SideSamplePlan,
 };

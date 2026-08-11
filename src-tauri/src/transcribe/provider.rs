@@ -59,6 +59,28 @@ static BUILT_IN_PROVIDERS: [ProviderDescriptor; 2] = [
     },
 ];
 
+/// Map a LingQ project language to a provider ISO-639-1 hint when safe.
+pub fn provider_language_hint(
+    project_language: &str,
+    descriptor: &ProviderDescriptor,
+) -> Option<String> {
+    let mapped = match project_language {
+        "eng" => "en",
+        "jpn" => "ja",
+        "rus" => "ru",
+        "spa" => "es",
+        "deu" => "de",
+        code if code.len() == 2 && code.chars().all(|c| c.is_ascii_lowercase()) => code,
+        _ => return None,
+    };
+    if !descriptor.supported_languages.is_empty()
+        && !descriptor.supported_languages.contains(&mapped)
+    {
+        return None;
+    }
+    Some(mapped.to_string())
+}
+
 pub struct ProviderCatalog;
 
 impl ProviderCatalog {
@@ -106,7 +128,7 @@ mod tests {
     use futures::future::BoxFuture;
     use secrecy::SecretString;
 
-    use super::ProviderCatalog;
+    use super::{provider_language_hint, ProviderCatalog};
     use crate::transcribe::{
         TranscribeError, TranscribeErrorKind, TranscribeOpts, TranscribeProviderId, Transcriber,
         Transcript,
@@ -244,5 +266,24 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.kind(), TranscribeErrorKind::Audio);
+    }
+
+    #[test]
+    fn provider_language_hint_maps_safe_codes() {
+        let d = ProviderCatalog::built_in()
+            .descriptor(TranscribeProviderId::Groq)
+            .unwrap();
+        assert_eq!(provider_language_hint("en", d).as_deref(), Some("en"));
+        assert_eq!(provider_language_hint("ja", d).as_deref(), Some("ja"));
+        assert_eq!(provider_language_hint("eng", d).as_deref(), Some("en"));
+        assert_eq!(provider_language_hint("jpn", d).as_deref(), Some("ja"));
+        assert_eq!(provider_language_hint("rus", d).as_deref(), Some("ru"));
+        assert_eq!(provider_language_hint("spa", d).as_deref(), Some("es"));
+        assert_eq!(provider_language_hint("deu", d).as_deref(), Some("de"));
+        assert_eq!(provider_language_hint("EN", d), None);
+        assert_eq!(provider_language_hint("xyz", d), None);
+        assert_eq!(provider_language_hint("eng-", d), None);
+        assert_eq!(provider_language_hint("", d), None);
+        assert_eq!(provider_language_hint("e", d), None);
     }
 }
