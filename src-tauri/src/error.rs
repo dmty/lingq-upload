@@ -9,6 +9,7 @@ use crate::core::text::TextError;
 use crate::ingest::IngestError;
 use crate::lingq::LingqError;
 use crate::secrets::SecretError;
+use crate::transcribe::TranscribeError;
 
 #[derive(Error, Debug, Serialize, Type)]
 #[serde(tag = "kind", content = "message")]
@@ -36,6 +37,8 @@ pub enum AppError {
     Mapping(#[from] MappingError),
     #[error("mapping op_id stale: server={server} expected={expected}")]
     MappingStaleOp { server: u64, expected: u64 },
+    #[error("transcription error: {0}")]
+    Transcribe(#[from] TranscribeError),
     #[error("{0}")]
     Other(String),
 }

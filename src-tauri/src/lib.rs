@@ -72,6 +72,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         // can type-narrow the raw "job" event payload.
         .typ::<events::JobEvent>()
         .typ::<events::Stage>()
+        .typ::<events::DetectionPhase>()
         .typ::<events::LogLevel>()
         .typ::<lingq::LingqError>()
         .typ::<lingq::WhoAmI>()

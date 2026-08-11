@@ -6,6 +6,7 @@ import type {
   MappingError,
   SecretError,
   TextError,
+  TranscribeError,
 } from "$lib/ipc/bindings";
 
 export function secretMessage(e: SecretError): string {
@@ -83,6 +84,25 @@ export function mappingMessage(e: MappingError): string {
   }
 }
 
+export function transcribeMessage(e: TranscribeError): string {
+  switch (e.kind) {
+    case "api_key":
+      return "No transcription API key configured. Open Settings to add one.";
+    case "unauthorized":
+      return "The transcription provider rejected the API key. Edit it in Settings.";
+    case "rate_limit":
+      return "The transcription provider rate limit was reached. Try again later or switch providers.";
+    case "timeout":
+      return "Transcription timed out. Try again.";
+    case "network":
+      return "Couldn't reach the transcription provider. Check your internet connection and try again.";
+    case "provider_failed":
+      return "The transcription provider failed. Try again or switch providers.";
+    case "audio":
+      return "Couldn't prepare this audio for transcription. Re-add it or check the file.";
+  }
+}
+
 export function appErrorMessage(e: AppError): string {
   switch (e.kind) {
     case "Io":
@@ -107,6 +127,8 @@ export function appErrorMessage(e: AppError): string {
       return mappingMessage(e.message);
     case "MappingStaleOp":
       return "This mapping was changed elsewhere. Reloading the latest version.";
+    case "Transcribe":
+      return transcribeMessage(e.message);
     case "Other":
       return e.message;
   }

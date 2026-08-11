@@ -45,5 +45,16 @@ fn bindings_export_in_sync() {
     let exported = std::fs::read_to_string(bindings_path).expect("read exported bindings");
     assert!(exported.contains("AUTO-GENERATED"));
     assert!(exported.contains("async cmdListTranscribeProviders()"));
+    assert!(exported.contains("{ kind: \"Transcribe\"; message: TranscribeError }"));
+    assert!(exported.contains(
+        "{ kind: \"DetectionProgress\"; job_id: string; pct: number; phase: DetectionPhase }"
+    ));
+    assert!(exported.contains("{ kind: \"detecting_start\" }"));
+    assert!(exported.contains(
+        "export type DetectionPhase = \"title_check\" | \"sample_head\" | \"transcribe_head\" | \"align_head\" | \"sample_tail\" | \"transcribe_tail\" | \"align_tail\""
+    ));
+    assert!(exported.contains(
+        "export type TranscribeErrorKind = \"api_key\" | \"unauthorized\" | \"rate_limit\" | \"timeout\" | \"network\" | \"provider_failed\" | \"audio\""
+    ));
     restore.contents = None;
 }

@@ -544,7 +544,7 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
  */
 export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Other"; message: string }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Transcribe"; message: TranscribeError } | { kind: "Other"; message: string }
 export type AppTranscriptionPreferences = { provider_id: TranscribeProviderId; auto_detect_start: boolean }
 export type AudioError = { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" } | { kind: "Decode"; message: string } | { kind: "Encode"; message: string }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
@@ -612,6 +612,7 @@ export type CollectionDetail = { id: number; title: string; description: string 
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
+export type DetectionPhase = "title_check" | "sample_head" | "transcribe_head" | "align_head" | "sample_tail" | "transcribe_tail" | "align_tail"
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
  * hide the toggle in release builds; `env_override` flags when the choice
@@ -620,7 +621,7 @@ export type CreateProjectResult = { status: "created"; id: ProjectId } | { statu
 export type DevBackendInfo = { is_debug: boolean; current: BackendChoice; env_override: boolean }
 export type EpubVendor = "kindle" | "kobo" | "generic"
 export type IngestError = { kind: "NotSupported" } | { kind: "Io"; message: string } | { kind: "Parse"; message: string } | { kind: "Other"; message: string }
-export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy?: EpubVendor | null } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
+export type JobEvent = { kind: "Started"; job_id: string; stage: Stage; strategy?: EpubVendor | null } | { kind: "StageChanged"; job_id: string; stage: Stage } | { kind: "Progress"; job_id: string; pct: number; message: string | null } | { kind: "DetectionProgress"; job_id: string; pct: number; phase: DetectionPhase } | { kind: "Log"; job_id: string; level: LogLevel; message: string } | { kind: "ChapterDone"; job_id: string; chapter_index: number; lesson_id: number; degraded: boolean } | { kind: "Result"; job_id: string; ok: boolean; payload: JsonValue } | { kind: "Cancelled"; job_id: string } | 
 /**
  * Emitted when the orchestrator can't auto-pair chapters and tracks
  * and needs the user to pick a [`MismatchResponse`]. Terminal: once
@@ -757,9 +758,11 @@ export type ReceiptSnapshot = { chapter_index: number; lesson_id: number | null;
  */
 export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | { kind: "MissingEntry" } | { kind: "Backend"; message: string }
 export type SeriesRef = { name: string; index: number | null }
-export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
+export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" } | { kind: "detecting_start" }
 export type TextError = { kind: "Io"; message: string }
 export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
+export type TranscribeError = { kind: TranscribeErrorKind; message: string }
+export type TranscribeErrorKind = "api_key" | "unauthorized" | "rate_limit" | "timeout" | "network" | "provider_failed" | "audio"
 export type TranscribeProviderId = "groq" | "open_ai"
 export type TrashEntry = { trash_id: string; project_id: ProjectId; title: string; language: string; trashed_at: string }
 export type UploadResult = { lesson_id: number; lesson_url: string }

@@ -5,19 +5,20 @@ use thiserror::Error;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum TranscribeErrorKind {
-    Audio,
-    Network,
-    Timeout,
+    ApiKey,
     Unauthorized,
     RateLimit,
+    Timeout,
+    Network,
     ProviderFailed,
+    Audio,
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq, Serialize, Deserialize, Type)]
 #[error("{message}")]
 pub struct TranscribeError {
-    kind: TranscribeErrorKind,
-    message: String,
+    pub kind: TranscribeErrorKind,
+    pub message: String,
 }
 
 impl TranscribeError {

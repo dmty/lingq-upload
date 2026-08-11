@@ -160,6 +160,8 @@
         return "Transcoding audio";
       case "uploading":
         return "Uploading to LingQ";
+      case "detecting_start":
+        return "Detecting text start";
     }
   }
 

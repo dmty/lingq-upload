@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -13,6 +13,19 @@ pub enum Stage {
     Transcoding,
     Uploading,
     Parsing,
+    DetectingStart,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DetectionPhase {
+    TitleCheck,
+    SampleHead,
+    TranscribeHead,
+    AlignHead,
+    SampleTail,
+    TranscribeTail,
+    AlignTail,
 }
 
 #[derive(Serialize, Type, Clone, Debug, PartialEq)]
@@ -46,6 +59,11 @@ pub enum JobEvent {
         job_id: Uuid,
         pct: f32,
         message: Option<String>,
+    },
+    DetectionProgress {
+        job_id: Uuid,
+        pct: f32,
+        phase: DetectionPhase,
     },
     Log {
         job_id: Uuid,
@@ -110,6 +128,7 @@ impl EventState {
             }
             JobEvent::StageChanged { .. }
             | JobEvent::Progress { .. }
+            | JobEvent::DetectionProgress { .. }
             | JobEvent::Log { .. }
             | JobEvent::ChapterDone { .. } => {
                 if !next.seen_started {
@@ -189,6 +208,14 @@ impl<'a> JobEmitter<'a> {
             job_id: self.job_id,
             pct,
             message,
+        });
+    }
+
+    pub fn detection_progress(&mut self, pct: f32, phase: DetectionPhase) {
+        self.emit(JobEvent::DetectionProgress {
+            job_id: self.job_id,
+            pct,
+            phase,
         });
     }
 
@@ -540,6 +567,110 @@ mod tests {
                 message: None,
             },
         ];
+        assert_eq!(validate(&seq), Err("non-terminal after terminal"));
+    }
+
+    #[test]
+    fn detection_sequence_has_one_terminal() {
+        let id = Uuid::new_v4();
+        let phases = [
+            DetectionPhase::TitleCheck,
+            DetectionPhase::SampleHead,
+            DetectionPhase::TranscribeHead,
+            DetectionPhase::AlignHead,
+            DetectionPhase::SampleTail,
+            DetectionPhase::TranscribeTail,
+            DetectionPhase::AlignTail,
+        ];
+        let mut seq = vec![JobEvent::Started {
+            job_id: id,
+            stage: Stage::DetectingStart,
+            strategy: None,
+        }];
+        seq.extend(phases.into_iter().enumerate().map(|(index, phase)| {
+            JobEvent::DetectionProgress {
+                job_id: id,
+                pct: (index + 1) as f32 / 7.0,
+                phase,
+            }
+        }));
+        seq.push(JobEvent::Result {
+            job_id: id,
+            ok: true,
+            payload: serde_json::Value::Null,
+        });
+
+        assert_eq!(validate(&seq), Ok(()));
+    }
+
+    #[test]
+    fn detection_progress_before_started_fails() {
+        let id = Uuid::new_v4();
+        let seq = vec![JobEvent::DetectionProgress {
+            job_id: id,
+            pct: 0.1,
+            phase: DetectionPhase::TitleCheck,
+        }];
+
+        assert_eq!(validate(&seq), Err("non-Started before Started"));
+    }
+
+    #[test]
+    fn detection_duplicate_started_fails() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+        ];
+
+        assert_eq!(validate(&seq), Err("duplicate Started"));
+    }
+
+    #[test]
+    fn detection_duplicate_terminal_fails() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+            JobEvent::Result {
+                job_id: id,
+                ok: false,
+                payload: serde_json::Value::Null,
+            },
+            JobEvent::Cancelled { job_id: id },
+        ];
+
+        assert_eq!(validate(&seq), Err("duplicate terminal"));
+    }
+
+    #[test]
+    fn detection_progress_after_terminal_fails() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+            JobEvent::Cancelled { job_id: id },
+            JobEvent::DetectionProgress {
+                job_id: id,
+                pct: 1.0,
+                phase: DetectionPhase::AlignTail,
+            },
+        ];
+
         assert_eq!(validate(&seq), Err("non-terminal after terminal"));
     }
 }

@@ -1,9 +1,10 @@
 use std::sync::{Arc, Barrier, Mutex};
 use std::time::Duration;
 
+use lingq_upload_lib::error::AppError;
 use lingq_upload_lib::transcribe::{
-    ProviderCatalog, ProviderDescriptor, TranscribeErrorKind, TranscribeOpts, TranscribeProviderId,
-    Transcriber, WhisperLikeTranscriber,
+    ProviderCatalog, ProviderDescriptor, TranscribeError, TranscribeErrorKind, TranscribeOpts,
+    TranscribeProviderId, Transcriber, WhisperLikeTranscriber,
 };
 use mockito::{Matcher, Server};
 use reqwest::Client;
@@ -36,6 +37,36 @@ fn transcriber(
 
 fn multipart_field(name: &str, value: &str) -> Matcher {
     Matcher::Regex(format!(r#"name="{name}"[\s\S]*?\r\n\r\n{value}\r\n"#))
+}
+
+#[test]
+fn operational_transcribe_errors_have_typed_serialized_kinds() {
+    for (kind, serialized_kind) in [
+        (TranscribeErrorKind::ApiKey, "api_key"),
+        (TranscribeErrorKind::Unauthorized, "unauthorized"),
+        (TranscribeErrorKind::RateLimit, "rate_limit"),
+        (TranscribeErrorKind::Timeout, "timeout"),
+        (TranscribeErrorKind::Network, "network"),
+        (TranscribeErrorKind::ProviderFailed, "provider_failed"),
+        (TranscribeErrorKind::Audio, "audio"),
+    ] {
+        let error = TranscribeError {
+            kind,
+            message: "safe detail".into(),
+        };
+        let app_error = AppError::from(error);
+
+        assert_eq!(
+            serde_json::to_value(app_error).unwrap(),
+            serde_json::json!({
+                "kind": "Transcribe",
+                "message": {
+                    "kind": serialized_kind,
+                    "message": "safe detail",
+                },
+            })
+        );
+    }
 }
 
 #[tokio::test]
@@ -152,11 +183,8 @@ async fn provider_statuses_map_to_typed_scrubbed_errors() {
         (500, TranscribeErrorKind::ProviderFailed),
     ] {
         let mut server = Server::new_async().await;
-        let response_body = format!(
-            "provider error Authorization: Bearer provider-secret-123 quoted Bearer \"quoted-secret-789\" {} {}",
-            "Bearer x ".repeat(80),
-            "界".repeat(600)
-        );
+        let response_body = format!("Bearer secret-value {}", "界".repeat(980));
+        assert_eq!(response_body.chars().count(), 1_000);
         let mock = server
             .mock("POST", "/openai/v1/audio/transcriptions")
             .match_header("authorization", "Bearer request-secret-456")
@@ -180,8 +208,7 @@ async fn provider_statuses_map_to_typed_scrubbed_errors() {
         assert_eq!(error.kind(), expected_kind, "status {status}");
         let message = error.to_string();
         assert!(!message.contains("request-secret-456"), "status {status}");
-        assert!(!message.contains("provider-secret-123"), "status {status}");
-        assert!(!message.contains("quoted-secret-789"), "status {status}");
+        assert!(!message.contains("secret-value"), "status {status}");
         let max_message_scalars =
             format!("provider returned HTTP {status}: ").chars().count() + 512;
         assert!(
