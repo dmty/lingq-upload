@@ -322,11 +322,12 @@ pub fn dev_prefs_save(app_data_dir: &Path, prefs: &DevPrefs) -> std::io::Result<
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
-    #[derive(Default)]
+    // ponytail: Arc inside fake so two stores share one map; no wrapper type.
+    #[derive(Clone, Default)]
     struct FakeBackend {
-        store: Mutex<HashMap<(String, String), String>>,
+        store: Arc<Mutex<HashMap<(String, String), String>>>,
     }
 
     impl KeyringBackend for FakeBackend {
@@ -356,32 +357,6 @@ mod tests {
         }
     }
 
-    /// Shared fake so two `SecretsStore`s can exercise account isolation.
-    #[derive(Clone, Default)]
-    struct ArcFakeBackend {
-        inner: std::sync::Arc<FakeBackend>,
-    }
-
-    impl ArcFakeBackend {
-        fn boxed_clone(&self) -> Box<dyn KeyringBackend> {
-            Box::new(self.clone())
-        }
-    }
-
-    impl KeyringBackend for ArcFakeBackend {
-        fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError> {
-            self.inner.set(service, account, value)
-        }
-
-        fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError> {
-            self.inner.get(service, account)
-        }
-
-        fn delete(&self, service: &str, account: &str) -> Result<(), SecretError> {
-            self.inner.delete(service, account)
-        }
-    }
-
     struct FailingBackend {
         err: SecretError,
     }
@@ -400,9 +375,9 @@ mod tests {
 
     #[test]
     fn provider_accounts_are_isolated_and_presence_is_boolean() {
-        let backend = ArcFakeBackend::default();
-        let groq = SecretsStore::new(GROQ_ACCOUNT, backend.boxed_clone());
-        let openai = SecretsStore::new(OPENAI_ACCOUNT, backend.boxed_clone());
+        let backend = FakeBackend::default();
+        let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(backend.clone()));
+        let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(backend));
         groq.save_key("groq-secret").unwrap();
         openai.save_key("openai-secret").unwrap();
         groq.clear_key().unwrap();
@@ -422,14 +397,11 @@ mod tests {
 
     #[test]
     fn debug_and_errors_never_include_key_values() {
-        let backend = ArcFakeBackend::default();
-        let groq = SecretsStore::new(GROQ_ACCOUNT, backend.boxed_clone());
-        let openai = SecretsStore::new(OPENAI_ACCOUNT, backend.boxed_clone());
+        let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(FakeBackend::default()));
+        let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(FakeBackend::default()));
         groq.save_key("groq-secret").unwrap();
         openai.save_key("openai-secret").unwrap();
-
-        let present: bool = groq.key_present().unwrap();
-        assert!(present);
+        assert!(groq.key_present().unwrap());
 
         for err in [
             SecretError::LockedKeychain,
@@ -446,8 +418,7 @@ mod tests {
             assert!(!display.contains("groq-secret") && !display.contains("openai-secret"));
         }
 
-        // SecretsStore intentionally has no Debug derive — account is not secret-bearing
-        // in Debug form because Debug is absent. Presence returns bool only.
+        // SecretsStore intentionally has no Debug derive. Presence returns bool only.
         let _ = (groq, openai);
     }
 
