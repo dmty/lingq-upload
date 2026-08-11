@@ -10,6 +10,7 @@ pub mod matcher;
 pub mod ping;
 pub mod project;
 pub mod secrets;
+pub mod transcribe;
 pub mod upload;
 
 use std::path::PathBuf;

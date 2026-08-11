@@ -28,6 +28,12 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::secrets::cmd_clear_lingq_key,
             commands::secrets::cmd_get_dev_backend,
             commands::secrets::cmd_set_dev_backend,
+            commands::transcribe::cmd_list_transcribe_providers,
+            commands::transcribe::cmd_save_transcribe_key,
+            commands::transcribe::cmd_transcribe_key_present,
+            commands::transcribe::cmd_clear_transcribe_key,
+            commands::transcribe::cmd_get_transcription_preferences,
+            commands::transcribe::cmd_set_transcription_preferences,
             commands::ingest::manual_source_from_files,
             commands::ingest::cmd_ingest_scan,
             commands::files::cmd_expand_audio_dir,
@@ -113,13 +119,15 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
 /// Write the TypeScript bindings to `src/lib/ipc/bindings.ts`.
 pub fn export_bindings() -> Result<(), Box<dyn std::error::Error>> {
     // LingQ collection / lesson IDs fit in JS Number range; map i64 -> number.
+    let bindings_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/lib/ipc/bindings.ts");
     specta_builder().export(
         Typescript::default()
             .bigint(BigIntExportBehavior::Number)
             .header(
                 "// @ts-nocheck\n// AUTO-GENERATED. Do not edit. specta from #[tauri::command]\n",
             ),
-        "../src/lib/ipc/bindings.ts",
+        bindings_path,
     )?;
     Ok(())
 }

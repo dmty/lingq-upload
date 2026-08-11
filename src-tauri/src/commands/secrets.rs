@@ -4,11 +4,15 @@ use tauri::AppHandle;
 
 use super::app_data_dir;
 use crate::error::AppError;
-use crate::secrets::{BackendChoice, SecretsStore, LINGQ_ACCOUNT};
+use crate::secrets::{default_backend, BackendChoice, KeyringBackend, SecretsStore, LINGQ_ACCOUNT};
+
+pub(crate) fn backend(app: &AppHandle) -> Result<Box<dyn KeyringBackend>, AppError> {
+    let dir = app_data_dir(app)?;
+    Ok(default_backend(&dir))
+}
 
 fn store(app: &AppHandle) -> Result<SecretsStore, AppError> {
-    let dir = app_data_dir(app)?;
-    Ok(SecretsStore::new_default(&dir, LINGQ_ACCOUNT))
+    Ok(SecretsStore::new(LINGQ_ACCOUNT, backend(app)?))
 }
 
 #[tauri::command]

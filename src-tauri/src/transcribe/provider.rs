@@ -3,7 +3,9 @@ use secrecy::SecretString;
 use serde::Serialize;
 use specta::Type;
 
-use super::{TranscribeError, TranscribeProviderId, Transcriber, WhisperLikeTranscriber};
+use super::{
+    TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber, WhisperLikeTranscriber,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Type)]
 pub struct ProviderDescriptor {
@@ -72,10 +74,15 @@ impl ProviderCatalog {
         &self,
         id: TranscribeProviderId,
     ) -> Result<&'static ProviderDescriptor, TranscribeError> {
-        Ok(match id {
-            TranscribeProviderId::Groq => &BUILT_IN_PROVIDERS[0],
-            TranscribeProviderId::OpenAi => &BUILT_IN_PROVIDERS[1],
-        })
+        self.descriptors()
+            .iter()
+            .find(|descriptor| descriptor.id == id)
+            .ok_or_else(|| {
+                TranscribeError::new(
+                    TranscribeErrorKind::ProviderFailed,
+                    format!("transcription provider {id:?} is not registered"),
+                )
+            })
     }
 
     pub fn create(

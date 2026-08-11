@@ -63,6 +63,54 @@ async cmdSetDevBackend(choice: BackendChoice) : Promise<Result<null, AppError>> 
     else return { status: "error", error: e  as any };
 }
 },
+async cmdListTranscribeProviders() : Promise<Result<ProviderInfo[], AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_list_transcribe_providers") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdSaveTranscribeKey(provider: TranscribeProviderId, key: string) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_save_transcribe_key", { provider, key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdTranscribeKeyPresent(provider: TranscribeProviderId) : Promise<Result<boolean, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_transcribe_key_present", { provider }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdClearTranscribeKey(provider: TranscribeProviderId) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_clear_transcribe_key", { provider }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdGetTranscriptionPreferences() : Promise<Result<AppTranscriptionPreferences, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_get_transcription_preferences") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdSetTranscriptionPreferences(preferences: AppTranscriptionPreferences) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_transcription_preferences", { preferences }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };
@@ -497,6 +545,7 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
 export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Other"; message: string }
+export type AppTranscriptionPreferences = { provider_id: TranscribeProviderId; auto_detect_start: boolean }
 export type AudioError = { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" } | { kind: "Decode"; message: string } | { kind: "Encode"; message: string }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
 /**
@@ -627,6 +676,7 @@ export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "
  * it is not a chapter order.
  */
 export type PlanStep = { chapter_index: number; title: string; degraded: boolean }
+export type PricingHintDto = { summary: string; estimated_usd_per_minute: number | null; free_tier_eligible: boolean; docs_url: string }
 export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
 /**
  * Chapter ids the user opted out of uploading. Replaced wholesale
@@ -692,6 +742,7 @@ export type ProjectStage = "new" | "parsed" | "mapped" |
  */
 "transcoded" | "uploaded" | "done"
 export type ProjectSummary = { id: ProjectId; title: string; language: string; receipt_count: number; completed_lesson_count: number; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; queue_cursor?: number; has_matcher_decision?: boolean; has_audio_source?: boolean; last_receipt_degraded?: boolean; chapter_manifest_len?: number | null; confirmed_at?: string | null }
+export type ProviderInfo = { id: TranscribeProviderId; label: string; model: string; pricing_hint: PricingHintDto; data_policy_url: string; key_present: boolean }
 /**
  * Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
  * rehydration. Includes only the fields the Run screen needs to render chips.
@@ -709,6 +760,7 @@ export type SeriesRef = { name: string; index: number | null }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" }
 export type TextError = { kind: "Io"; message: string }
 export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
+export type TranscribeProviderId = "groq" | "open_ai"
 export type TrashEntry = { trash_id: string; project_id: ProjectId; title: string; language: string; trashed_at: string }
 export type UploadResult = { lesson_id: number; lesson_url: string }
 export type WhoAmI = { ok: boolean }
