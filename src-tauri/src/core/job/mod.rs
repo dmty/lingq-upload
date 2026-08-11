@@ -1259,7 +1259,7 @@ fn project_chapters(project: &Project) -> Result<Vec<Chapter>, AppError> {
     ))
 }
 
-async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {
+pub(crate) async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {
     let Some(source) = project.sources.audio.as_ref() else {
         return Err(AppError::Other("project has no audio source".into()));
     };
