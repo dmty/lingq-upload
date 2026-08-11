@@ -97,55 +97,16 @@ impl Transcriber for CountingFakeTranscriber {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum RecordedDetectionEvent {
-    Started,
-    Progress,
-    Result,
-    Error(TranscribeErrorKind),
-    Cancelled,
-}
-
+// ponytail: no-op sink — Task 15 asserts provider/store contracts, not event logs
 #[derive(Clone, Default)]
-pub struct RecordingDetectionSink {
-    events: Arc<Mutex<Vec<RecordedDetectionEvent>>>,
-}
+pub struct RecordingDetectionSink;
 
 impl DetectionSink for RecordingDetectionSink {
-    fn started(&mut self, _: Uuid) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(RecordedDetectionEvent::Started);
-    }
-
-    fn progress(&mut self, _: Uuid, _: f32, _: DetectionPhase) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(RecordedDetectionEvent::Progress);
-    }
-
-    fn result(&mut self, _: Uuid, _: &DetectStartResult) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(RecordedDetectionEvent::Result);
-    }
-
-    fn error(&mut self, _: Uuid, error: &TranscribeError) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(RecordedDetectionEvent::Error(error.kind()));
-    }
-
-    fn cancelled(&mut self, _: Uuid) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(RecordedDetectionEvent::Cancelled);
-    }
+    fn started(&mut self, _: Uuid) {}
+    fn progress(&mut self, _: Uuid, _: f32, _: DetectionPhase) {}
+    fn result(&mut self, _: Uuid, _: &DetectStartResult) {}
+    fn error(&mut self, _: Uuid, _: &TranscribeError) {}
+    fn cancelled(&mut self, _: Uuid) {}
 }
 
 pub struct BackendFixture {
@@ -161,21 +122,19 @@ pub struct BackendFixture {
 }
 
 impl BackendFixture {
-    pub async fn availability(&self) -> Result<DetectionAvailability, AppError> {
-        let project = self
-            .store
+    fn project(&self) -> Result<Project, AppError> {
+        self.store
             .get(&self.id)
             .map_err(|error| AppError::Other(format!("store.get: {error}")))?
-            .ok_or_else(|| AppError::Other("project not found".into()))?;
-        detection_availability_impl(&project, TranscribeProviderId::Groq, true).await
+            .ok_or_else(|| AppError::Other("project not found".into()))
+    }
+
+    pub async fn availability(&self) -> Result<DetectionAvailability, AppError> {
+        detection_availability_impl(&self.project()?, TranscribeProviderId::Groq, true).await
     }
 
     pub async fn detect(&self) -> Result<DetectStartResult, AppError> {
-        let project = self
-            .store
-            .get(&self.id)
-            .map_err(|error| AppError::Other(format!("store.get: {error}")))?
-            .ok_or_else(|| AppError::Other("project not found".into()))?;
+        let project = self.project()?;
         let transcriber = self.transcriber.clone();
         let factory = detection_provider_factory(
             self.store.as_ref(),
