@@ -194,15 +194,10 @@
     availability: DetectionAvailability,
     suppressed: boolean,
   ): boolean {
-    return (
-      preferences.auto_detect_start &&
-      availability.eligible &&
-      availability.key_present &&
-      availability.consent_matches &&
-      availability.existing_evidence == null &&
-      availability.can_start &&
-      !suppressed
-    );
+    // can_start is the backend's own conjunction of eligibility, key, consent
+    // and absent evidence — re-checking the parts here would only let the two
+    // gates drift apart.
+    return preferences.auto_detect_start && availability.can_start && !suppressed;
   }
 
   // Opt-in auto mode runs the assist's own manual start path — no second
