@@ -7,6 +7,7 @@ pub mod events;
 pub mod ingest;
 pub mod lingq;
 mod secrets;
+pub mod transcribe;
 
 pub use codecs::{AudioDecoder, AudioMetadata, PcmFrame, StreamInfo};
 
