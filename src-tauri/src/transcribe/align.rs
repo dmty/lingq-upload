@@ -687,19 +687,42 @@ mod tests {
 
     #[test]
     fn transcript_probe_respects_400_scalar_cap() {
-        let unique = "UNIQUEBOUNDARYMARKERXYZABC";
-        // Head probe is first 400 scalars: Early contains unique; Late only past 400.
-        let early = format!("{}{}", unique, "a".repeat(400));
-        let late_only = format!("{}{}", "b".repeat(450), unique);
+        // Shared opening ≥267 scalars → probe_len caps at 400.
+        let shared = format!("HEADPROBE{}", "d".repeat(260));
+        assert!(normalize_for_alignment(&shared).chars().count() >= 267);
+        // Early: shared inside first 400. Late: shared only after scalar 400.
+        let early = format!("{}{}", shared, "a".repeat(200));
+        let late_only = format!("{}{}", "b".repeat(400), shared);
         let chapters = chapters_with_bodies(&[("Late", &late_only), ("Early", &early)]);
-        let head = transcript_match_head(unique, &chapters, &AlignmentConfig::default());
+        let head = transcript_match_head(&shared, &chapters, &AlignmentConfig::default());
         assert_eq!(head.confident_id(), Some(&chapters[1].id));
-        assert!(head
+        let late_score = head
             .top()
             .iter()
             .find(|c| c.chapter_id == chapters[0].id)
-            .map(|c| c.score < 0.45)
-            .unwrap_or(true));
+            .map(|c| c.score)
+            .unwrap_or(0.0);
+        assert!(
+            late_score < 0.45,
+            "late-only content past probe must not score high: {late_score}"
+        );
+    }
+
+    #[test]
+    fn transcript_lcs_score_uses_min_not_max_denominator() {
+        // LCS=10 over transcript=20, probe=30 → min-denom 10/20=0.5 (max would be 10/30).
+        let body = format!("{}{}", "abcdefghij", "z".repeat(40));
+        let chapters = chapters_with_bodies(&[("Only", &body)]);
+        let head = transcript_match_head(
+            "abcdefghijabcdefghij",
+            &chapters,
+            &AlignmentConfig::default(),
+        );
+        let score = head.top()[0].score;
+        assert!(
+            (score - 0.5).abs() < 1e-5,
+            "expected LCS/min score 0.5, got {score}"
+        );
     }
 
     #[test]

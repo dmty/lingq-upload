@@ -59,6 +59,26 @@ static BUILT_IN_PROVIDERS: [ProviderDescriptor; 2] = [
     },
 ];
 
+/// ISO 639-1 alpha-2 codes (sorted) for safe provider language hints.
+const ISO_639_1: &[&str] = &[
+    "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az", "ba", "be", "bg", "bh",
+    "bi", "bm", "bn", "bo", "br", "bs", "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv", "cy", "da",
+    "de", "dv", "dz", "ee", "el", "en", "eo", "es", "et", "eu", "fa", "ff", "fi", "fj", "fo", "fr",
+    "fy", "ga", "gd", "gl", "gn", "gu", "gv", "ha", "he", "hi", "ho", "hr", "ht", "hu", "hy", "hz",
+    "ia", "id", "ie", "ig", "ii", "ik", "io", "is", "it", "iu", "ja", "jv", "ka", "kg", "ki", "kj",
+    "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku", "kv", "kw", "ky", "la", "lb", "lg", "li", "ln",
+    "lo", "lt", "lu", "lv", "mg", "mh", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "na", "nb",
+    "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv", "ny", "oc", "oj", "om", "or", "os", "pa", "pi",
+    "pl", "ps", "pt", "qu", "rm", "rn", "ro", "ru", "rw", "sa", "sc", "sd", "se", "sg", "si", "sk",
+    "sl", "sm", "sn", "so", "sq", "sr", "ss", "st", "su", "sv", "sw", "ta", "te", "tg", "th", "ti",
+    "tk", "tl", "tn", "to", "tr", "ts", "tt", "tw", "ty", "ug", "uk", "ur", "uz", "ve", "vi", "vo",
+    "wa", "wo", "xh", "yi", "yo", "za", "zh", "zu",
+];
+
+fn is_iso_639_1(code: &str) -> bool {
+    ISO_639_1.binary_search(&code).is_ok()
+}
+
 /// Map a LingQ project language to a provider ISO-639-1 hint when safe.
 pub fn provider_language_hint(
     project_language: &str,
@@ -73,6 +93,9 @@ pub fn provider_language_hint(
         code if code.len() == 2 && code.chars().all(|c| c.is_ascii_lowercase()) => code,
         _ => return None,
     };
+    if !is_iso_639_1(mapped) {
+        return None;
+    }
     if !descriptor.supported_languages.is_empty()
         && !descriptor.supported_languages.contains(&mapped)
     {
@@ -285,5 +308,7 @@ mod tests {
         assert_eq!(provider_language_hint("eng-", d), None);
         assert_eq!(provider_language_hint("", d), None);
         assert_eq!(provider_language_hint("e", d), None);
+        // Non-ISO two-letter codes must not pass when supported_languages is empty.
+        assert_eq!(provider_language_hint("zz", d), None);
     }
 }
