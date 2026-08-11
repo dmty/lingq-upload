@@ -316,6 +316,15 @@ fn detection_inputs_unchanged(resolved: &Project, current: &Project) -> bool {
         && current.confirmed_at == resolved.confirmed_at
 }
 
+fn stale_text_source(error: AppError) -> AppError {
+    match error {
+        AppError::Text(_) => {
+            AppError::Unsupported("text source changed; rerun or refine detection".into())
+        }
+        error => error,
+    }
+}
+
 pub async fn confirm_detected_range_impl(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
@@ -328,7 +337,8 @@ pub async fn confirm_detected_range_impl(
         .map_err(|error| AppError::Other(format!("store.get: {error}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
     let inspection = inspect_mismatch(&project)
-        .await?
+        .await
+        .map_err(stale_text_source)?
         .filter(|inspection| {
             detection_eligible(
                 inspection.condition,
@@ -340,9 +350,13 @@ pub async fn confirm_detected_range_impl(
             AppError::Unsupported("project is not eligible for text-range detection".into())
         })?;
     if preview.range != selected_range {
-        seed_bounded_mapping(&project, &preview.range).await?;
+        seed_bounded_mapping(&project, &preview.range)
+            .await
+            .map_err(stale_text_source)?;
     }
-    let mapping = seed_bounded_mapping(&project, &selected_range).await?;
+    let mapping = seed_bounded_mapping(&project, &selected_range)
+        .await
+        .map_err(stale_text_source)?;
     let now = Utc::now();
     let evidence = DetectionEvidence {
         provider_id: preview.provider_id,
