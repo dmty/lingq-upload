@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Barrier, Mutex};
 use std::time::Duration;
 
 use lingq_upload_lib::transcribe::{
@@ -224,6 +224,55 @@ async fn delayed_response_maps_to_timeout() {
 
     assert_eq!(error.kind(), TranscribeErrorKind::Timeout);
     assert!(!error.to_string().contains("test-secret"));
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn response_headers_after_connect_timeout_are_accepted() {
+    let mut server = Server::new_async().await;
+    let request_seen = Arc::new(tokio::sync::Notify::new());
+    let seen_for_mock = Arc::clone(&request_seen);
+    let response_gate = Arc::new(Barrier::new(2));
+    let gate_for_mock = Arc::clone(&response_gate);
+    let mock = server
+        .mock("POST", "/openai/v1/audio/transcriptions")
+        .with_status(200)
+        .with_body_from_request(move |_| {
+            seen_for_mock.notify_one();
+            gate_for_mock.wait();
+            b"eventual words".to_vec()
+        })
+        .create_async()
+        .await;
+    let (dir, audio) = audio_fixture();
+    let http = Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+    let client = transcriber(
+        descriptor(TranscribeProviderId::Groq),
+        "test-secret",
+        http,
+        format!("{}/openai/v1/audio/transcriptions", server.url()),
+    );
+    let transcription = tokio::spawn(async move {
+        let _dir = dir;
+        client.transcribe(&audio, &TranscribeOpts::default()).await
+    });
+
+    request_seen.notified().await;
+    tokio::time::pause();
+    let release_response = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(11)).await;
+        response_gate.wait();
+        tokio::time::resume();
+    });
+
+    let result = transcription.await.expect("transcription task");
+    release_response.await.expect("response release task");
+    let transcript = result.expect("response within the overall timeout");
+    assert_eq!(transcript.text, "eventual words");
     mock.assert_async().await;
 }
 

@@ -13,7 +13,6 @@ use super::{
     Transcript,
 };
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const ERROR_EXCERPT_BYTES: usize = 512 * 4;
 const ERROR_EXCERPT_SCALARS: usize = 512;
@@ -101,10 +100,7 @@ impl Transcriber for WhisperLikeTranscriber {
                 .multipart(form);
 
             tokio::time::timeout(REQUEST_TIMEOUT, async {
-                let response = tokio::time::timeout(CONNECT_TIMEOUT, request.send())
-                    .await
-                    .map_err(|_| timeout_error())?
-                    .map_err(transport_error)?;
+                let response = request.send().await.map_err(transport_error)?;
 
                 if !response.status().is_success() {
                     let status = response.status();
