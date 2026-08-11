@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
+
   import {
     commands,
     type DetectionAvailability,
@@ -19,6 +21,9 @@
 
   let modalOpen = $state(false);
   let trigger = $state<HTMLButtonElement | null>(null);
+  let destroyed = false;
+
+  onDestroy(() => (destroyed = true));
 
   function requestDetection(event: MouseEvent) {
     trigger = event.currentTarget as HTMLButtonElement;
@@ -27,17 +32,20 @@
 
   async function acceptConsent() {
     if (!availability) return;
+    const consentProjectId = projectId;
     const accepted = await commands.cmdAcceptTranscribeConsent(
-      projectId,
+      consentProjectId,
       availability.active_provider.id,
     );
     if (accepted.status === "error") {
       throw new Error(appErrorMessage(accepted.error));
     }
-    const refreshed = await commands.cmdDetectionAvailability(projectId);
+    if (destroyed || projectId !== consentProjectId) return;
+    const refreshed = await commands.cmdDetectionAvailability(consentProjectId);
     if (refreshed.status === "error") {
       throw new Error(appErrorMessage(refreshed.error));
     }
+    if (destroyed || projectId !== consentProjectId) return;
     onAvailabilityChanged(refreshed.data);
     modalOpen = false;
   }

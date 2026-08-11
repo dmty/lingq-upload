@@ -69,6 +69,16 @@ function multiProjectScript(): string {
   })();`;
 }
 
+async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
+  return page.evaluate(
+    (command) =>
+      ((window as any).__invokeLog__ as string[]).filter(
+        (entry) => entry === command,
+      ).length,
+    cmd,
+  );
+}
+
 test.describe("match navigation", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
@@ -101,6 +111,54 @@ test.describe("match navigation", () => {
     await expect(page.getByText("A Atom 1")).toHaveCount(0);
     await expect(page.getByText("A Atom 2")).toHaveCount(0);
     await expect(page.getByText("Book A — Toki")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Detect audio's text range" }),
+    ).toHaveCount(0);
+  });
+
+  test("an in-flight consent refresh cannot overwrite the next project", async ({
+    page,
+  }) => {
+    await page.goto(`/match/${PROJECT_B}`);
+    await expect(page.getByText("Book B — Silent Witch")).toBeVisible();
+    await page.evaluate(() => {
+      (window as any).__transcribeConsentGate__ = new Promise((resolve) => {
+        (window as any).__releaseTranscribeConsent__ = resolve;
+      });
+    });
+
+    await page.evaluate((href) => {
+      const link = document.createElement("a");
+      link.href = href;
+      document.body.append(link);
+      link.click();
+    }, `/match/${PROJECT_A}`);
+    await expect(page.getByText("Book A — Toki")).toBeVisible();
+    await page
+      .getByRole("button", { name: "Detect audio's text range" })
+      .click();
+    await page.getByRole("button", { name: "Accept and continue" }).click();
+    await expect(page.getByRole("button", { name: "Saving…" })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/match/${PROJECT_B}$`));
+    await expect(page.getByText("Book B — Silent Witch")).toBeVisible();
+    const refreshesBeforeRelease = await invokeCount(
+      page,
+      "cmd_detection_availability",
+    );
+
+    await page.evaluate(async () => {
+      (window as any).__releaseTranscribeConsent__();
+      await (window as any).__transcribeConsentGate__;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    });
+    expect(await invokeCount(page, "cmd_detection_availability")).toBe(
+      refreshesBeforeRelease,
+    );
+
     await expect(
       page.getByRole("button", { name: "Detect audio's text range" }),
     ).toHaveCount(0);
