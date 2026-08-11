@@ -28,6 +28,7 @@ export const tauriStubInitScript = `
     const MAPPING_KEY = "__mappingByProject__:" + WORKER_NS;
     const TRANSCRIPTION_PREFERENCES_KEY = "__transcriptionPreferences__:" + WORKER_NS;
     const TRANSCRIPTION_KEYS_KEY = "__transcriptionKeyPresence__:" + WORKER_NS;
+    const TRANSCRIPTION_CONSENTS_KEY = "__transcriptionConsents__:" + WORKER_NS;
     function readSkipped() {
         try {
             return JSON.parse(sessionStorage.getItem(SKIPPED_KEY) || "{}");
@@ -72,15 +73,63 @@ export const tauriStubInitScript = `
     }
     function readTranscriptionKeys() {
         try {
-            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_KEYS_KEY)) || {};
+            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_KEYS_KEY)) ||
+                window.__transcriptionKeys__ || {};
         } catch {
-            return {};
+            return window.__transcriptionKeys__ || {};
         }
     }
     function writeTranscriptionKeys(keys) {
         try {
             sessionStorage.setItem(TRANSCRIPTION_KEYS_KEY, JSON.stringify(keys));
         } catch {}
+    }
+    function readTranscriptionConsents() {
+        try {
+            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_CONSENTS_KEY)) ||
+                window.__transcriptionConsents__ || {};
+        } catch {
+            return window.__transcriptionConsents__ || {};
+        }
+    }
+    function writeTranscriptionConsents(consents) {
+        try {
+            sessionStorage.setItem(
+                TRANSCRIPTION_CONSENTS_KEY,
+                JSON.stringify(consents),
+            );
+        } catch {}
+    }
+    function transcriptionProviders() {
+        const keys = readTranscriptionKeys();
+        return [
+            {
+                id: "groq",
+                label: "Groq",
+                model: "whisper-large-v3-turbo",
+                pricing_hint: {
+                    summary: "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+                    estimated_usd_per_minute: 0.0006666666666666666,
+                    free_tier_eligible: true,
+                    docs_url: "https://console.groq.com/docs/speech-to-text",
+                },
+                data_policy_url: "https://console.groq.com/docs/your-data",
+                key_present: keys.groq === true,
+            },
+            {
+                id: "open_ai",
+                label: "OpenAI",
+                model: "whisper-1",
+                pricing_hint: {
+                    summary: "No free tier; current reference $0.006/min",
+                    estimated_usd_per_minute: 0.006,
+                    free_tier_eligible: false,
+                    docs_url: "https://developers.openai.com/api/docs/models/whisper-1",
+                },
+                data_policy_url: "https://platform.openai.com/docs/models/default-usage-policies-by-endpoint",
+                key_present: keys.open_ai === true,
+            },
+        ];
     }
     window.__pickerState__ = {
         get skippedByProject() {
@@ -387,37 +436,7 @@ export const tauriStubInitScript = `
             window.__lingqKey__ = null;
             return null;
         },
-        cmd_list_transcribe_providers: () => {
-            const keys = readTranscriptionKeys();
-            return [
-                {
-                    id: "groq",
-                    label: "Groq",
-                    model: "whisper-large-v3-turbo",
-                    pricing_hint: {
-                        summary: "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
-                        estimated_usd_per_minute: 0.0006666666666666666,
-                        free_tier_eligible: true,
-                        docs_url: "https://console.groq.com/docs/speech-to-text",
-                    },
-                    data_policy_url: "https://console.groq.com/docs/your-data",
-                    key_present: keys.groq === true,
-                },
-                {
-                    id: "open_ai",
-                    label: "OpenAI",
-                    model: "whisper-1",
-                    pricing_hint: {
-                        summary: "No free tier; current reference $0.006/min",
-                        estimated_usd_per_minute: 0.006,
-                        free_tier_eligible: false,
-                        docs_url: "https://developers.openai.com/api/docs/models/whisper-1",
-                    },
-                    data_policy_url: "https://platform.openai.com/docs/models/default-usage-policies-by-endpoint",
-                    key_present: keys.open_ai === true,
-                },
-            ];
-        },
+        cmd_list_transcribe_providers: () => transcriptionProviders(),
         cmd_save_transcribe_key: (args) => {
             const keys = readTranscriptionKeys();
             keys[args && args.provider] = Boolean(args && args.key);
@@ -440,6 +459,62 @@ export const tauriStubInitScript = `
             }
             writeTranscriptionPreferences(args && args.preferences);
             return null;
+        },
+        cmd_detection_availability: (args) => {
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const byProject = window.__detectionAvailabilityByProject__ || {};
+            const base = byProject[key] || window.__detectionAvailability__ || {
+                eligible: false,
+                condition: null,
+                chapter_count: 0,
+                track_count: 0,
+                existing_evidence: null,
+            };
+            const providerId = readTranscriptionPreferences().provider_id;
+            const configuredProvider = transcriptionProviders().find(
+                (provider) => provider.id === providerId,
+            );
+            const keyPresent = base.key_present ?? configuredProvider.key_present;
+            const activeProvider = {
+                ...configuredProvider,
+                key_present: keyPresent,
+            };
+            const consentMatches =
+                readTranscriptionConsents()[key] === activeProvider.id;
+            return {
+                ...base,
+                active_provider: activeProvider,
+                key_present: keyPresent,
+                consent_matches: consentMatches,
+                can_start:
+                    base.eligible &&
+                    base.existing_evidence == null &&
+                    keyPresent &&
+                    consentMatches,
+            };
+        },
+        cmd_accept_transcribe_consent: async (args) => {
+            window.__transcribeConsentCalls__ = window.__transcribeConsentCalls__ || [];
+            window.__transcribeConsentCalls__.push(args);
+            if (window.__failNextTranscribeConsent__) {
+                window.__failNextTranscribeConsent__ = false;
+                throw { kind: "Other", message: "Could not save transcription consent." };
+            }
+            if (window.__transcribeConsentGate__) {
+                await window.__transcribeConsentGate__;
+            }
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const consents = readTranscriptionConsents();
+            consents[key] = args && args.providerId;
+            writeTranscriptionConsents(consents);
+            return null;
+        },
+        cmd_detect_start_offset: () => {
+            window.__detectionStartCalls__ =
+                (window.__detectionStartCalls__ || 0) + 1;
+            return { kind: "no_transcript", reason: "content_poor" };
         },
         cmd_seed_mapping: () => null,
         // Dev backend info — defaults to file backend, debug mode off.

@@ -127,6 +127,16 @@ export function appErrorMessage(e: AppError): string {
       return mappingMessage(e.message);
     case "MappingStaleOp":
       return "This mapping was changed elsewhere. Reloading the latest version.";
+    case "DetectedRange":
+      switch (e.message.kind) {
+        case "MissingBoundary":
+        case "DuplicateBoundary":
+          return e.message.message;
+        case "EndBeforeStart":
+          return "The detected end chapter comes before the start chapter.";
+        case "EmptyRange":
+          return "The detected chapter range is empty.";
+      }
     case "Transcribe":
       return transcribeMessage(e.message);
     case "Other":

@@ -9,6 +9,7 @@
     type AbsorbPolicy,
     type AudioSource,
     type BucketPreview,
+    type DetectionAvailability,
     type MappingOp,
     type MismatchCondition,
     type MismatchResponse,
@@ -27,6 +28,7 @@
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
   import StepIndicator from "$lib/components/StepIndicator.svelte";
+  import DetectionAssist from "$lib/components/DetectionAssist.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -53,6 +55,7 @@
   let projectIdValue = $state<ProjectIdType | null>(null);
   let absorbPolicy = $state<AbsorbPolicy>("forward");
   let settingsOpen = $state(false);
+  let detectionAvailability = $state<DetectionAvailability | null>(null);
 
   // Audio-expand affordance (sub-case A only: no receipts yet). Toggled by the
   // "+ Add more audio" button; reveals a DropZone seeded from the project's
@@ -101,6 +104,10 @@
       }
       projectIdValue = mapping.projectId;
       absorbPolicy = mapping.absorbPolicy;
+      if (mapping.projectId) {
+        await refreshDetectionAvailability(key, mapping.projectId);
+        if (cancelled || projectKey !== key) return;
+      }
       await refreshAudioState(key);
       if (cancelled || projectKey !== key) return;
       if (applyParams()) {
@@ -157,6 +164,15 @@
     audioOriginFolder = null;
   }
 
+  async function refreshDetectionAvailability(
+    key: string,
+    projectId: ProjectIdType,
+  ) {
+    const result = await commands.cmdDetectionAvailability(projectId);
+    if (projectKey !== key) return;
+    detectionAvailability = result.status === "ok" ? result.data : null;
+  }
+
   function resetProjectState() {
     title = "Untitled";
     chapters = 0;
@@ -173,6 +189,7 @@
     projectIdValue = null;
     absorbPolicy = "forward";
     settingsOpen = false;
+    detectionAvailability = null;
     audioPaths = [];
     audioOriginFolder = null;
     receiptCount = 0;
@@ -740,7 +757,9 @@
             onRemove={(id) => mapping.removeChapter(id)}
             onMove={(id, trackId) => mapping.moveChapter(id, trackId)}
             onRestore={(id) =>
-              void mapping.setSkipped(mapping.skippedIds.filter((x) => x !== id))}
+              void mapping.setSkipped(
+                mapping.skippedIds.filter((x) => x !== id),
+              )}
             onContinue={handleMappingContinue}
           />
         </div>
@@ -812,6 +831,14 @@
         {/if}
 
         <MismatchEvidence {title} {chapters} {tracks} {condition} />
+
+        {#if projectIdValue}
+          <DetectionAssist
+            projectId={projectIdValue}
+            availability={detectionAvailability}
+            onAvailabilityChanged={(next) => (detectionAvailability = next)}
+          />
+        {/if}
 
         <div class="space-y-2">
           {#each options.filter((o) => o !== "cancel") as opt (opt)}

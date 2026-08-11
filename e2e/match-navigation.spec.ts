@@ -49,6 +49,23 @@ function multiProjectScript(): string {
       ${JSON.stringify(PROJECT_A)}: ${JSON.stringify(inspectionA)},
       ${JSON.stringify(PROJECT_B)}: ${JSON.stringify(inspectionB)},
     };
+    window.__transcriptionKeys__ = { groq: true };
+    window.__detectionAvailabilityByProject__ = {
+      ${JSON.stringify(PROJECT_A)}: {
+        eligible: true,
+        condition: "count_off",
+        chapter_count: 9,
+        track_count: 5,
+        existing_evidence: null,
+      },
+      ${JSON.stringify(PROJECT_B)}: {
+        eligible: false,
+        condition: "count_off",
+        chapter_count: 85,
+        track_count: 6,
+        existing_evidence: null,
+      },
+    };
   })();`;
 }
 
@@ -64,11 +81,15 @@ test.describe("match navigation", () => {
     await page.goto(`/match/${PROJECT_A}`);
 
     // Project A: title, counts, and Proposed split all visible.
-    await expect(page.getByRole("heading", { name: "Resolve mismatch" }))
-      .toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Resolve mismatch" }),
+    ).toBeVisible();
     await expect(page.getByText("Book A — Toki")).toBeVisible();
     await expect(page.getByText("Proposed split")).toBeVisible();
     await expect(page.getByText("A Atom 1")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Detect audio's text range" }),
+    ).toBeVisible();
 
     // Cross-project navigation: simulates Back → click another book in the
     // library. SvelteKit reuses the page component across the same route.
@@ -80,5 +101,8 @@ test.describe("match navigation", () => {
     await expect(page.getByText("A Atom 1")).toHaveCount(0);
     await expect(page.getByText("A Atom 2")).toHaveCount(0);
     await expect(page.getByText("Book A — Toki")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Detect audio's text range" }),
+    ).toHaveCount(0);
   });
 });
