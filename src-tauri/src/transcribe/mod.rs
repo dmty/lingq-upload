@@ -10,6 +10,7 @@ mod whisper_like;
 
 pub use error::{TranscribeError, TranscribeErrorKind};
 pub use provider::{PricingHint, ProviderCatalog, ProviderDescriptor};
+pub use whisper_like::WhisperLikeTranscriber;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]

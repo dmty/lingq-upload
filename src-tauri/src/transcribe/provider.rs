@@ -3,8 +3,7 @@ use secrecy::SecretString;
 use serde::Serialize;
 use specta::Type;
 
-use super::whisper_like::WhisperLikeTranscriber;
-use super::{TranscribeError, TranscribeProviderId, Transcriber};
+use super::{TranscribeError, TranscribeProviderId, Transcriber, WhisperLikeTranscriber};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Type)]
 pub struct ProviderDescriptor {
@@ -237,6 +236,6 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(error.kind(), TranscribeErrorKind::Io);
+        assert_eq!(error.kind(), TranscribeErrorKind::Audio);
     }
 }

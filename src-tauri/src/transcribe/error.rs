@@ -5,10 +5,12 @@ use thiserror::Error;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum TranscribeErrorKind {
-    Io,
-    Transport,
-    Provider,
-    InvalidResponse,
+    Audio,
+    Network,
+    Timeout,
+    Unauthorized,
+    RateLimit,
+    ProviderFailed,
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq, Serialize, Deserialize, Type)]
