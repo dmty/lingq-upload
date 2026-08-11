@@ -19,8 +19,12 @@ use lingq_upload_lib::core::project::{
     SCHEMA_V1,
 };
 use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
+use lingq_upload_lib::error::AppError;
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::lingq::{LanguageCode, LingqClient};
+use lingq_upload_lib::transcribe::{
+    AlignSource, DetectedRange, DetectedRangeError, DetectionEvidence,
+};
 
 #[derive(Default, Clone)]
 struct RecordingSink {
@@ -202,6 +206,63 @@ fn mock_imports(server: &mut ServerGuard, expected: usize, start_id: i64) {
             .expect(1)
             .create();
     }
+}
+
+#[tokio::test]
+async fn stale_detected_range_emits_terminal_failure() {
+    let fixture = make_fixture(3).await;
+    fixture
+        .store
+        .update(&fixture.project_id, &mut |project| {
+            project.matcher_decision = Some(MatcherDecision {
+                condition: MismatchCondition::ManyToFew,
+                response: MismatchResponse::SplitProportional,
+                chapter_count: 3,
+                track_count: 3,
+                user_overrode: false,
+                decided_at: Utc::now(),
+                detection: Some(DetectionEvidence {
+                    provider_id: None,
+                    align_source: AlignSource::Title,
+                    range: DetectedRange {
+                        start_chapter_id: ChapterId("missing-boundary".into()),
+                        end_chapter_id: ChapterId::from_order(2),
+                    },
+                    confidence: 1.0,
+                    transcript_head_preview: None,
+                    transcript_tail_preview: None,
+                    detected_at: Utc::now(),
+                }),
+            });
+        })
+        .unwrap();
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").expect("valid lang"),
+        fixture.server.url(),
+    ));
+    let mut sink = RecordingSink::default();
+
+    let error = run_project_job(
+        fixture.store,
+        client,
+        fixture.project_id,
+        CancellationToken::new(),
+        &mut sink,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        AppError::DetectedRange(DetectedRangeError::MissingBoundary(ref id))
+            if id == "missing-boundary"
+    ));
+    let events = sink.events.lock().unwrap().clone();
+    assert!(matches!(events.as_slice(), [
+        RecordedEvent::Started,
+        RecordedEvent::Result(false, payload),
+    ] if payload["error"].as_str().is_some_and(|message| message.contains("missing-boundary"))));
 }
 
 #[tokio::test]

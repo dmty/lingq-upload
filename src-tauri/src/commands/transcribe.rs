@@ -13,17 +13,20 @@ use uuid::Uuid;
 use super::jobs::{register_caller_job, JobCancelMap};
 use super::{app_data_dir, secrets};
 use crate::core::identity::ProjectId;
-use crate::core::job::{detection_chapters, inspect_mismatch, resolve_audio_tracks};
-use crate::core::matcher::MismatchCondition;
-use crate::core::project::Project;
+use crate::core::job::{
+    detection_chapters, inspect_mismatch, resolve_audio_tracks, seed_bounded_mapping,
+};
+use crate::core::matcher::{MismatchCondition, MismatchResponse};
+use crate::core::project::{MatcherDecision, Project};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::JobEmitter;
 use crate::secrets::{KeyringBackend, SecretsStore, GROQ_ACCOUNT, OPENAI_ACCOUNT};
 use crate::transcribe::{
-    consent_matches, detect_start_offset, AlignmentConfig, DetectStartResult, DetectionEvidence,
-    DetectionPreview, DetectionSink, ProviderCatalog, ProviderDescriptor, ProviderFactory,
-    TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber,
+    bound_preview, consent_matches, detect_start_offset, detection_provider_matches_source,
+    AlignmentConfig, DetectStartResult, DetectedRange, DetectionEvidence, DetectionPreview,
+    DetectionSink, ProviderCatalog, ProviderDescriptor, ProviderFactory, TranscribeConsent,
+    TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber,
 };
 
 const PREFERENCES_FILE: &str = "transcription-preferences.json";
@@ -279,6 +282,187 @@ pub async fn cmd_detect_start_offset(
     );
     let mut emitter = JobEmitter::new(&app, job_id);
     detect_start_offset_impl(&project, cancels.inner(), job_id, &mut emitter, factory).await
+}
+
+fn validate_detection_preview(preview: &DetectionPreview) -> Result<(), AppError> {
+    if !preview.confidence.is_finite() || !(0.0..=1.0).contains(&preview.confidence) {
+        return Err(AppError::Unsupported(
+            "detection confidence must be finite and within 0.0..=1.0".into(),
+        ));
+    }
+    if !detection_provider_matches_source(preview.align_source, preview.provider_id) {
+        return Err(AppError::Unsupported(
+            "detection provider does not match the alignment source".into(),
+        ));
+    }
+    let bounded = |value: Option<&str>| bound_preview(value).as_deref() == value;
+    if !bounded(preview.transcript_head_preview.as_deref())
+        || !bounded(preview.transcript_tail_preview.as_deref())
+    {
+        return Err(AppError::Unsupported(
+            "detection transcript previews must not exceed 240 Unicode scalars".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn detection_inputs_unchanged(resolved: &Project, current: &Project) -> bool {
+    current.sources == resolved.sources
+        && current.cover_source_href == resolved.cover_source_href
+        && current.skipped_chapters == resolved.skipped_chapters
+        && current.receipts == resolved.receipts
+        && current.matcher_decision == resolved.matcher_decision
+        && current.mapping == resolved.mapping
+        && current.confirmed_at == resolved.confirmed_at
+}
+
+pub async fn confirm_detected_range_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    selected_range: DetectedRange,
+    preview: DetectionPreview,
+) -> Result<(), AppError> {
+    validate_detection_preview(&preview)?;
+    let project = store
+        .get(project_id)
+        .map_err(|error| AppError::Other(format!("store.get: {error}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    let inspection = inspect_mismatch(&project)
+        .await?
+        .filter(|inspection| {
+            detection_eligible(
+                inspection.condition,
+                inspection.chapter_count,
+                inspection.track_count,
+            )
+        })
+        .ok_or_else(|| {
+            AppError::Unsupported("project is not eligible for text-range detection".into())
+        })?;
+    if preview.range != selected_range {
+        seed_bounded_mapping(&project, &preview.range).await?;
+    }
+    let mapping = seed_bounded_mapping(&project, &selected_range).await?;
+    let now = Utc::now();
+    let evidence = DetectionEvidence {
+        provider_id: preview.provider_id,
+        align_source: preview.align_source,
+        range: selected_range,
+        confidence: preview.confidence,
+        transcript_head_preview: preview.transcript_head_preview,
+        transcript_tail_preview: preview.transcript_tail_preview,
+        detected_at: now,
+    };
+    let decision = MatcherDecision {
+        condition: inspection.condition,
+        response: MismatchResponse::SplitProportional,
+        chapter_count: inspection.chapter_count,
+        track_count: inspection.track_count,
+        user_overrode: inspection.preselect != MismatchResponse::SplitProportional,
+        decided_at: now,
+        detection: Some(evidence),
+    };
+    let mut confirmed = false;
+    store
+        .update(project_id, &mut |current| {
+            if detection_inputs_unchanged(&project, current) {
+                current.matcher_decision = Some(decision.clone());
+                current.mapping = Some(mapping.clone());
+                current.confirmed_at = None;
+                confirmed = true;
+            }
+        })
+        .map_err(|error| AppError::Other(format!("store.update: {error}")))?;
+    if !confirmed {
+        return Err(AppError::Unsupported(
+            "project changed while confirming detection; reload and try again".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_confirm_detected_range(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    selected_range: DetectedRange,
+    evidence: DetectionPreview,
+) -> Result<(), AppError> {
+    confirm_detected_range_impl(
+        store.inner().as_ref(),
+        &project_id,
+        selected_range,
+        evidence,
+    )
+    .await
+}
+
+pub fn reset_detection_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+) -> Result<(), AppError> {
+    let project = store
+        .get(project_id)
+        .map_err(|error| AppError::Other(format!("store.get: {error}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    if !project.receipts.is_empty() {
+        return Err(AppError::Unsupported(
+            "cannot reset detection after uploads have begun".into(),
+        ));
+    }
+    if project
+        .matcher_decision
+        .as_ref()
+        .and_then(|decision| decision.detection.as_ref())
+        .is_none()
+    {
+        return Err(AppError::Unsupported(
+            "project has no confirmed detection to reset".into(),
+        ));
+    }
+
+    let mut reset = false;
+    let mut uploads_started = false;
+    store
+        .update(project_id, &mut |project| {
+            if !project.receipts.is_empty() {
+                uploads_started = true;
+                return;
+            }
+            if project
+                .matcher_decision
+                .as_ref()
+                .and_then(|decision| decision.detection.as_ref())
+                .is_some()
+            {
+                project.matcher_decision = None;
+                project.mapping = None;
+                project.confirmed_at = None;
+                reset = true;
+            }
+        })
+        .map_err(|error| AppError::Other(format!("store.update: {error}")))?;
+    if uploads_started {
+        return Err(AppError::Unsupported(
+            "cannot reset detection after uploads have begun".into(),
+        ));
+    }
+    if !reset {
+        return Err(AppError::Unsupported(
+            "confirmed detection changed; reload the project and try again".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_reset_detection(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<(), AppError> {
+    reset_detection_impl(store.inner().as_ref(), &project_id)
 }
 
 fn validate_provider(provider: TranscribeProviderId) -> Result<(), AppError> {

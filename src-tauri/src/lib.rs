@@ -37,6 +37,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::transcribe::cmd_accept_transcribe_consent,
             commands::transcribe::cmd_detection_availability,
             commands::transcribe::cmd_detect_start_offset,
+            commands::transcribe::cmd_confirm_detected_range,
+            commands::transcribe::cmd_reset_detection,
             commands::ingest::manual_source_from_files,
             commands::ingest::cmd_ingest_scan,
             commands::files::cmd_expand_audio_dir,

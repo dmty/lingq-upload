@@ -173,6 +173,14 @@ pub async fn run_project_job(
     // per-chapter steps for it are never created.
     let full_chapter_count = chapters.len();
     let leftover_base = leftover_index_base(&chapters);
+    let chapters = match detected_chapter_slice(&project, &chapters) {
+        Ok(chapters) => chapters,
+        Err(error) => {
+            let error = AppError::from(error);
+            sink.result(false, serde_json::json!({"error": error.to_string()}));
+            return Err(error);
+        }
+    };
     let chapters = eligible_chapters(&chapters, &skipped_set, &project.receipts);
 
     tracing::info!(
@@ -626,6 +634,7 @@ pub async fn plan_preview(
 
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let leftover_base = leftover_index_base(&chapters);
+    let chapters = detected_chapter_slice(&project, &chapters)?;
     let chapters = eligible_chapters(&chapters, &skipped, &project.receipts);
 
     match build_plan(&project, &chapters, &tracks, leftover_base) {
@@ -886,6 +895,20 @@ fn bounded_chapter_slice<'a>(
         return Err(DetectedRangeError::EndBeforeStart);
     }
     Ok(&chapters[start..=end])
+}
+
+fn detected_chapter_slice<'a>(
+    project: &Project,
+    chapters: &'a [Chapter],
+) -> Result<&'a [Chapter], DetectedRangeError> {
+    match project
+        .matcher_decision
+        .as_ref()
+        .and_then(|decision| decision.detection.as_ref())
+    {
+        Some(evidence) => bounded_chapter_slice(chapters, &evidence.range),
+        None => Ok(chapters),
+    }
 }
 
 /// Re-resolve a detected range against the project's current eligible chapter

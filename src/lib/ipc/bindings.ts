@@ -135,6 +135,22 @@ async cmdDetectStartOffset(projectId: ProjectId, jobId: string) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
+async cmdConfirmDetectedRange(projectId: ProjectId, selectedRange: DetectedRange, evidence: DetectionPreview) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_confirm_detected_range", { projectId, selectedRange, evidence }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdResetDetection(projectId: ProjectId) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_reset_detection", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };

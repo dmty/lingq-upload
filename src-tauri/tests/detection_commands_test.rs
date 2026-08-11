@@ -4,26 +4,32 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
+use chrono::{Duration as ChronoDuration, Utc};
 use futures::future::BoxFuture;
 use lingq_upload_lib::commands::jobs::JobCancelMap;
+use lingq_upload_lib::commands::project::confirm_mapping_impl;
 use lingq_upload_lib::commands::transcribe::{
-    detect_start_offset_impl, detection_availability_impl, detection_eligible,
-    detection_provider_factory, load_detection_authorization,
+    confirm_detected_range_impl, detect_start_offset_impl, detection_availability_impl,
+    detection_eligible, detection_provider_factory, load_detection_authorization,
+    reset_detection_impl,
 };
 use lingq_upload_lib::core::epub::ChapterId;
 use lingq_upload_lib::core::identity::ProjectId;
-use lingq_upload_lib::core::job::inspect_mismatch;
-use lingq_upload_lib::core::matcher::{MismatchCondition, MismatchResponse};
-use lingq_upload_lib::core::project::{MatcherDecision, Project};
-use lingq_upload_lib::core::store::{InMemoryProjectStore, ProjectStore};
+use lingq_upload_lib::core::job::{inspect_mismatch, plan_preview};
+use lingq_upload_lib::core::matcher::{
+    allowed, MappingOp, MappingState, MismatchCondition, MismatchResponse,
+};
+use lingq_upload_lib::core::project::{ChapterReceipt, MatcherDecision, Project, ProjectSummary};
+use lingq_upload_lib::core::store::{
+    InMemoryProjectStore, JsonProjectStore, ProjectStore, StoreError,
+};
 use lingq_upload_lib::error::AppError;
 use lingq_upload_lib::events::DetectionPhase;
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::transcribe::{
-    AlignSource, DetectStartResult, DetectedRange, DetectionEvidence, DetectionSink,
-    TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeOpts, TranscribeProviderId,
-    Transcriber, Transcript,
+    AlignSource, DetectStartResult, DetectedRange, DetectionEvidence, DetectionPreview,
+    DetectionSink, TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeOpts,
+    TranscribeProviderId, Transcriber, Transcript,
 };
 use secrecy::SecretString;
 use tempfile::TempDir;
@@ -157,6 +163,677 @@ impl DetectionSink for RecordingDetectionSink {
 
 fn empty_cancel_map() -> JobCancelMap {
     Arc::new(Mutex::new(HashMap::new()))
+}
+
+struct UpdateProbeStore<'a> {
+    inner: &'a dyn ProjectStore,
+    update_calls: AtomicUsize,
+    behavior: UpdateBehavior,
+}
+
+#[derive(Clone, Copy)]
+enum UpdateBehavior {
+    Delegate,
+    Fail,
+    ChangeSelection,
+    AddReceipt,
+}
+
+impl<'a> UpdateProbeStore<'a> {
+    fn new(inner: &'a dyn ProjectStore) -> Self {
+        Self {
+            inner,
+            update_calls: AtomicUsize::new(0),
+            behavior: UpdateBehavior::Delegate,
+        }
+    }
+
+    fn failing(inner: &'a dyn ProjectStore) -> Self {
+        Self {
+            inner,
+            update_calls: AtomicUsize::new(0),
+            behavior: UpdateBehavior::Fail,
+        }
+    }
+
+    fn changing_selection(inner: &'a dyn ProjectStore) -> Self {
+        Self {
+            inner,
+            update_calls: AtomicUsize::new(0),
+            behavior: UpdateBehavior::ChangeSelection,
+        }
+    }
+
+    fn adding_receipt(inner: &'a dyn ProjectStore) -> Self {
+        Self {
+            inner,
+            update_calls: AtomicUsize::new(0),
+            behavior: UpdateBehavior::AddReceipt,
+        }
+    }
+
+    fn update_calls(&self) -> usize {
+        self.update_calls.load(Ordering::SeqCst)
+    }
+}
+
+impl ProjectStore for UpdateProbeStore<'_> {
+    fn put(&self, project: &Project) -> Result<(), StoreError> {
+        self.inner.put(project)
+    }
+
+    fn get(&self, id: &ProjectId) -> Result<Option<Project>, StoreError> {
+        self.inner.get(id)
+    }
+
+    fn project_dir(&self, id: &ProjectId) -> Option<PathBuf> {
+        self.inner.project_dir(id)
+    }
+
+    fn update(
+        &self,
+        id: &ProjectId,
+        f: &mut dyn FnMut(&mut Project),
+    ) -> Result<Project, StoreError> {
+        self.update_calls.fetch_add(1, Ordering::SeqCst);
+        match self.behavior {
+            UpdateBehavior::Fail => {
+                let mut project = self
+                    .inner
+                    .get(id)?
+                    .ok_or_else(|| StoreError::NotFound { key: id.join_key() })?;
+                f(&mut project);
+                return Err(StoreError::Io {
+                    path: PathBuf::from("injected-update-failure"),
+                    message: "injected update failure after closure".into(),
+                });
+            }
+            UpdateBehavior::ChangeSelection => {
+                self.inner.update(id, &mut |project| {
+                    project.skipped_chapters.push(ChapterId::from_order(0));
+                })?;
+            }
+            UpdateBehavior::AddReceipt => {
+                self.inner.update(id, &mut |project| {
+                    project.receipts.push(interleaved_receipt());
+                })?;
+            }
+            UpdateBehavior::Delegate => {}
+        }
+        self.inner.update(id, f)
+    }
+
+    fn list(&self) -> Result<Vec<ProjectSummary>, StoreError> {
+        self.inner.list()
+    }
+
+    fn patch_chapter(
+        &self,
+        id: &ProjectId,
+        index: usize,
+        receipt: ChapterReceipt,
+    ) -> Result<(), StoreError> {
+        self.inner.patch_chapter(id, index, receipt)
+    }
+
+    fn set_selection(&self, id: &ProjectId, skipped_ids: &[ChapterId]) -> Result<(), StoreError> {
+        self.inner.set_selection(id, skipped_ids)
+    }
+
+    fn apply_mapping_op(
+        &self,
+        id: &ProjectId,
+        op: MappingOp,
+        expected_op_id: u64,
+    ) -> Result<MappingState, StoreError> {
+        self.inner.apply_mapping_op(id, op, expected_op_id)
+    }
+}
+
+fn range(start: usize, end: usize) -> DetectedRange {
+    DetectedRange {
+        start_chapter_id: ChapterId::from_order(start),
+        end_chapter_id: ChapterId::from_order(end),
+    }
+}
+
+fn preview(range: DetectedRange) -> DetectionPreview {
+    DetectionPreview {
+        provider_id: Some(TranscribeProviderId::Groq),
+        align_source: AlignSource::Transcript,
+        range,
+        confidence: 0.91,
+        transcript_head_preview: Some("head preview".into()),
+        transcript_tail_preview: Some("tail preview".into()),
+        detected_at: Utc::now() - ChronoDuration::days(1),
+    }
+}
+
+fn interleaved_receipt() -> ChapterReceipt {
+    ChapterReceipt {
+        chapter_index: 0,
+        track_index: Some(0),
+        lesson_id: Some(42),
+        degraded: false,
+        uploaded_at: None,
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ExpectedValidationError {
+    DetectedRange,
+    Unsupported,
+}
+
+async fn assert_confirm_rejected_unchanged(
+    store: &UpdateProbeStore<'_>,
+    project: Project,
+    selected_range: DetectedRange,
+    preview: DetectionPreview,
+    label: &str,
+    expected_error: ExpectedValidationError,
+    message_fragment: &str,
+) {
+    store.put(&project).unwrap();
+    let before = store.get(&project.id).unwrap().unwrap();
+    let calls_before = store.update_calls();
+
+    let error = confirm_detected_range_impl(store, &project.id, selected_range, preview)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            (expected_error, &error),
+            (
+                ExpectedValidationError::DetectedRange,
+                AppError::DetectedRange(_)
+            ) | (
+                ExpectedValidationError::Unsupported,
+                AppError::Unsupported(_)
+            )
+        ),
+        "{label}: wrong validation error type: {error:?}"
+    );
+    assert!(
+        error.to_string().contains(message_fragment),
+        "{label}: error must contain '{message_fragment}', got {error}"
+    );
+    assert_eq!(store.update_calls(), calls_before, "{label}: no update");
+    assert_eq!(
+        store.get(&project.id).unwrap().unwrap(),
+        before,
+        "{label}: whole project unchanged"
+    );
+}
+
+async fn assert_confirmed_condition(
+    store: &UpdateProbeStore<'_>,
+    chapter_count: usize,
+    track_count: usize,
+    expected_condition: MismatchCondition,
+) {
+    let mut fixture = availability_project(chapter_count, track_count);
+    fixture.project.confirmed_at = Some(Utc::now());
+    store.put(&fixture.project).unwrap();
+    let selected_range = range(1, chapter_count - 2);
+    let calls_before = store.update_calls();
+
+    confirm_detected_range_impl(
+        store,
+        &fixture.project.id,
+        selected_range.clone(),
+        preview(range(0, chapter_count - 1)),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(store.update_calls(), calls_before + 1);
+    let project = store.get(&fixture.project.id).unwrap().unwrap();
+    let decision = project.matcher_decision.unwrap();
+    assert_eq!(decision.condition, expected_condition);
+    assert_eq!(decision.chapter_count, chapter_count);
+    assert_eq!(decision.track_count, track_count);
+    assert_eq!(decision.response, MismatchResponse::SplitProportional);
+    assert!(decision.user_overrode);
+    assert_eq!(decision.detection.unwrap().range, selected_range);
+    assert!(project.mapping.is_some());
+    assert!(project.confirmed_at.is_none());
+}
+
+async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
+    let probe = UpdateProbeStore::new(store);
+
+    let mut fixture = availability_project(6, 3);
+    fixture.project.confirmed_at = Some(Utc::now());
+    probe.put(&fixture.project).unwrap();
+    let selected_range = range(2, 4);
+    let transient_preview = preview(range(1, 5));
+    let preview_detected_at = transient_preview.detected_at;
+    let started_at = Utc::now();
+    let calls_before = probe.update_calls();
+
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        selected_range.clone(),
+        transient_preview,
+    )
+    .await
+    .unwrap();
+
+    let finished_at = Utc::now();
+    assert_eq!(probe.update_calls(), calls_before + 1);
+    let confirmed = probe.get(&fixture.project.id).unwrap().unwrap();
+    let decision = confirmed.matcher_decision.as_ref().unwrap();
+    assert_eq!(decision.condition, MismatchCondition::ManyToFew);
+    assert_eq!(decision.response, MismatchResponse::SplitProportional);
+    assert_eq!(decision.chapter_count, 6);
+    assert_eq!(decision.track_count, 3);
+    assert!(!decision.user_overrode);
+    assert!((started_at..=finished_at).contains(&decision.decided_at));
+    let persisted_evidence = decision.detection.as_ref().unwrap();
+    assert_eq!(persisted_evidence.range, selected_range);
+    assert_ne!(persisted_evidence.detected_at, preview_detected_at);
+    assert!((started_at..=finished_at).contains(&persisted_evidence.detected_at));
+    assert_eq!(
+        confirmed
+            .mapping
+            .as_ref()
+            .unwrap()
+            .pairs
+            .iter()
+            .map(|pair| pair.chapter_id.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            ChapterId::from_order(2),
+            ChapterId::from_order(3),
+            ChapterId::from_order(4),
+        ]
+    );
+    assert!(confirmed.confirmed_at.is_none());
+
+    confirm_mapping_impl(&probe, &fixture.project.id).unwrap();
+    assert!(probe
+        .get(&fixture.project.id)
+        .unwrap()
+        .unwrap()
+        .confirmed_at
+        .is_some());
+    assert_eq!(
+        plan_preview(&probe, &fixture.project.id)
+            .await
+            .unwrap()
+            .iter()
+            .map(|step| step.chapter_index)
+            .collect::<Vec<_>>(),
+        vec![2, 3, 4]
+    );
+
+    assert_eq!(
+        allowed(MismatchCondition::ManyToOne),
+        (
+            vec![MismatchResponse::SingleLesson, MismatchResponse::Cancel],
+            MismatchResponse::SingleLesson,
+        )
+    );
+    assert_confirmed_condition(&probe, 5, 1, MismatchCondition::ManyToOne).await;
+    assert_eq!(
+        allowed(MismatchCondition::ManyToOne),
+        (
+            vec![MismatchResponse::SingleLesson, MismatchResponse::Cancel],
+            MismatchResponse::SingleLesson,
+        )
+    );
+
+    assert_eq!(
+        allowed(MismatchCondition::Unalignable),
+        (
+            vec![MismatchResponse::SingleLesson, MismatchResponse::Cancel],
+            MismatchResponse::Cancel,
+        )
+    );
+    assert_confirmed_condition(&probe, 70, 2, MismatchCondition::Unalignable).await;
+    assert_eq!(
+        allowed(MismatchCondition::Unalignable),
+        (
+            vec![MismatchResponse::SingleLesson, MismatchResponse::Cancel],
+            MismatchResponse::Cancel,
+        )
+    );
+
+    let fixture = availability_project(6, 3);
+    assert_confirm_rejected_unchanged(
+        &probe,
+        fixture.project,
+        DetectedRange {
+            start_chapter_id: ChapterId("missing".into()),
+            end_chapter_id: ChapterId::from_order(4),
+        },
+        preview(range(1, 4)),
+        "missing selected boundary",
+        ExpectedValidationError::DetectedRange,
+        "missing",
+    )
+    .await;
+
+    let fixture = availability_project(6, 3);
+    assert_confirm_rejected_unchanged(
+        &probe,
+        fixture.project,
+        range(4, 1),
+        preview(range(1, 4)),
+        "reordered selected boundaries",
+        ExpectedValidationError::DetectedRange,
+        "precedes",
+    )
+    .await;
+
+    let fixture = availability_project(6, 3);
+    let mut invalid_preview = preview(range(1, 4));
+    invalid_preview.range.start_chapter_id = ChapterId("missing-preview".into());
+    assert_confirm_rejected_unchanged(
+        &probe,
+        fixture.project,
+        range(1, 4),
+        invalid_preview,
+        "missing preview boundary",
+        ExpectedValidationError::DetectedRange,
+        "missing",
+    )
+    .await;
+
+    let fixture = availability_project(6, 3);
+    assert_confirm_rejected_unchanged(
+        &probe,
+        fixture.project,
+        range(1, 4),
+        preview(range(4, 1)),
+        "reordered preview boundaries",
+        ExpectedValidationError::DetectedRange,
+        "precedes",
+    )
+    .await;
+
+    for (label, confidence) in [
+        ("NaN confidence", f32::NAN),
+        ("infinite confidence", f32::INFINITY),
+        ("negative confidence", -0.01),
+        ("confidence over one", 1.01),
+    ] {
+        let fixture = availability_project(6, 3);
+        let mut invalid_preview = preview(range(1, 4));
+        invalid_preview.confidence = confidence;
+        assert_confirm_rejected_unchanged(
+            &probe,
+            fixture.project,
+            range(1, 4),
+            invalid_preview,
+            label,
+            ExpectedValidationError::Unsupported,
+            "confidence",
+        )
+        .await;
+    }
+
+    for (label, align_source, provider_id) in [
+        (
+            "title evidence with provider",
+            AlignSource::Title,
+            Some(TranscribeProviderId::Groq),
+        ),
+        (
+            "transcript evidence without provider",
+            AlignSource::Transcript,
+            None,
+        ),
+    ] {
+        let fixture = availability_project(6, 3);
+        let mut invalid_preview = preview(range(1, 4));
+        invalid_preview.align_source = align_source;
+        invalid_preview.provider_id = provider_id;
+        assert_confirm_rejected_unchanged(
+            &probe,
+            fixture.project,
+            range(1, 4),
+            invalid_preview,
+            label,
+            ExpectedValidationError::Unsupported,
+            "provider",
+        )
+        .await;
+    }
+
+    for (label, head_overlong) in [
+        ("overlong head preview", true),
+        ("overlong tail preview", false),
+    ] {
+        let fixture = availability_project(6, 3);
+        let mut invalid_preview = preview(range(1, 4));
+        if head_overlong {
+            invalid_preview.transcript_head_preview = Some("界".repeat(241));
+        } else {
+            invalid_preview.transcript_tail_preview = Some("🙂".repeat(241));
+        }
+        assert_confirm_rejected_unchanged(
+            &probe,
+            fixture.project,
+            range(1, 4),
+            invalid_preview,
+            label,
+            ExpectedValidationError::Unsupported,
+            "previews",
+        )
+        .await;
+    }
+
+    let fixture = availability_project(5, 3);
+    assert_confirm_rejected_unchanged(
+        &probe,
+        fixture.project,
+        range(1, 3),
+        preview(range(1, 3)),
+        "current condition is not detection eligible",
+        ExpectedValidationError::Unsupported,
+        "eligible",
+    )
+    .await;
+
+    let fixture = availability_project(6, 3);
+    let failing = UpdateProbeStore::failing(store);
+    failing.put(&fixture.project).unwrap();
+    let before = failing.get(&fixture.project.id).unwrap().unwrap();
+    let error = confirm_detected_range_impl(
+        &failing,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(error, AppError::Other(message) if message.contains("store.update")),
+        "injected failure must identify the store update"
+    );
+    assert_eq!(failing.update_calls(), 1);
+    assert_eq!(failing.get(&fixture.project.id).unwrap().unwrap(), before);
+
+    let fixture = availability_project(6, 3);
+    let interleaving = UpdateProbeStore::changing_selection(store);
+    interleaving.put(&fixture.project).unwrap();
+    let mut expected_after_interleave = fixture.project.clone();
+    expected_after_interleave
+        .skipped_chapters
+        .push(ChapterId::from_order(0));
+    let result = confirm_detected_range_impl(
+        &interleaving,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(AppError::Unsupported(message)) if message.contains("changed")),
+        "stale confirmation must return an actionable unsupported error"
+    );
+    assert_eq!(interleaving.update_calls(), 1);
+    assert_eq!(
+        interleaving.get(&fixture.project.id).unwrap().unwrap(),
+        expected_after_interleave
+    );
+
+    let mut fixture = availability_project(6, 3);
+    fixture.project.settings.tags = vec!["preserve-me".into()];
+    fixture.project.cover_use = false;
+    fixture.project.transcribe_consent = Some(TranscribeConsent {
+        provider_id: TranscribeProviderId::Groq,
+        accepted_at: Utc::now(),
+    });
+    probe.put(&fixture.project).unwrap();
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await
+    .unwrap();
+    store
+        .update(&fixture.project.id, &mut |project| {
+            project.confirmed_at = Some(Utc::now());
+        })
+        .unwrap();
+    let before_reset = probe.get(&fixture.project.id).unwrap().unwrap();
+    let calls_before = probe.update_calls();
+
+    reset_detection_impl(&probe, &fixture.project.id).unwrap();
+
+    assert_eq!(probe.update_calls(), calls_before + 1);
+    let reset = probe.get(&fixture.project.id).unwrap().unwrap();
+    let mut expected_reset = before_reset;
+    expected_reset.matcher_decision = None;
+    expected_reset.mapping = None;
+    expected_reset.confirmed_at = None;
+    assert_eq!(reset, expected_reset);
+
+    probe.put(&fixture.project).unwrap();
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await
+    .unwrap();
+    store
+        .update(&fixture.project.id, &mut |project| {
+            project.receipts.push(ChapterReceipt {
+                chapter_index: 0,
+                track_index: Some(0),
+                lesson_id: Some(42),
+                degraded: false,
+                uploaded_at: Some(Utc::now()),
+            });
+        })
+        .unwrap();
+    let before_receipt_reset = probe.get(&fixture.project.id).unwrap().unwrap();
+    let calls_before = probe.update_calls();
+    let error = reset_detection_impl(&probe, &fixture.project.id).unwrap_err();
+    assert!(
+        matches!(error, AppError::Unsupported(message) if message.contains("uploads")),
+        "receipt reset must return an actionable unsupported error"
+    );
+    assert_eq!(probe.update_calls(), calls_before);
+    assert_eq!(
+        probe.get(&fixture.project.id).unwrap().unwrap(),
+        before_receipt_reset
+    );
+
+    let mut no_evidence = fixture.project.clone();
+    no_evidence.matcher_decision = Some(MatcherDecision {
+        condition: MismatchCondition::ManyToFew,
+        response: MismatchResponse::SplitProportional,
+        chapter_count: 6,
+        track_count: 3,
+        user_overrode: false,
+        decided_at: Utc::now(),
+        detection: None,
+    });
+    no_evidence.mapping = Some(MappingState::default());
+    no_evidence.confirmed_at = Some(Utc::now());
+    probe.put(&no_evidence).unwrap();
+    let before_no_evidence = probe.get(&no_evidence.id).unwrap().unwrap();
+    let calls_before = probe.update_calls();
+    let error = reset_detection_impl(&probe, &no_evidence.id).unwrap_err();
+    assert!(
+        matches!(error, AppError::Unsupported(message) if message.contains("no confirmed detection")),
+        "reset without evidence must explain the missing confirmation"
+    );
+    assert_eq!(probe.update_calls(), calls_before);
+    assert_eq!(
+        probe.get(&no_evidence.id).unwrap().unwrap(),
+        before_no_evidence
+    );
+
+    probe.put(&fixture.project).unwrap();
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await
+    .unwrap();
+    let interleaving = UpdateProbeStore::adding_receipt(store);
+    let mut expected_after_interleave = interleaving.get(&fixture.project.id).unwrap().unwrap();
+    expected_after_interleave
+        .receipts
+        .push(interleaved_receipt());
+    let result = reset_detection_impl(&interleaving, &fixture.project.id);
+    assert!(
+        matches!(result, Err(AppError::Unsupported(message)) if message.contains("uploads")),
+        "receipt interleave must return an actionable unsupported error"
+    );
+    assert_eq!(interleaving.update_calls(), 1);
+    assert_eq!(
+        interleaving.get(&fixture.project.id).unwrap().unwrap(),
+        expected_after_interleave
+    );
+
+    probe.put(&fixture.project).unwrap();
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        range(1, 4),
+        preview(range(1, 4)),
+    )
+    .await
+    .unwrap();
+    let failing = UpdateProbeStore::failing(store);
+    let before_failed_reset = failing.get(&fixture.project.id).unwrap().unwrap();
+    let error = reset_detection_impl(&failing, &fixture.project.id).unwrap_err();
+    assert!(
+        matches!(error, AppError::Other(message) if message.contains("store.update")),
+        "injected reset failure must identify the store update"
+    );
+    assert_eq!(failing.update_calls(), 1);
+    assert_eq!(
+        failing.get(&fixture.project.id).unwrap().unwrap(),
+        before_failed_reset
+    );
+}
+
+#[tokio::test]
+async fn in_memory_store_passes_detection_confirmation_reset_contract() {
+    let store = InMemoryProjectStore::new();
+    run_detection_confirmation_reset_contract(&store).await;
+}
+
+#[tokio::test]
+async fn json_store_passes_detection_confirmation_reset_contract() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonProjectStore::new(dir.path());
+    run_detection_confirmation_reset_contract(&store).await;
 }
 
 #[test]
