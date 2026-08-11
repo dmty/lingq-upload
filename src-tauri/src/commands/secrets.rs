@@ -14,8 +14,7 @@ fn store(app: &AppHandle) -> Result<SecretsStore, AppError> {
 #[tauri::command]
 #[specta::specta]
 pub fn cmd_save_lingq_key(app: AppHandle, key: String) -> Result<(), AppError> {
-    // Length-only audit trail — never log the value.
-    tracing::info!(chars = key.chars().count(), "saving lingq api key");
+    // Audit trail (account + chars) lives in SecretsStore::save_key.
     store(&app)?.save_key(&key)?;
     Ok(())
 }
@@ -29,7 +28,6 @@ pub fn cmd_load_lingq_key(app: AppHandle) -> Result<Option<String>, AppError> {
 #[tauri::command]
 #[specta::specta]
 pub fn cmd_clear_lingq_key(app: AppHandle) -> Result<(), AppError> {
-    tracing::info!("clearing lingq api key");
     store(&app)?.clear_key()?;
     Ok(())
 }

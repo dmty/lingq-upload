@@ -136,6 +136,12 @@ impl SecretsStore {
     }
 
     pub fn save_key(&self, key: &str) -> Result<(), SecretError> {
+        // Account id + length only — never the key value.
+        tracing::info!(
+            account = self.account,
+            chars = key.chars().count(),
+            "saving api key"
+        );
         self.backend.set(SERVICE, self.account, key)
     }
 
@@ -150,6 +156,7 @@ impl SecretsStore {
     }
 
     pub fn clear_key(&self) -> Result<(), SecretError> {
+        tracing::info!(account = self.account, "clearing api key");
         self.backend.delete(SERVICE, self.account)
     }
 }
@@ -322,7 +329,58 @@ pub fn dev_prefs_save(app_data_dir: &Path, prefs: &DevPrefs) -> std::io::Result<
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::io::{self, Write};
     use std::sync::{Arc, Mutex};
+
+    /// Compile-fail if `$ty: Debug` (static_assertions ambiguity trick, inlined).
+    macro_rules! assert_not_impl_debug {
+        ($ty:ty) => {
+            const _: fn() = || {
+                trait AmbiguousIfImpl<A> {
+                    fn inv() {}
+                }
+                impl<T: ?Sized> AmbiguousIfImpl<()> for T {}
+                impl<T: ?Sized + std::fmt::Debug> AmbiguousIfImpl<u8> for T {}
+                let _ = <$ty as AmbiguousIfImpl<_>>::inv;
+            };
+        };
+    }
+
+    assert_not_impl_debug!(SecretsStore);
+
+    #[derive(Clone, Default)]
+    struct LogBuf(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for LogBuf {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().expect("log buf").extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuf {
+        type Writer = LogBuf;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    fn captured_logs(f: impl FnOnce()) -> String {
+        let buf = LogBuf::default();
+        let bytes_arc = Arc::clone(&buf.0);
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(buf)
+            .with_level(false)
+            .with_target(false)
+            .without_time()
+            .finish();
+        tracing::subscriber::with_default(subscriber, f);
+        let bytes = bytes_arc.lock().expect("log buf").clone();
+        String::from_utf8(bytes).expect("utf8 logs")
+    }
 
     // ponytail: Arc inside fake so two stores share one map; no wrapper type.
     #[derive(Clone, Default)]
@@ -397,29 +455,51 @@ mod tests {
 
     #[test]
     fn debug_and_errors_never_include_key_values() {
-        let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(FakeBackend::default()));
-        let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(FakeBackend::default()));
-        groq.save_key("groq-secret").unwrap();
-        openai.save_key("openai-secret").unwrap();
-        assert!(groq.key_present().unwrap());
+        const GROQ_SECRET: &str = "groq-secret";
+        const OPENAI_SECRET: &str = "openai-secret";
 
-        for err in [
-            SecretError::LockedKeychain,
-            SecretError::UserDenied,
-            SecretError::MissingEntry,
-            SecretError::Backend("keychain unavailable".into()),
-        ] {
-            let rendered = format!("{err:?}");
-            assert!(
-                !rendered.contains("groq-secret") && !rendered.contains("openai-secret"),
-                "SecretError Debug leaked key material: {rendered}"
-            );
-            let display = format!("{err}");
-            assert!(!display.contains("groq-secret") && !display.contains("openai-secret"));
+        // Returned errors from real store ops must not embed the key argument.
+        for (account, secret) in [(GROQ_ACCOUNT, GROQ_SECRET), (OPENAI_ACCOUNT, OPENAI_SECRET)] {
+            for err in [
+                SecretError::LockedKeychain,
+                SecretError::UserDenied,
+                SecretError::MissingEntry,
+                SecretError::Backend("write failed".into()),
+            ] {
+                let store = SecretsStore::new(account, Box::new(FailingBackend { err }));
+                for returned in [
+                    store.save_key(secret).unwrap_err(),
+                    store.load_key().unwrap_err(),
+                    store.clear_key().unwrap_err(),
+                ] {
+                    let rendered = format!("{returned:?} / {returned}");
+                    assert!(
+                        !rendered.contains(secret),
+                        "store error leaked key for {account}: {rendered}"
+                    );
+                }
+            }
         }
 
-        // SecretsStore intentionally has no Debug derive. Presence returns bool only.
-        let _ = (groq, openai);
+        // Audit logs: account + char count only — never the key value.
+        let logs = captured_logs(|| {
+            let backend = FakeBackend::default();
+            let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(backend.clone()));
+            let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(backend));
+            groq.save_key(GROQ_SECRET).unwrap();
+            openai.save_key(OPENAI_SECRET).unwrap();
+            groq.clear_key().unwrap();
+            let _ = groq.key_present().unwrap();
+        });
+        assert!(
+            !logs.contains(GROQ_SECRET) && !logs.contains(OPENAI_SECRET),
+            "logs leaked key material: {logs}"
+        );
+        assert!(
+            logs.contains(GROQ_ACCOUNT) && logs.contains("chars"),
+            "expected account+chars audit trail, got: {logs}"
+        );
+        assert!(logs.contains(&(GROQ_SECRET.chars().count().to_string())));
     }
 
     #[test]
