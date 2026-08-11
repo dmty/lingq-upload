@@ -11,6 +11,7 @@ use crate::core::audio::{self, AudioError, AudioTrack, EncoderSettings, Transcod
 use crate::core::project::Project;
 use crate::error::AppError;
 
+mod align;
 mod error;
 mod provider;
 pub mod sample;
