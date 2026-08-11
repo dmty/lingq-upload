@@ -29,6 +29,7 @@ use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
 use crate::ingest::{audio_source_paths, AudioSource, TextSource};
 use crate::lingq::{ImportLessonRequest, LessonStatus, LingqClient};
+use crate::transcribe::{DetectedRange, DetectedRangeError};
 
 /// Returns the next lifecycle stage the project should advance to, or `None`
 /// when the project is already `Done`. Pure function; does not look at receipts
@@ -794,7 +795,9 @@ pub async fn seed_mapping_for_response(
                 .map(|c| new_pair(c.id.clone(), Some(tid.clone())))
                 .collect()
         }
-        MismatchResponse::SplitProportional => proportional_split_pairs(&chapters, &tracks),
+        MismatchResponse::SplitProportional => {
+            return Ok(Some(seed_split_mapping_from_resolved(&chapters, &tracks)))
+        }
         MismatchResponse::PairAccept | MismatchResponse::PairDrop => {
             let n = chapters.len().min(tracks.len());
             chapters
@@ -812,6 +815,14 @@ pub async fn seed_mapping_for_response(
         }
         MismatchResponse::Cancel | MismatchResponse::Unknown => return Ok(None),
     };
+    Ok(Some(mapping_state_from_resolved(pairs, &chapters, &tracks)))
+}
+
+fn mapping_state_from_resolved(
+    pairs: Vec<MappingPair>,
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+) -> MappingState {
     let chars_by_chapter: std::collections::HashMap<_, _> = chapters
         .iter()
         .map(|c| (c.id.clone(), c.body.chars().count()))
@@ -834,12 +845,66 @@ pub async fn seed_mapping_for_response(
         })
         .collect();
     let buckets = build_bucket_meta(&pairs, &track_meta, &chars_by_chapter);
-    Ok(Some(MappingState {
+    MappingState {
         pairs,
         parking_lot: Vec::new(),
         op_id: 0,
         buckets,
-    }))
+    }
+}
+
+fn seed_split_mapping_from_resolved(chapters: &[Chapter], tracks: &[AudioTrack]) -> MappingState {
+    mapping_state_from_resolved(proportional_split_pairs(chapters, tracks), chapters, tracks)
+}
+
+fn bounded_chapter_slice<'a>(
+    chapters: &'a [Chapter],
+    range: &DetectedRange,
+) -> Result<&'a [Chapter], DetectedRangeError> {
+    if chapters.is_empty() {
+        return Err(DetectedRangeError::EmptyRange);
+    }
+
+    let boundary_index = |id: &ChapterId| {
+        let mut matches = chapters
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chapter)| (&chapter.id == id).then_some(index));
+        let Some(index) = matches.next() else {
+            return Err(DetectedRangeError::MissingBoundary(id.to_string()));
+        };
+        if matches.next().is_some() {
+            Err(DetectedRangeError::DuplicateBoundary(id.to_string()))
+        } else {
+            Ok(index)
+        }
+    };
+
+    let start = boundary_index(&range.start_chapter_id)?;
+    let end = boundary_index(&range.end_chapter_id)?;
+    if end < start {
+        return Err(DetectedRangeError::EndBeforeStart);
+    }
+    Ok(&chapters[start..=end])
+}
+
+/// Re-resolve a detected range against the project's current eligible chapter
+/// set and seed the standard SplitProportional mapping for its inclusive slice.
+pub async fn seed_bounded_mapping(
+    project: &Project,
+    range: &DetectedRange,
+) -> Result<MappingState, AppError> {
+    let all_chapters = project_chapters(project)?;
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+    let chapters = bounded_chapter_slice(&chapters, range)?;
+    let tracks = resolve_audio_tracks(project).await?;
+    if tracks.is_empty() {
+        return Err(AppError::Other(
+            "split-proportional needs chapters and tracks".into(),
+        ));
+    }
+    Ok(seed_split_mapping_from_resolved(chapters, &tracks))
 }
 
 fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {
@@ -1407,6 +1472,31 @@ mod tests {
             orders,
             vec![0, 1, 2],
             "skip only gates not-yet-uploaded chapters"
+        );
+    }
+
+    #[test]
+    fn bounded_chapter_slice_rejects_a_duplicated_boundary_id() {
+        let duplicated = ChapterId::from_order(1);
+        let chapters = vec![
+            chapter(0, "c0", "b0"),
+            chapter(1, "c1", "b1"),
+            Chapter {
+                id: duplicated.clone(),
+                ..chapter(2, "c2", "b2")
+            },
+            chapter(3, "c3", "b3"),
+        ];
+        let range = crate::transcribe::DetectedRange {
+            start_chapter_id: duplicated.clone(),
+            end_chapter_id: ChapterId::from_order(3),
+        };
+
+        assert_eq!(
+            bounded_chapter_slice(&chapters, &range),
+            Err(crate::transcribe::DetectedRangeError::DuplicateBoundary(
+                duplicated.to_string()
+            ))
         );
     }
 

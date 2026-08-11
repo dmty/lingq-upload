@@ -32,6 +32,19 @@ pub use sample::{
 };
 pub use whisper_like::WhisperLikeTranscriber;
 
+#[derive(Clone, Debug, Error, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(tag = "kind", content = "message")]
+pub enum DetectedRangeError {
+    #[error("detected chapter boundary is missing: {0}")]
+    MissingBoundary(String),
+    #[error("detected chapter boundary is duplicated: {0}")]
+    DuplicateBoundary(String),
+    #[error("detected range end precedes start")]
+    EndBeforeStart,
+    #[error("detected range has no eligible chapters")]
+    EmptyRange,
+}
+
 #[derive(Debug, Error)]
 pub enum SamplePlanningError {
     #[error("no transcript: {0:?}")]
