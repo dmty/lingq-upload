@@ -22,7 +22,7 @@ use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::lingq::LingqClient;
-use crate::secrets::SecretsStore;
+use crate::secrets::{SecretsStore, LINGQ_ACCOUNT};
 
 /// Lightweight projection of a [`crate::core::project::ChapterReceipt`] for
 /// rehydration. Includes only the fields the Run screen needs to render chips.
@@ -127,7 +127,7 @@ pub async fn cmd_start_project_job(
     cancels: tauri::State<'_, JobCancelMap>,
     project_id: ProjectId,
 ) -> Result<Uuid, AppError> {
-    let secrets = SecretsStore::new_default(&app_data_dir(&app)?);
+    let secrets = SecretsStore::new_default(&app_data_dir(&app)?, LINGQ_ACCOUNT);
     let key = secrets.load_key()?.ok_or(AppError::MissingApiKey)?;
 
     let project = store

@@ -12,7 +12,7 @@ use crate::error::AppError;
 use crate::events::{JobEmitter, Stage};
 use crate::ingest::{audio_source_paths, Candidate, TextSource};
 use crate::lingq::{LessonOpts, LingqClient};
-use crate::secrets::SecretsStore;
+use crate::secrets::{SecretsStore, LINGQ_ACCOUNT};
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone)]
 pub struct UploadResult {
@@ -50,7 +50,7 @@ pub async fn upload_one_shot(
         ))
     })?;
 
-    let store = SecretsStore::new_default(&app_data_dir(&app)?);
+    let store = SecretsStore::new_default(&app_data_dir(&app)?, LINGQ_ACCOUNT);
     let key = store.load_key()?.ok_or(AppError::MissingApiKey)?;
 
     let strategy = match crate::core::epub::autodetect_vendor(&text_path) {

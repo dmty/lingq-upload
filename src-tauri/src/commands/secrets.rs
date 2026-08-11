@@ -4,11 +4,11 @@ use tauri::AppHandle;
 
 use super::app_data_dir;
 use crate::error::AppError;
-use crate::secrets::{BackendChoice, SecretsStore};
+use crate::secrets::{BackendChoice, SecretsStore, LINGQ_ACCOUNT};
 
 fn store(app: &AppHandle) -> Result<SecretsStore, AppError> {
     let dir = app_data_dir(app)?;
-    Ok(SecretsStore::new_default(&dir))
+    Ok(SecretsStore::new_default(&dir, LINGQ_ACCOUNT))
 }
 
 #[tauri::command]

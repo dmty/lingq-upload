@@ -6,10 +6,10 @@ use crate::error::AppError;
 use crate::lingq::{
     AccountProfile, Collection, CollectionId, CourseView, Language, LanguageCode, LingqClient,
 };
-use crate::secrets::SecretsStore;
+use crate::secrets::{SecretsStore, LINGQ_ACCOUNT};
 
 fn load_api_key(app: &AppHandle) -> Result<String, AppError> {
-    let store = SecretsStore::new_default(&app_data_dir(app)?);
+    let store = SecretsStore::new_default(&app_data_dir(app)?, LINGQ_ACCOUNT);
     store.load_key()?.ok_or(AppError::MissingApiKey)
 }
 

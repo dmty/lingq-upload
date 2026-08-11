@@ -7,7 +7,13 @@ use thiserror::Error;
 // Sourced from tauri.conf.json at build time (see build.rs) so the keychain
 // prompt always shows the app's real bundle identity.
 const SERVICE: &str = env!("LINGQ_BUNDLE_ID");
-const ACCOUNT: &str = "lingq_api_key";
+pub(crate) const LINGQ_ACCOUNT: &str = "lingq_api_key";
+pub(crate) const GROQ_ACCOUNT: &str = "groq_api_key";
+pub(crate) const OPENAI_ACCOUNT: &str = "openai_api_key";
+
+// Keep the account id set referenced so unused-account warnings don't fire before
+// provider IPC lands; only these three ids are valid.
+const _: &[&str] = &[LINGQ_ACCOUNT, GROQ_ACCOUNT, OPENAI_ACCOUNT];
 
 /// Which backend the secrets layer uses. In release builds the choice is
 /// fixed to `Keychain`; the variant exists in the type so the IPC surface
@@ -115,29 +121,36 @@ impl KeyringBackend for RealKeyring {
 
 pub struct SecretsStore {
     backend: Box<dyn KeyringBackend>,
+    account: &'static str,
 }
 
 impl SecretsStore {
-    pub fn new(backend: Box<dyn KeyringBackend>) -> Self {
-        Self { backend }
+    pub fn new(account: &'static str, backend: Box<dyn KeyringBackend>) -> Self {
+        Self { backend, account }
     }
 
     /// Construct using the platform-appropriate default backend, resolved
     /// from build profile, env override, and persisted dev prefs.
-    pub fn new_default(app_data_dir: &Path) -> Self {
-        Self::new(default_backend(app_data_dir))
+    pub fn new_default(app_data_dir: &Path, account: &'static str) -> Self {
+        Self::new(account, default_backend(app_data_dir))
     }
 
     pub fn save_key(&self, key: &str) -> Result<(), SecretError> {
-        self.backend.set(SERVICE, ACCOUNT, key)
+        self.backend.set(SERVICE, self.account, key)
     }
 
     pub fn load_key(&self) -> Result<Option<String>, SecretError> {
-        self.backend.get(SERVICE, ACCOUNT)
+        self.backend.get(SERVICE, self.account)
+    }
+
+    /// Boolean presence only — never returns key material.
+    #[allow(dead_code)]
+    pub fn key_present(&self) -> Result<bool, SecretError> {
+        Ok(self.load_key()?.is_some())
     }
 
     pub fn clear_key(&self) -> Result<(), SecretError> {
-        self.backend.delete(SERVICE, ACCOUNT)
+        self.backend.delete(SERVICE, self.account)
     }
 }
 
@@ -343,6 +356,32 @@ mod tests {
         }
     }
 
+    /// Shared fake so two `SecretsStore`s can exercise account isolation.
+    #[derive(Clone, Default)]
+    struct ArcFakeBackend {
+        inner: std::sync::Arc<FakeBackend>,
+    }
+
+    impl ArcFakeBackend {
+        fn boxed_clone(&self) -> Box<dyn KeyringBackend> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl KeyringBackend for ArcFakeBackend {
+        fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError> {
+            self.inner.set(service, account, value)
+        }
+
+        fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError> {
+            self.inner.get(service, account)
+        }
+
+        fn delete(&self, service: &str, account: &str) -> Result<(), SecretError> {
+            self.inner.delete(service, account)
+        }
+    }
+
     struct FailingBackend {
         err: SecretError,
     }
@@ -360,8 +399,61 @@ mod tests {
     }
 
     #[test]
+    fn provider_accounts_are_isolated_and_presence_is_boolean() {
+        let backend = ArcFakeBackend::default();
+        let groq = SecretsStore::new(GROQ_ACCOUNT, backend.boxed_clone());
+        let openai = SecretsStore::new(OPENAI_ACCOUNT, backend.boxed_clone());
+        groq.save_key("groq-secret").unwrap();
+        openai.save_key("openai-secret").unwrap();
+        groq.clear_key().unwrap();
+        assert!(!groq.key_present().unwrap());
+        assert!(openai.key_present().unwrap());
+    }
+
+    #[test]
+    fn lingq_account_round_trip_unchanged() {
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
+        store.save_key("lingq-secret").expect("save");
+        assert_eq!(store.load_key().expect("load"), Some("lingq-secret".into()));
+        assert!(store.key_present().expect("present"));
+        store.clear_key().expect("clear");
+        assert!(!store.key_present().expect("absent"));
+    }
+
+    #[test]
+    fn debug_and_errors_never_include_key_values() {
+        let backend = ArcFakeBackend::default();
+        let groq = SecretsStore::new(GROQ_ACCOUNT, backend.boxed_clone());
+        let openai = SecretsStore::new(OPENAI_ACCOUNT, backend.boxed_clone());
+        groq.save_key("groq-secret").unwrap();
+        openai.save_key("openai-secret").unwrap();
+
+        let present: bool = groq.key_present().unwrap();
+        assert!(present);
+
+        for err in [
+            SecretError::LockedKeychain,
+            SecretError::UserDenied,
+            SecretError::MissingEntry,
+            SecretError::Backend("keychain unavailable".into()),
+        ] {
+            let rendered = format!("{err:?}");
+            assert!(
+                !rendered.contains("groq-secret") && !rendered.contains("openai-secret"),
+                "SecretError Debug leaked key material: {rendered}"
+            );
+            let display = format!("{err}");
+            assert!(!display.contains("groq-secret") && !display.contains("openai-secret"));
+        }
+
+        // SecretsStore intentionally has no Debug derive — account is not secret-bearing
+        // in Debug form because Debug is absent. Presence returns bool only.
+        let _ = (groq, openai);
+    }
+
+    #[test]
     fn round_trip_save_load_clear() {
-        let store = SecretsStore::new(Box::new(FakeBackend::default()));
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
 
         assert_eq!(store.load_key().expect("load empty"), None);
 
@@ -377,7 +469,7 @@ mod tests {
 
     #[test]
     fn save_overwrites_existing() {
-        let store = SecretsStore::new(Box::new(FakeBackend::default()));
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
         store.save_key("first").expect("save first");
         store.save_key("second").expect("save second");
         assert_eq!(store.load_key().expect("load"), Some("second".into()));
@@ -385,9 +477,12 @@ mod tests {
 
     #[test]
     fn locked_keychain_lifts_to_distinct_variant() {
-        let store = SecretsStore::new(Box::new(FailingBackend {
-            err: SecretError::LockedKeychain,
-        }));
+        let store = SecretsStore::new(
+            LINGQ_ACCOUNT,
+            Box::new(FailingBackend {
+                err: SecretError::LockedKeychain,
+            }),
+        );
         assert_eq!(
             store.save_key("k").unwrap_err(),
             SecretError::LockedKeychain
@@ -398,9 +493,12 @@ mod tests {
 
     #[test]
     fn user_denied_lifts_to_distinct_variant() {
-        let store = SecretsStore::new(Box::new(FailingBackend {
-            err: SecretError::UserDenied,
-        }));
+        let store = SecretsStore::new(
+            LINGQ_ACCOUNT,
+            Box::new(FailingBackend {
+                err: SecretError::UserDenied,
+            }),
+        );
         assert_eq!(store.save_key("k").unwrap_err(), SecretError::UserDenied);
         assert_eq!(store.load_key().unwrap_err(), SecretError::UserDenied);
         assert_eq!(store.clear_key().unwrap_err(), SecretError::UserDenied);
@@ -408,9 +506,12 @@ mod tests {
 
     #[test]
     fn missing_entry_lifts_to_distinct_variant() {
-        let store = SecretsStore::new(Box::new(FailingBackend {
-            err: SecretError::MissingEntry,
-        }));
+        let store = SecretsStore::new(
+            LINGQ_ACCOUNT,
+            Box::new(FailingBackend {
+                err: SecretError::MissingEntry,
+            }),
+        );
         assert_eq!(store.save_key("k").unwrap_err(), SecretError::MissingEntry);
         assert_eq!(store.load_key().unwrap_err(), SecretError::MissingEntry);
         assert_eq!(store.clear_key().unwrap_err(), SecretError::MissingEntry);
