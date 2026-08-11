@@ -2,8 +2,11 @@
   import { onMount } from "svelte";
   import {
     commands,
+    type AppTranscriptionPreferences,
     type BackendChoice,
     type DevBackendInfo,
+    type ProviderInfo,
+    type TranscribeProviderId,
     type TrashEntry,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
@@ -35,6 +38,132 @@
   let devBackend = $state<DevBackendInfo | null>(null);
   let devBackendBusy = $state(false);
   let devBackendError = $state<string | null>(null);
+
+  let transcribeProviders = $state<ProviderInfo[]>([]);
+  let transcriptionPreferences = $state<AppTranscriptionPreferences>({
+    provider_id: "groq",
+    auto_detect_start: false,
+  });
+  let transcriptionKeys = $state<Record<TranscribeProviderId, string>>({
+    groq: "",
+    open_ai: "",
+  });
+  let transcriptionLoaded = $state(false);
+  let transcriptionBusy = $state(false);
+  let transcriptionKeyBusy = $state<TranscribeProviderId | null>(null);
+  let transcriptionError = $state<string | null>(null);
+  let transcriptionClearArmed = $state<TranscribeProviderId | null>(null);
+  let transcriptionClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async function loadTranscriptionSettings() {
+    const [providersResult, preferencesResult] = await Promise.all([
+      commands.cmdListTranscribeProviders(),
+      commands.cmdGetTranscriptionPreferences(),
+    ]);
+    if (providersResult.status === "ok") {
+      transcribeProviders = providersResult.data;
+    } else {
+      transcriptionError = appErrorMessage(providersResult.error);
+    }
+    if (preferencesResult.status === "ok") {
+      transcriptionPreferences = preferencesResult.data;
+    } else if (!transcriptionError) {
+      transcriptionError = appErrorMessage(preferencesResult.error);
+    }
+    transcriptionLoaded = true;
+  }
+
+  async function saveTranscriptionPreferences(
+    next: AppTranscriptionPreferences,
+  ) {
+    if (transcriptionBusy) return;
+    const previous = { ...transcriptionPreferences };
+    transcriptionPreferences = next;
+    transcriptionBusy = true;
+    transcriptionError = null;
+    const result = await commands.cmdSetTranscriptionPreferences(next);
+    if (result.status === "error") {
+      transcriptionPreferences = previous;
+      transcriptionError = appErrorMessage(result.error);
+    }
+    transcriptionBusy = false;
+  }
+
+  function setTranscriptionProvider(provider_id: TranscribeProviderId) {
+    cancelTranscriptionClear();
+    return saveTranscriptionPreferences({
+      ...transcriptionPreferences,
+      provider_id,
+    });
+  }
+
+  function setAutoDetect(auto_detect_start: boolean) {
+    return saveTranscriptionPreferences({
+      ...transcriptionPreferences,
+      auto_detect_start,
+    });
+  }
+
+  async function refreshTranscriptionKey(provider: TranscribeProviderId) {
+    const result = await commands.cmdTranscribeKeyPresent(provider);
+    if (result.status === "ok") {
+      transcribeProviders = transcribeProviders.map((item) =>
+        item.id === provider ? { ...item, key_present: result.data } : item,
+      );
+    } else {
+      transcriptionError = appErrorMessage(result.error);
+    }
+  }
+
+  async function saveTranscriptionKey(provider: TranscribeProviderId) {
+    const value = transcriptionKeys[provider].trim();
+    if (!value) {
+      transcriptionError = "Enter a key first.";
+      return;
+    }
+    transcriptionKeyBusy = provider;
+    transcriptionError = null;
+    const result = await commands.cmdSaveTranscribeKey(provider, value);
+    if (result.status === "ok") {
+      transcriptionKeys[provider] = "";
+      await refreshTranscriptionKey(provider);
+    } else {
+      transcriptionError = appErrorMessage(result.error);
+    }
+    transcriptionKeyBusy = null;
+  }
+
+  function cancelTranscriptionClear() {
+    if (transcriptionClearTimer != null) {
+      clearTimeout(transcriptionClearTimer);
+    }
+    transcriptionClearTimer = null;
+    transcriptionClearArmed = null;
+  }
+
+  function requestTranscriptionClear(provider: TranscribeProviderId) {
+    if (transcriptionClearArmed === provider) {
+      cancelTranscriptionClear();
+      void clearTranscriptionKey(provider);
+      return;
+    }
+    cancelTranscriptionClear();
+    transcriptionClearArmed = provider;
+    transcriptionClearTimer = setTimeout(cancelTranscriptionClear, 5000);
+  }
+
+  async function clearTranscriptionKey(provider: TranscribeProviderId) {
+    transcriptionKeyBusy = provider;
+    transcriptionError = null;
+    const result = await commands.cmdClearTranscribeKey(provider);
+    if (result.status === "ok") {
+      transcriptionKeys[provider] = "";
+      await refreshTranscriptionKey(provider);
+    } else {
+      transcriptionError = appErrorMessage(result.error);
+    }
+    transcriptionKeyBusy = null;
+  }
 
   async function loadDevBackend() {
     const res = await commands.cmdGetDevBackend();
@@ -194,6 +323,7 @@
     void refresh();
     void loadTrash();
     void loadDevBackend();
+    void loadTranscriptionSettings();
   });
 </script>
 
@@ -203,9 +333,7 @@
     Where this app keeps your keys and preferences.
   </p>
 
-  <div
-    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
-  >
+  <div class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card">
     <h2 class="text-md font-semibold text-fg">LingQ API key</h2>
     <p class="mt-1 text-sm text-fg-subtle">
       Find it at <a
@@ -294,6 +422,161 @@
       </Button>
     </div>
   </div>
+
+  <section
+    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
+    aria-labelledby="transcription-heading"
+  >
+    <h2 id="transcription-heading" class="text-md font-semibold text-fg">
+      Transcription (optional)
+    </h2>
+    <p class="mt-1 text-sm text-fg-subtle">
+      Choose the app-wide provider used for transcription-assisted detection.
+      Keys stay in your OS keychain.
+    </p>
+
+    {#if !transcriptionLoaded}
+      <p class="mt-4 text-sm text-fg-muted">Loading providers…</p>
+    {:else}
+      <fieldset class="mt-5 space-y-3" disabled={transcriptionBusy}>
+        <legend class="sr-only">Transcription provider</legend>
+        {#each transcribeProviders as provider (provider.id)}
+          <div
+            role="group"
+            aria-label={`${provider.label} provider`}
+            class="rounded-sm border p-4 transition-colors duration-120 {transcriptionPreferences.provider_id ===
+            provider.id
+              ? 'border-accent bg-accent-soft/30'
+              : 'border-border'}"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex items-start gap-3">
+                <input
+                  id={`transcription-provider-${provider.id}`}
+                  type="radio"
+                  name="transcription-provider"
+                  value={provider.id}
+                  aria-label={provider.label}
+                  checked={transcriptionPreferences.provider_id === provider.id}
+                  onchange={() => setTranscriptionProvider(provider.id)}
+                  class="mt-1 h-4 w-4 accent-accent"
+                />
+                <label
+                  for={`transcription-provider-${provider.id}`}
+                  class="cursor-pointer"
+                >
+                  <span class="block text-sm font-semibold text-fg">
+                    {provider.label}
+                  </span>
+                  <code class="tabular text-xs text-fg-muted">
+                    {provider.model}
+                  </code>
+                </label>
+              </div>
+              <span
+                class={provider.key_present
+                  ? "text-xs font-medium text-success"
+                  : "text-xs text-fg-subtle"}
+              >
+                {provider.key_present ? "Key saved" : "No key saved"}
+              </span>
+            </div>
+
+            <p class="mt-3 text-sm text-fg-muted">
+              {provider.pricing_hint.summary}
+            </p>
+            <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <a
+                href={provider.pricing_hint.docs_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${provider.label} pricing documentation`}
+                >Pricing documentation</a
+              >
+              <a
+                href={provider.data_policy_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${provider.label} data policy`}>Data policy</a
+              >
+            </p>
+
+            {#if transcriptionPreferences.provider_id === provider.id}
+              <label class="mt-4 block">
+                <span
+                  class="block text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+                >
+                  API key
+                </span>
+                <input
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  bind:value={transcriptionKeys[provider.id]}
+                  disabled={transcriptionKeyBusy !== null}
+                  placeholder={`Paste your ${provider.label} API key`}
+                  class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
+                />
+              </label>
+
+              <div class="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  aria-label={transcriptionClearArmed === provider.id
+                    ? `Confirm removing ${provider.label} key`
+                    : `Remove ${provider.label} key`}
+                  onclick={() => requestTranscriptionClear(provider.id)}
+                  disabled={transcriptionKeyBusy !== null ||
+                    !provider.key_present}
+                  class="rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-120 hover:bg-surface-sunken disabled:opacity-40 {transcriptionClearArmed ===
+                  provider.id
+                    ? 'text-error'
+                    : 'text-fg-muted hover:text-fg'}"
+                >
+                  {transcriptionClearArmed === provider.id
+                    ? "Really clear?"
+                    : "Clear"}
+                </button>
+                <Button
+                  aria-label={`Save ${provider.label} key`}
+                  disabled={transcriptionKeyBusy !== null ||
+                    transcriptionKeys[provider.id].length === 0}
+                  onclick={() => saveTranscriptionKey(provider.id)}
+                >
+                  {transcriptionKeyBusy === provider.id
+                    ? "Saving…"
+                    : "Save key"}
+                </Button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </fieldset>
+
+      <label class="mt-5 flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={transcriptionPreferences.auto_detect_start}
+          disabled={transcriptionBusy}
+          onchange={(event) => setAutoDetect(event.currentTarget.checked)}
+          class="mt-0.5 h-4 w-4 accent-accent"
+        />
+        <span>
+          <span class="font-medium text-fg"
+            >Automatically detect text start</span
+          >
+          <span class="block text-fg-muted">
+            Offer transcription-assisted start detection when a mismatch is
+            eligible.
+          </span>
+        </span>
+      </label>
+    {/if}
+
+    {#if transcriptionError}
+      <Alert class="mt-4">{transcriptionError}</Alert>
+    {/if}
+  </section>
 
   <details
     class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
@@ -474,5 +757,4 @@
       </div>
     </details>
   {/if}
-
 </section>

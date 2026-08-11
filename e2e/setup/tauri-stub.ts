@@ -26,6 +26,8 @@ export const tauriStubInitScript = `
     const WORKER_NS = "__WORKER_INDEX__";
     const SKIPPED_KEY = "__pickerSkipped__:" + WORKER_NS;
     const MAPPING_KEY = "__mappingByProject__:" + WORKER_NS;
+    const TRANSCRIPTION_PREFERENCES_KEY = "__transcriptionPreferences__:" + WORKER_NS;
+    const TRANSCRIPTION_KEYS_KEY = "__transcriptionKeyPresence__:" + WORKER_NS;
     function readSkipped() {
         try {
             return JSON.parse(sessionStorage.getItem(SKIPPED_KEY) || "{}");
@@ -48,6 +50,36 @@ export const tauriStubInitScript = `
     function writeMappings(m) {
         try {
             sessionStorage.setItem(MAPPING_KEY, JSON.stringify(m));
+        } catch {}
+    }
+    function readTranscriptionPreferences() {
+        try {
+            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_PREFERENCES_KEY)) || {
+                provider_id: "groq",
+                auto_detect_start: false,
+            };
+        } catch {
+            return { provider_id: "groq", auto_detect_start: false };
+        }
+    }
+    function writeTranscriptionPreferences(preferences) {
+        try {
+            sessionStorage.setItem(
+                TRANSCRIPTION_PREFERENCES_KEY,
+                JSON.stringify(preferences),
+            );
+        } catch {}
+    }
+    function readTranscriptionKeys() {
+        try {
+            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_KEYS_KEY)) || {};
+        } catch {
+            return {};
+        }
+    }
+    function writeTranscriptionKeys(keys) {
+        try {
+            sessionStorage.setItem(TRANSCRIPTION_KEYS_KEY, JSON.stringify(keys));
         } catch {}
     }
     window.__pickerState__ = {
@@ -353,6 +385,60 @@ export const tauriStubInitScript = `
         },
         cmd_clear_lingq_key: () => {
             window.__lingqKey__ = null;
+            return null;
+        },
+        cmd_list_transcribe_providers: () => {
+            const keys = readTranscriptionKeys();
+            return [
+                {
+                    id: "groq",
+                    label: "Groq",
+                    model: "whisper-large-v3-turbo",
+                    pricing_hint: {
+                        summary: "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+                        estimated_usd_per_minute: 0.0006666666666666666,
+                        free_tier_eligible: true,
+                        docs_url: "https://console.groq.com/docs/speech-to-text",
+                    },
+                    data_policy_url: "https://console.groq.com/docs/your-data",
+                    key_present: keys.groq === true,
+                },
+                {
+                    id: "open_ai",
+                    label: "OpenAI",
+                    model: "whisper-1",
+                    pricing_hint: {
+                        summary: "No free tier; current reference $0.006/min",
+                        estimated_usd_per_minute: 0.006,
+                        free_tier_eligible: false,
+                        docs_url: "https://developers.openai.com/api/docs/models/whisper-1",
+                    },
+                    data_policy_url: "https://platform.openai.com/docs/models/default-usage-policies-by-endpoint",
+                    key_present: keys.open_ai === true,
+                },
+            ];
+        },
+        cmd_save_transcribe_key: (args) => {
+            const keys = readTranscriptionKeys();
+            keys[args && args.provider] = Boolean(args && args.key);
+            writeTranscriptionKeys(keys);
+            return null;
+        },
+        cmd_transcribe_key_present: (args) =>
+            readTranscriptionKeys()[args && args.provider] === true,
+        cmd_clear_transcribe_key: (args) => {
+            const keys = readTranscriptionKeys();
+            keys[args && args.provider] = false;
+            writeTranscriptionKeys(keys);
+            return null;
+        },
+        cmd_get_transcription_preferences: () => readTranscriptionPreferences(),
+        cmd_set_transcription_preferences: (args) => {
+            if (window.__failNextTranscriptionPreferences__) {
+                window.__failNextTranscriptionPreferences__ = false;
+                throw { kind: "Other", message: "Could not save transcription preferences." };
+            }
+            writeTranscriptionPreferences(args && args.preferences);
             return null;
         },
         cmd_seed_mapping: () => null,
