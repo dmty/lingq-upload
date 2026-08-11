@@ -213,7 +213,27 @@
     }
     unlisten = stop;
 
-    await commands.cmdDetectStartOffset(detectionProjectId, jobId);
+    // Paths that return before the backend emitter exists (cached evidence,
+    // setup failures, transport faults) never emit a terminal event, so the
+    // returned Result is the only terminal signal. `terminal` keeps whichever
+    // arrives first the only one rendered.
+    const outcome = await commands
+      .cmdDetectStartOffset(detectionProjectId, jobId)
+      .catch((cause: unknown) => ({
+        status: "error" as const,
+        error: {
+          kind: "Other" as const,
+          message: cause instanceof Error ? cause.message : String(cause),
+        },
+      }));
+    if (destroyed || activeToken !== token || terminal) return;
+    if (outcome.status === "ok") {
+      applyResult(outcome.data);
+      finish("Detection complete");
+    } else {
+      error = appErrorMessage(outcome.error);
+      finish("Detection failed");
+    }
   }
 
   function requestDetection(event: MouseEvent) {

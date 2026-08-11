@@ -303,17 +303,82 @@ test.describe("detected text range flow", () => {
       job_id: jobId,
       stage: { kind: "detecting_start" },
     });
-    await page.evaluate(() => window.__releaseDetection__());
     await emit(page, {
       kind: "Result",
       job_id: jobId,
       ok: false,
       payload: { kind: "Transcribe", message: { kind: "network" } },
     });
+    await page.evaluate(() => window.__releaseDetection__());
     await expect(page.getByRole("alert")).toHaveCount(1);
     await expect(page.getByRole("alert")).toContainText(
       "Couldn't reach the transcription provider",
     );
+  });
+
+  test("renders a command error that never emits a terminal event", async ({
+    page,
+  }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    await expect(page.getByText("Range Detection Fixture")).toBeVisible();
+    await page.evaluate(() => {
+      window.__detectionCommandError__ = {
+        kind: "Transcribe",
+        message: { kind: "api_key" },
+      };
+    });
+    await page
+      .getByRole("button", { name: "Detect audio's text range" })
+      .click();
+
+    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(page.getByRole("alert")).toContainText(
+      "No transcription API key configured",
+    );
+    await expect(
+      page.getByRole("button", { name: "Cancel detection" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Refine" })).toBeVisible();
+  });
+
+  test("renders a transport rejection instead of spinning forever", async ({
+    page,
+  }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    await expect(page.getByText("Range Detection Fixture")).toBeVisible();
+    await page.evaluate(() => {
+      window.__detectionCommandError__ = new Error("ipc transport unavailable");
+    });
+    await page
+      .getByRole("button", { name: "Detect audio's text range" })
+      .click();
+
+    await expect(page.getByRole("alert")).toContainText(
+      "ipc transport unavailable",
+    );
+    await expect(
+      page.getByRole("button", { name: "Cancel detection" }),
+    ).toHaveCount(0);
+  });
+
+  test("renders a cached preview returned without any events", async ({
+    page,
+  }) => {
+    await page.goto(`/match/${PROJECT_KEY}`);
+    await expect(page.getByText("Range Detection Fixture")).toBeVisible();
+    await page.evaluate((preview) => {
+      window.__detectionResult__ = { kind: "detected", preview };
+    }, titlePreview);
+    await page
+      .getByRole("button", { name: "Detect audio's text range" })
+      .click();
+
+    const preview = page.getByTestId("detection-range-preview");
+    await expect(preview).toContainText("Chapter 2 · Arrival");
+    await expect(preview).toContainText("Chapter 3 · Return");
+    await expect(
+      page.getByRole("button", { name: "Cancel detection" }),
+    ).toHaveCount(0);
   });
 
   test("confirms stable IDs into MappingGrid and routes only from mapping confirmation", async ({
