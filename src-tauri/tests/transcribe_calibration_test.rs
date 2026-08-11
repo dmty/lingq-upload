@@ -35,6 +35,26 @@ struct CorpusMetrics {
     valid_top1_inclusion: f64,
 }
 
+/// NFR12 release floors for auto mode. Manual detection stays callable below
+/// them; only the unattended path is gated.
+fn meets_auto_release_gate(metrics: &CorpusMetrics) -> bool {
+    metrics.auto_accept_precision >= 0.95 && metrics.valid_top1_inclusion >= 0.90
+}
+
+fn corpus_chapters(case: &CorpusCase) -> Vec<Chapter> {
+    case.chapters
+        .iter()
+        .enumerate()
+        .map(|(order, chapter)| Chapter {
+            order,
+            id: chapter.id.clone(),
+            title: chapter.title.clone(),
+            body: chapter.body.clone(),
+            ..Default::default()
+        })
+        .collect()
+}
+
 fn evaluate_corpus(cases: &[CorpusCase]) -> CorpusMetrics {
     let config = AlignmentConfig::default();
     let mut auto_accepted = 0;
@@ -45,18 +65,7 @@ fn evaluate_corpus(cases: &[CorpusCase]) -> CorpusMetrics {
     let mut stage_b_cases = 0;
 
     for case in cases {
-        let chapters: Vec<_> = case
-            .chapters
-            .iter()
-            .enumerate()
-            .map(|(order, chapter)| Chapter {
-                order,
-                id: chapter.id.clone(),
-                title: chapter.title.clone(),
-                body: chapter.body.clone(),
-                ..Default::default()
-            })
-            .collect();
+        let chapters = corpus_chapters(case);
         let title = title_match(
             case.first_audio_title.as_deref(),
             case.last_audio_title.as_deref(),
@@ -188,13 +197,91 @@ fn defaults_meet_multilingual_calibration_floors() {
         metrics.auto_accept_precision, metrics.valid_top1_inclusion
     );
     assert!(
-        metrics.auto_accept_precision >= 0.95,
-        "auto_accept_precision {:.3} is below 0.95",
-        metrics.auto_accept_precision
+        meets_auto_release_gate(&metrics),
+        "auto release gate failed: auto_accept_precision {:.3} (>= 0.95), valid_top1_inclusion {:.3} (>= 0.90)",
+        metrics.auto_accept_precision,
+        metrics.valid_top1_inclusion
+    );
+}
+
+#[test]
+fn sub_threshold_metrics_cannot_pass_the_auto_release_gate() {
+    for (label, metrics) in [
+        (
+            "precision below floor",
+            CorpusMetrics {
+                auto_accept_precision: 0.94,
+                valid_top1_inclusion: 0.99,
+            },
+        ),
+        (
+            "top-1 inclusion below floor",
+            CorpusMetrics {
+                auto_accept_precision: 1.0,
+                valid_top1_inclusion: 0.89,
+            },
+        ),
+        (
+            "both below floor",
+            CorpusMetrics {
+                auto_accept_precision: 0.5,
+                valid_top1_inclusion: 0.5,
+            },
+        ),
+    ] {
+        assert!(
+            !meets_auto_release_gate(&metrics),
+            "{label} must not pass the auto release gate"
+        );
+    }
+
+    assert!(
+        meets_auto_release_gate(&CorpusMetrics {
+            auto_accept_precision: 0.95,
+            valid_top1_inclusion: 0.90,
+        }),
+        "the exact floors must pass"
+    );
+}
+
+#[test]
+fn manual_detection_stays_callable_below_the_auto_release_gate() {
+    let cases: Vec<CorpusCase> = serde_json::from_str(CORPUS).expect("parse calibration corpus");
+    let case = cases
+        .iter()
+        .find(|case| case.valid_sample)
+        .expect("corpus contains a valid sample");
+    let chapters = corpus_chapters(case);
+    // Unreachable floors: auto accept becomes impossible, manual review must not.
+    let config = AlignmentConfig {
+        transcript_confidence: 2.0,
+        title_confidence: 2.0,
+        ..AlignmentConfig::default()
+    };
+
+    assert!(title_match(
+        case.first_audio_title.as_deref(),
+        case.last_audio_title.as_deref(),
+        &chapters,
+        &config,
+    )
+    .is_none());
+    let head = transcript_match_head(&case.head_transcript, &chapters, &config);
+    let tail = transcript_match_tail(
+        &case.tail_transcript,
+        &chapters,
+        head.confident_id(),
+        &config,
+    );
+
+    assert!(!matches!(head, BoundaryResult::Confident { .. }));
+    assert!(!matches!(tail, BoundaryResult::Confident { .. }));
+    assert!(
+        !head.top().is_empty(),
+        "manual review still needs head candidates"
     );
     assert!(
-        metrics.valid_top1_inclusion >= 0.90,
-        "valid_top1_inclusion {:.3} is below 0.90",
-        metrics.valid_top1_inclusion
+        !tail.top().is_empty(),
+        "manual review still needs tail candidates"
     );
 }

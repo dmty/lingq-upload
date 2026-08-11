@@ -250,16 +250,21 @@ async function autoStarted(page: Page): Promise<string> {
   return page.evaluate(() => window.__detectionStartArgs__[0].jobId);
 }
 
+/** Invoke log filtered to the ordered detection→mapping commands. */
+function detectionCommandOrder(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const ordered = [
+      "cmd_detect_start_offset",
+      "cmd_confirm_detected_range",
+      "cmd_confirm_mapping",
+    ];
+    return window.__invokeLog__.filter((command) => ordered.includes(command));
+  });
+}
+
 async function expectNoProviderCall(page: Page): Promise<void> {
   expect(await detectionCalls(page)).toBe(0);
-  expect(
-    await page.evaluate(
-      () =>
-        window.__invokeLog__.filter(
-          (command) => command === "cmd_detect_start_offset",
-        ).length,
-    ),
-  ).toBe(0);
+  expect(await detectionCommandOrder(page)).toEqual([]);
 }
 
 test.describe("gated automatic range detection", () => {
@@ -304,9 +309,19 @@ test.describe("gated automatic range detection", () => {
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/match/${AUTO_KEY}$`));
     expect(await detectionCalls(page)).toBe(1);
+    // The mapping grid is a gate: /run stays unreachable until it is confirmed.
+    expect(await detectionCommandOrder(page)).toEqual([
+      "cmd_detect_start_offset",
+      "cmd_confirm_detected_range",
+    ]);
 
     await page.getByTestId("mapping-continue").click();
     await expect(page).toHaveURL(new RegExp(`/run/${AUTO_KEY}`));
+    expect(await detectionCommandOrder(page)).toEqual([
+      "cmd_detect_start_offset",
+      "cmd_confirm_detected_range",
+      "cmd_confirm_mapping",
+    ]);
   });
 
   test("the app toggle off keeps an eligible project manual", async ({

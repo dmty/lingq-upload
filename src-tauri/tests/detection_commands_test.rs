@@ -62,6 +62,42 @@ fn availability_project(chapter_count: usize, track_count: usize) -> Availabilit
     AvailabilityFixture { _dir: dir, project }
 }
 
+fn consented(
+    mut fixture: AvailabilityFixture,
+    provider_id: TranscribeProviderId,
+) -> AvailabilityFixture {
+    fixture.project.transcribe_consent = Some(TranscribeConsent {
+        provider_id,
+        accepted_at: Utc::now(),
+    });
+    fixture
+}
+
+/// A project whose consent already matches the Groq default of the matrix.
+fn groq_project(chapter_count: usize, track_count: usize) -> AvailabilityFixture {
+    consented(
+        availability_project(chapter_count, track_count),
+        TranscribeProviderId::Groq,
+    )
+}
+
+fn with_evidence(
+    mut fixture: AvailabilityFixture,
+    chapter_count: usize,
+    track_count: usize,
+) -> AvailabilityFixture {
+    fixture.project.matcher_decision = Some(MatcherDecision {
+        condition: MismatchCondition::ManyToFew,
+        response: MismatchResponse::SplitProportional,
+        chapter_count,
+        track_count,
+        user_overrode: false,
+        decided_at: Utc::now(),
+        detection: Some(evidence()),
+    });
+    fixture
+}
+
 fn stage_b_project() -> AvailabilityFixture {
     let mut fixture = availability_project(6, 0);
     let audio = fixture._dir.path().join("generic-audio.mp3");
@@ -1208,6 +1244,190 @@ async fn confirmed_evidence_reuse_still_rejects_a_duplicate_caller_job_id() {
     assert_eq!(cancels.lock().unwrap().len(), 1);
     assert!(!existing_token.is_cancelled());
     assert!(sink.events.is_empty());
+}
+
+#[derive(Clone, Copy)]
+enum LocalAction {
+    /// Refining a preview boundary and confirming it — a local decision that
+    /// must never re-upload audio.
+    Refine,
+    Reset,
+}
+
+struct AutoCase {
+    name: &'static str,
+    fixture: AvailabilityFixture,
+    active_provider: TranscribeProviderId,
+    key: Option<&'static str>,
+    action: Option<LocalAction>,
+    /// A reset is not itself a trigger: the one-shot suppression that keeps the
+    /// next mount from restarting lives in the resolver and is covered by the
+    /// browser spec, so a reset row only proves the reset touched no provider.
+    reconsiders_start: bool,
+}
+
+fn auto_case(name: &'static str, fixture: AvailabilityFixture) -> AutoCase {
+    AutoCase {
+        name,
+        fixture,
+        active_provider: TranscribeProviderId::Groq,
+        key: Some("groq-test-key"),
+        action: None,
+        reconsiders_start: true,
+    }
+}
+
+#[derive(Debug)]
+struct AutoCounters {
+    factory_calls: usize,
+    transcribe_calls: usize,
+    started: bool,
+    /// `None` when availability itself refused to answer.
+    can_start: Option<bool>,
+}
+
+/// Replays one auto-mode consideration end to end: optional local action, then
+/// the `can_start` gate, then — only if the gate opens — a real detection run
+/// against counting fakes.
+async fn run_auto_consideration(case: AutoCase) -> AutoCounters {
+    let preferences_dir = tempfile::tempdir().unwrap();
+    write_preferences(preferences_dir.path(), case.active_provider);
+    let store = InMemoryProjectStore::new();
+    store.put(&case.fixture.project).unwrap();
+    let project_id = case.fixture.project.id.clone();
+
+    match case.action {
+        Some(LocalAction::Refine) => {
+            confirm_detected_range_impl(&store, &project_id, range(2, 3), preview(range(1, 4)))
+                .await
+                .unwrap_or_else(|error| panic!("{}: refine confirm failed: {error}", case.name));
+        }
+        Some(LocalAction::Reset) => {
+            reset_detection_impl(&store, &project_id)
+                .unwrap_or_else(|error| panic!("{}: reset failed: {error}", case.name));
+        }
+        None => {}
+    }
+
+    let project = store.get(&project_id).unwrap().unwrap();
+    // An availability error is itself a refusal to start, so it counts as a
+    // closed gate rather than a panic — the row still asserts zero uploads.
+    let can_start = detection_availability_impl(&project, case.active_provider, case.key.is_some())
+        .await
+        .ok()
+        .map(|availability| availability.can_start);
+    let factory_calls = Arc::new(AtomicUsize::new(0));
+    let transcribe_calls = Arc::new(AtomicUsize::new(0));
+    let mut started = false;
+
+    if case.reconsiders_start && can_start == Some(true) {
+        let creations = Arc::clone(&factory_calls);
+        let calls = Arc::clone(&transcribe_calls);
+        let key = case.key;
+        let factory = detection_provider_factory(
+            &store,
+            &project_id,
+            preferences_dir.path(),
+            move |_| {
+                key.map(SecretString::from).ok_or_else(|| {
+                    AppError::Transcribe(TranscribeError {
+                        kind: TranscribeErrorKind::ApiKey,
+                        message: "no fake key".into(),
+                    })
+                })
+            },
+            move |_, _| {
+                creations.fetch_add(1, Ordering::SeqCst);
+                Ok(Box::new(CountingTranscriber { calls }))
+            },
+        );
+        let mut sink = RecordingDetectionSink::default();
+        let _ = detect_start_offset_impl(
+            &project,
+            &empty_cancel_map(),
+            Uuid::new_v4(),
+            &mut sink,
+            factory,
+        )
+        .await;
+        started = true;
+    }
+
+    AutoCounters {
+        factory_calls: factory_calls.load(Ordering::SeqCst),
+        transcribe_calls: transcribe_calls.load(Ordering::SeqCst),
+        started,
+        can_start,
+    }
+}
+
+fn privacy_cases() -> Vec<AutoCase> {
+    vec![
+        auto_case("missing consent", availability_project(6, 3)),
+        AutoCase {
+            active_provider: TranscribeProviderId::OpenAi,
+            key: Some("openai-test-key"),
+            ..auto_case("groq consent after switching to openai", groq_project(6, 3))
+        },
+        AutoCase {
+            key: None,
+            ..auto_case("missing selected provider key", groq_project(6, 3))
+        },
+        auto_case("count off", groq_project(5, 3)),
+        auto_case("one to many", groq_project(1, 3)),
+        auto_case("zero tracks", groq_project(6, 0)),
+        auto_case("zero chapters", groq_project(0, 3)),
+        auto_case("tracks heavy mismatch", groq_project(2, 7)),
+        auto_case("existing evidence", with_evidence(groq_project(6, 3), 6, 3)),
+        AutoCase {
+            action: Some(LocalAction::Refine),
+            ..auto_case("local preview refine", groq_project(6, 3))
+        },
+        AutoCase {
+            action: Some(LocalAction::Reset),
+            reconsiders_start: false,
+            ..auto_case("reset command", with_evidence(groq_project(6, 3), 6, 3))
+        },
+    ]
+}
+
+#[tokio::test]
+async fn privacy_matrix_uploads_nothing_until_an_eligible_trigger() {
+    for case in privacy_cases() {
+        let name = case.name;
+        let reconsiders_start = case.reconsiders_start;
+        let counters = run_auto_consideration(case).await;
+        assert_eq!(counters.factory_calls, 0, "{name} constructed provider");
+        assert_eq!(counters.transcribe_calls, 0, "{name} uploaded audio");
+        assert!(!counters.started, "{name} started a detection job");
+        if reconsiders_start {
+            assert_eq!(
+                counters.can_start,
+                Some(false),
+                "{name} must be refused by the availability gate"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn privacy_matrix_lets_an_explicit_rerun_after_reset_start_one_job() {
+    let counters = run_auto_consideration(AutoCase {
+        action: Some(LocalAction::Reset),
+        ..auto_case(
+            "explicit rerun after reset",
+            with_evidence(
+                consented(stage_b_project(), TranscribeProviderId::Groq),
+                6,
+                1,
+            ),
+        )
+    })
+    .await;
+
+    assert!(counters.started);
+    assert_eq!(counters.factory_calls, 1);
+    assert_eq!(counters.transcribe_calls, 2);
 }
 
 #[tokio::test]
