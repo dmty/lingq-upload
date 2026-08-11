@@ -1,15 +1,19 @@
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tempfile::TempDir;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::core::audio::{self, AudioError, AudioTrack, EncoderSettings, TranscodeReport};
+use crate::core::epub::Chapter;
 use crate::core::project::Project;
 use crate::error::AppError;
+use crate::events::DetectionPhase;
 
 mod align;
 mod error;
@@ -148,4 +152,340 @@ pub trait Transcriber: Send + Sync {
         audio: &Path,
         opts: &TranscribeOpts,
     ) -> BoxFuture<'_, Result<Transcript, TranscribeError>>;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct DetectionPreview {
+    pub provider_id: Option<TranscribeProviderId>,
+    pub align_source: AlignSource,
+    pub range: DetectedRange,
+    pub confidence: f32,
+    pub transcript_head_preview: Option<String>,
+    pub transcript_tail_preview: Option<String>,
+    pub detected_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DetectStartResult {
+    Detected {
+        preview: DetectionPreview,
+    },
+    LowConfidence {
+        transcript_head_preview: Option<String>,
+        transcript_tail_preview: Option<String>,
+        top_head: Vec<ChapterCandidate>,
+        top_tail: Vec<ChapterCandidate>,
+    },
+    NoTranscript {
+        reason: NoTranscriptReason,
+    },
+}
+
+pub trait DetectionSink: Send {
+    fn started(&mut self, job_id: Uuid);
+    fn progress(&mut self, job_id: Uuid, pct: f32, phase: DetectionPhase);
+    fn result(&mut self, job_id: Uuid, result: &DetectStartResult);
+    fn error(&mut self, job_id: Uuid, error: &TranscribeError);
+    fn cancelled(&mut self, job_id: Uuid);
+}
+
+pub type ProviderFactory<'a> =
+    Box<dyn FnOnce() -> Result<Box<dyn Transcriber>, TranscribeError> + Send + 'a>;
+
+enum DetectFailure {
+    Cancelled,
+    Operational(TranscribeError),
+    Content(NoTranscriptReason),
+}
+
+struct DetectionLifecycle<'a> {
+    job_id: Uuid,
+    sink: &'a mut dyn DetectionSink,
+    terminal: bool,
+}
+
+impl<'a> DetectionLifecycle<'a> {
+    fn start(job_id: Uuid, sink: &'a mut dyn DetectionSink) -> Self {
+        sink.started(job_id);
+        Self {
+            job_id,
+            sink,
+            terminal: false,
+        }
+    }
+
+    fn progress(&mut self, pct: f32, phase: DetectionPhase) {
+        debug_assert!(!self.terminal);
+        self.sink.progress(self.job_id, pct, phase);
+    }
+
+    fn result(&mut self, result: &DetectStartResult) {
+        self.finish();
+        self.sink.result(self.job_id, result);
+    }
+
+    fn error(&mut self, error: &TranscribeError) {
+        self.finish();
+        self.sink.error(self.job_id, error);
+    }
+
+    fn cancelled(&mut self) {
+        self.finish();
+        self.sink.cancelled(self.job_id);
+    }
+
+    fn finish(&mut self) {
+        debug_assert!(!self.terminal, "duplicate detection terminal");
+        self.terminal = true;
+    }
+}
+
+pub async fn detect_start_offset(
+    project: &Project,
+    tracks: &[AudioTrack],
+    chapters: &[Chapter],
+    job_id: Uuid,
+    config: &AlignmentConfig,
+    sink: &mut dyn DetectionSink,
+    cancel: CancellationToken,
+    provider_factory: ProviderFactory<'_>,
+) -> Result<DetectStartResult, TranscribeError> {
+    let mut lifecycle = DetectionLifecycle::start(job_id, sink);
+    match detect_start_offset_inner(
+        project,
+        tracks,
+        chapters,
+        config,
+        &mut lifecycle,
+        &cancel,
+        provider_factory,
+    )
+    .await
+    {
+        Ok(result) => {
+            lifecycle.result(&result);
+            Ok(result)
+        }
+        Err(DetectFailure::Operational(error)) => {
+            lifecycle.error(&error);
+            Err(error)
+        }
+        Err(DetectFailure::Cancelled) => {
+            lifecycle.cancelled();
+            Err(TranscribeError::new(
+                TranscribeErrorKind::Audio,
+                "detection cancelled",
+            ))
+        }
+        Err(DetectFailure::Content(reason)) => {
+            let result = DetectStartResult::NoTranscript { reason };
+            lifecycle.result(&result);
+            Ok(result)
+        }
+    }
+}
+
+async fn detect_start_offset_inner(
+    project: &Project,
+    tracks: &[AudioTrack],
+    chapters: &[Chapter],
+    config: &AlignmentConfig,
+    lifecycle: &mut DetectionLifecycle<'_>,
+    cancel: &CancellationToken,
+    provider_factory: ProviderFactory<'_>,
+) -> Result<DetectStartResult, DetectFailure> {
+    lifecycle.progress(0.05, DetectionPhase::TitleCheck);
+    ensure_not_cancelled(cancel)?;
+    if let Some(alignment) = title_match(
+        tracks.first().and_then(|track| track.title.as_deref()),
+        tracks.last().and_then(|track| track.title.as_deref()),
+        chapters,
+        config,
+    ) {
+        return Ok(DetectStartResult::Detected {
+            preview: DetectionPreview {
+                provider_id: None,
+                align_source: alignment.source,
+                range: alignment.range,
+                confidence: alignment.confidence,
+                transcript_head_preview: None,
+                transcript_tail_preview: None,
+                detected_at: Utc::now(),
+            },
+        });
+    }
+
+    lifecycle.progress(0.15, DetectionPhase::SampleHead);
+    ensure_not_cancelled(cancel)?;
+    let plan = match probe_and_plan_sample_windows(tracks, config).await {
+        Ok(plan) => plan,
+        Err(SamplePlanningError::NoTranscript(reason)) => {
+            return Ok(DetectStartResult::NoTranscript { reason })
+        }
+        Err(SamplePlanningError::Audio(error)) => return Err(audio_failure(error)),
+        Err(SamplePlanningError::Resolve(error)) => {
+            return Err(DetectFailure::Operational(TranscribeError::new(
+                TranscribeErrorKind::Audio,
+                error.to_string(),
+            )))
+        }
+    };
+    ensure_not_cancelled(cancel)?;
+
+    let head_sample = extract_sample(&plan.head.initial, cancel)
+        .await
+        .map_err(audio_failure)?;
+    lifecycle.progress(0.30, DetectionPhase::TranscribeHead);
+    ensure_not_cancelled(cancel)?;
+    let transcriber = provider_factory().map_err(DetectFailure::Operational)?;
+    let provider_id = transcriber.provider_id();
+    let language = ProviderCatalog::built_in()
+        .descriptor(provider_id)
+        .ok()
+        .and_then(|descriptor| provider_language_hint(&project.settings.language, descriptor));
+    let opts = TranscribeOpts {
+        language,
+        prompt: None,
+    };
+    let head_text = transcribe_side(
+        transcriber.as_ref(),
+        head_sample,
+        plan.head.retry.as_ref(),
+        &opts,
+        cancel,
+    )
+    .await?;
+
+    lifecycle.progress(0.45, DetectionPhase::AlignHead);
+    ensure_not_cancelled(cancel)?;
+    let head = transcript_match_head(&head_text, chapters, config);
+
+    lifecycle.progress(0.55, DetectionPhase::SampleTail);
+    ensure_not_cancelled(cancel)?;
+    let tail_sample = extract_sample(&plan.tail.initial, cancel)
+        .await
+        .map_err(audio_failure)?;
+    lifecycle.progress(0.70, DetectionPhase::TranscribeTail);
+    ensure_not_cancelled(cancel)?;
+    let tail_text = transcribe_side(
+        transcriber.as_ref(),
+        tail_sample,
+        plan.tail.retry.as_ref(),
+        &opts,
+        cancel,
+    )
+    .await?;
+
+    lifecycle.progress(0.90, DetectionPhase::AlignTail);
+    ensure_not_cancelled(cancel)?;
+    let tail = transcript_match_tail(&tail_text, chapters, head.confident_id(), config);
+
+    match (&head, &tail) {
+        (
+            BoundaryResult::Confident {
+                chapter_id: start_chapter_id,
+                score: head_score,
+                ..
+            },
+            BoundaryResult::Confident {
+                chapter_id: end_chapter_id,
+                score: tail_score,
+                ..
+            },
+        ) => Ok(DetectStartResult::Detected {
+            preview: DetectionPreview {
+                provider_id: Some(provider_id),
+                align_source: AlignSource::Transcript,
+                range: DetectedRange {
+                    start_chapter_id: start_chapter_id.clone(),
+                    end_chapter_id: end_chapter_id.clone(),
+                },
+                confidence: (head_score + tail_score) * 0.5,
+                transcript_head_preview: bound_preview(Some(&head_text)),
+                transcript_tail_preview: bound_preview(Some(&tail_text)),
+                detected_at: Utc::now(),
+            },
+        }),
+        (BoundaryResult::ContentPoor, _) | (_, BoundaryResult::ContentPoor) => {
+            Err(DetectFailure::Content(NoTranscriptReason::ContentPoor))
+        }
+        _ => Ok(DetectStartResult::LowConfidence {
+            transcript_head_preview: bound_preview(Some(&head_text)),
+            transcript_tail_preview: bound_preview(Some(&tail_text)),
+            top_head: head.top().to_vec(),
+            top_tail: tail.top().to_vec(),
+        }),
+    }
+}
+
+async fn transcribe_side(
+    transcriber: &dyn Transcriber,
+    initial: ExtractedSample,
+    retry: Option<&SampleWindow>,
+    opts: &TranscribeOpts,
+    cancel: &CancellationToken,
+) -> Result<String, DetectFailure> {
+    let text = transcribe_sample(transcriber, initial, opts, cancel).await?;
+    let Err(reason) = usable_transcript(&text) else {
+        return Ok(text);
+    };
+    let Some(retry) = retry else {
+        return Err(DetectFailure::Content(reason));
+    };
+
+    ensure_not_cancelled(cancel)?;
+    let sample = extract_sample(retry, cancel).await.map_err(audio_failure)?;
+    ensure_not_cancelled(cancel)?;
+    let text = transcribe_sample(transcriber, sample, opts, cancel).await?;
+    usable_transcript(&text).map_err(DetectFailure::Content)?;
+    Ok(text)
+}
+
+async fn transcribe_sample(
+    transcriber: &dyn Transcriber,
+    sample: ExtractedSample,
+    opts: &TranscribeOpts,
+    cancel: &CancellationToken,
+) -> Result<String, DetectFailure> {
+    ensure_not_cancelled(cancel)?;
+    let response = transcriber.transcribe(sample.path(), opts).await;
+    drop(sample);
+    ensure_not_cancelled(cancel)?;
+    response
+        .map(|transcript| transcript.text)
+        .map_err(DetectFailure::Operational)
+}
+
+fn usable_transcript(text: &str) -> Result<(), NoTranscriptReason> {
+    let normalized = normalize_for_alignment(text);
+    if normalized.is_empty() {
+        Err(NoTranscriptReason::Empty)
+    } else if normalized.chars().count() < 20 {
+        Err(NoTranscriptReason::ContentPoor)
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_not_cancelled(cancel: &CancellationToken) -> Result<(), DetectFailure> {
+    if cancel.is_cancelled() {
+        Err(DetectFailure::Cancelled)
+    } else {
+        Ok(())
+    }
+}
+
+fn audio_failure(error: AudioError) -> DetectFailure {
+    match error {
+        AudioError::Cancelled => DetectFailure::Cancelled,
+        error => DetectFailure::Operational(TranscribeError::new(
+            TranscribeErrorKind::Audio,
+            error.to_string(),
+        )),
+    }
+}
+
+fn bound_preview(transcript: Option<&str>) -> Option<String> {
+    transcript.map(|text| text.chars().take(240).collect())
 }

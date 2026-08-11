@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::core::epub::EpubVendor;
 use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
+use crate::error::AppError;
+use crate::transcribe::{DetectStartResult, DetectionSink, TranscribeError};
 
 #[derive(Serialize, Type, Clone, Copy, Debug, Eq, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -333,6 +335,41 @@ impl<'a> JobEmitter<'a> {
         if let Err(e) = self.app.emit("job", event) {
             tracing::warn!(error = %e, "JobEvent emit dropped");
         }
+    }
+}
+
+impl DetectionSink for JobEmitter<'_> {
+    fn started(&mut self, job_id: Uuid) {
+        debug_assert_eq!(self.job_id, job_id);
+        JobEmitter::started(self, Stage::DetectingStart, None);
+    }
+
+    fn progress(&mut self, job_id: Uuid, pct: f32, phase: DetectionPhase) {
+        debug_assert_eq!(self.job_id, job_id);
+        self.detection_progress(pct, phase);
+    }
+
+    fn result(&mut self, job_id: Uuid, result: &DetectStartResult) {
+        debug_assert_eq!(self.job_id, job_id);
+        JobEmitter::result(
+            self,
+            true,
+            serde_json::to_value(result).unwrap_or(serde_json::Value::Null),
+        );
+    }
+
+    fn error(&mut self, job_id: Uuid, error: &TranscribeError) {
+        debug_assert_eq!(self.job_id, job_id);
+        JobEmitter::result(
+            self,
+            false,
+            serde_json::to_value(AppError::from(error.clone())).unwrap_or(serde_json::Value::Null),
+        );
+    }
+
+    fn cancelled(&mut self, job_id: Uuid) {
+        debug_assert_eq!(self.job_id, job_id);
+        JobEmitter::cancelled(self);
     }
 }
 
