@@ -4,6 +4,7 @@ import {
   type BucketMeta,
   type ChapterId,
   type ChapterMeta,
+  type DetectionEvidence,
   type MappingOp,
   type MappingState,
   type ProjectId,
@@ -15,6 +16,10 @@ type State = {
   skippedIds: ChapterId[];
   mappingState: MappingState | null;
   absorbPolicy: AbsorbPolicy;
+  // Confirmed detection evidence for this project, if the mismatch was
+  // resolved by the detection assist rather than a manual response.
+  detectionEvidence: DetectionEvidence | null;
+  hasUploadReceipts: boolean;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
   // Ticks whenever an optimistic update is reverted by a backend error.
@@ -36,6 +41,8 @@ const state = $state<State>({
   skippedIds: [],
   mappingState: null,
   absorbPolicy: "forward",
+  detectionEvidence: null,
+  hasUploadReceipts: false,
   status: "idle",
   error: null,
   revertEpoch: 0,
@@ -162,6 +169,12 @@ export const mapping = {
   get absorbPolicy() {
     return state.absorbPolicy;
   },
+  get detectionEvidence() {
+    return state.detectionEvidence;
+  },
+  get hasUploadReceipts() {
+    return state.hasUploadReceipts;
+  },
   get status() {
     return state.status;
   },
@@ -194,6 +207,8 @@ export const mapping = {
     state.skippedIds = [];
     state.mappingState = null;
     state.absorbPolicy = "forward";
+    state.detectionEvidence = null;
+    state.hasUploadReceipts = false;
     state.revertEpoch = 0;
     state.selectedChapterId = null;
     state.chapterTextCache = {};
@@ -208,6 +223,9 @@ export const mapping = {
     state.skippedIds = loaded.data.skipped_chapters ?? [];
     state.mappingState = loaded.data.mapping ?? null;
     state.absorbPolicy = loaded.data.absorb_policy ?? "forward";
+    state.detectionEvidence =
+      loaded.data.matcher_decision?.detection ?? null;
+    state.hasUploadReceipts = (loaded.data.receipts?.length ?? 0) > 0;
 
     const chaptersResult = await commands.cmdProjectChapters(loaded.data.id);
     if (chaptersResult.status === "error") {
@@ -408,6 +426,8 @@ export const mapping = {
     state.skippedIds = [];
     state.mappingState = null;
     state.absorbPolicy = "forward";
+    state.detectionEvidence = null;
+    state.hasUploadReceipts = false;
     state.status = "idle";
     state.error = null;
     state.revertEpoch = 0;

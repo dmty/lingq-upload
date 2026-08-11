@@ -26,6 +26,7 @@ export const tauriStubInitScript = `
     const WORKER_NS = "__WORKER_INDEX__";
     const SKIPPED_KEY = "__pickerSkipped__:" + WORKER_NS;
     const MAPPING_KEY = "__mappingByProject__:" + WORKER_NS;
+    const DECISION_KEY = "__matcherDecisionByProject__:" + WORKER_NS;
     const TRANSCRIPTION_PREFERENCES_KEY = "__transcriptionPreferences__:" + WORKER_NS;
     const TRANSCRIPTION_KEYS_KEY = "__transcriptionKeyPresence__:" + WORKER_NS;
     const TRANSCRIPTION_CONSENTS_KEY = "__transcriptionConsents__:" + WORKER_NS;
@@ -52,6 +53,24 @@ export const tauriStubInitScript = `
         try {
             sessionStorage.setItem(MAPPING_KEY, JSON.stringify(m));
         } catch {}
+    }
+    // Matcher decisions are sessionStorage-backed so a confirm/reset round trip
+    // survives the navigations and reloads the specs drive. Seeded from
+    // window.__matcherDecisionByProject__ until the first write.
+    function readDecisions() {
+        try {
+            const raw = sessionStorage.getItem(DECISION_KEY);
+            if (raw) return JSON.parse(raw);
+        } catch {}
+        return window.__matcherDecisionByProject__ || {};
+    }
+    function writeDecisions(m) {
+        try {
+            sessionStorage.setItem(DECISION_KEY, JSON.stringify(m));
+        } catch {}
+    }
+    function readReceipts(key) {
+        return (window.__receiptsByProject__ && window.__receiptsByProject__[key]) || [];
     }
     function readTranscriptionPreferences() {
         try {
@@ -216,10 +235,10 @@ export const tauriStubInitScript = `
                     level: 1,
                     tags: [],
                 },
-                receipts: [],
+                receipts: readReceipts(key),
                 queue_cursor: 0,
                 completed_lesson_ids: [],
-                matcher_decision: null,
+                matcher_decision: readDecisions()[key] ?? null,
                 cover_path: meta.cover_path ?? null,
                 authors: meta.authors || [],
                 series: null,
@@ -578,6 +597,40 @@ export const tauriStubInitScript = `
                 parking_lot: [],
                 op_id: 0,
             };
+            writeMappings(mappings);
+            const decisions = readDecisions();
+            decisions[key] = {
+                condition: "many_to_few",
+                response: "split_proportional",
+                chapter_count: chapters.length,
+                track_count: selected.length,
+                user_overrode: false,
+                decided_at: new Date().toISOString(),
+                detection: { ...(args && args.evidence), range: range },
+            };
+            writeDecisions(decisions);
+            return null;
+        },
+        // Mirrors reset_detection_impl: refuses once uploads exist, otherwise
+        // drops the decision and mapping so the resolver renders again.
+        cmd_reset_detection: async (args) => {
+            window.__resetDetectionCalls__ = window.__resetDetectionCalls__ || [];
+            window.__resetDetectionCalls__.push(args);
+            if (window.__resetDetectionGate__) await window.__resetDetectionGate__;
+            if (window.__resetDetectionError__) throw window.__resetDetectionError__;
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            if (readReceipts(key).length > 0) {
+                throw {
+                    kind: "Unsupported",
+                    message: "cannot reset detection after uploads have begun",
+                };
+            }
+            const decisions = readDecisions();
+            delete decisions[key];
+            writeDecisions(decisions);
+            const mappings = readMappings();
+            delete mappings[key];
             writeMappings(mappings);
             return null;
         },

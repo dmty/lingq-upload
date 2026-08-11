@@ -31,6 +31,7 @@
   import Alert from "$lib/components/Alert.svelte";
   import StepIndicator from "$lib/components/StepIndicator.svelte";
   import DetectionAssist from "$lib/components/DetectionAssist.svelte";
+  import DetectionEvidencePanel from "$lib/components/DetectionEvidencePanel.svelte";
 
   const projectKey = $derived(page.params.projectId ?? "");
   const previewKey = $derived(`bucketPreview:${projectKey}`);
@@ -58,6 +59,10 @@
   let absorbPolicy = $state<AbsorbPolicy>("forward");
   let settingsOpen = $state(false);
   let detectionAvailability = $state<DetectionAvailability | null>(null);
+  let resettingDetection = $state(false);
+  // One-shot: a reset returns to mismatch resolution but must never be the
+  // thing that starts a detection run.
+  let suppressAutoAfterReset = false;
 
   // Audio-expand affordance (sub-case A only: no receipts yet). Toggled by the
   // "+ Add more audio" button; reveals a DropZone seeded from the project's
@@ -192,6 +197,8 @@
     absorbPolicy = "forward";
     settingsOpen = false;
     detectionAvailability = null;
+    resettingDetection = false;
+    suppressAutoAfterReset = false;
     audioPaths = [];
     audioOriginFolder = null;
     receiptCount = 0;
@@ -290,7 +297,22 @@
     return deviation > 0.3;
   }
 
-  const mappingGateOk = $derived(mapping.gateContinue());
+  // Evidence whose boundaries the current chapter set can no longer resolve
+  // makes the seeded mapping untrustworthy, so Continue is blocked until the
+  // range is reset.
+  const evidenceBoundariesResolved = $derived.by(() => {
+    const evidence = mapping.detectionEvidence;
+    if (!evidence) return true;
+    const ids = new Set(mapping.chapters.map((chapter) => chapter.id));
+    return (
+      ids.has(evidence.range.start_chapter_id) &&
+      ids.has(evidence.range.end_chapter_id)
+    );
+  });
+
+  const mappingGateOk = $derived(
+    mapping.gateContinue() && evidenceBoundariesResolved,
+  );
 
   const matterIds = $derived(
     mapping.chapters.filter((c) => c.kind !== "body").map((c) => c.id),
@@ -330,7 +352,7 @@
     }
     // A revert during the final flush means the save failed — stay on the
     // page and the footer notice explains the revert.
-    if (mapping.revertEpoch !== epoch || !mapping.gateContinue()) return;
+    if (mapping.revertEpoch !== epoch || !mappingGateOk) return;
     const pid = mapping.projectId;
     if (!pid) return;
     const res = await commands.cmdConfirmMapping(pid);
@@ -357,6 +379,41 @@
     if (projectKey !== key) return;
     if (mapping.status === "error") {
       throw new Error(mapping.error ?? "Failed to load mapping");
+    }
+  }
+
+  // Rejects so the panel can render the failure and keep the evidence: state
+  // clears only after the command succeeds.
+  async function handleResetDetection() {
+    const key = projectKey;
+    const pid = mapping.projectId;
+    if (!pid) throw new Error("Failed to load project");
+    resettingDetection = true;
+    try {
+      const result = await commands.cmdResetDetection(pid);
+      if (projectKey !== key) return;
+      if (result.status === "error") {
+        throw new Error(appErrorMessage(result.error));
+      }
+      suppressAutoAfterReset = true;
+      hydrating = true;
+      await mapping.load(key);
+      if (projectKey !== key) return;
+      // The reset already landed, so a reload failure belongs to the resolver
+      // that now renders — not to the panel this call came from.
+      if (mapping.status === "error") {
+        error = mapping.error;
+        hydrating = false;
+        return;
+      }
+      projectIdValue = mapping.projectId;
+      if (mapping.projectId) {
+        await refreshDetectionAvailability(key, mapping.projectId);
+        if (projectKey !== key) return;
+      }
+      await hydrateFromBackend(key);
+    } finally {
+      resettingDetection = false;
     }
   }
 
@@ -761,6 +818,15 @@
         <div id="project-settings-panel" data-testid="project-settings-panel">
           <ProjectSettings projectId={projectIdValue} bind:absorbPolicy />
         </div>
+      {/if}
+      {#if mapping.detectionEvidence}
+        <DetectionEvidencePanel
+          evidence={mapping.detectionEvidence}
+          chapters={mapping.chapters}
+          canReset={!mapping.hasUploadReceipts}
+          resetting={resettingDetection}
+          onReset={handleResetDetection}
+        />
       {/if}
       <div class="match-body">
         <div class="min-w-0 flex-1">
