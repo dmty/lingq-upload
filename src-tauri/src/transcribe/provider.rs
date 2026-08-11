@@ -85,13 +85,8 @@ impl ProviderCatalog {
         key: SecretString,
         http_client: Client,
     ) -> Result<Box<dyn Transcriber>, TranscribeError> {
-        let descriptor = match provider_id {
-            TranscribeProviderId::Groq => &BUILT_IN_PROVIDERS[0],
-            TranscribeProviderId::OpenAi => &BUILT_IN_PROVIDERS[1],
-        };
-
         Ok(Box::new(WhisperLikeTranscriber::new(
-            descriptor,
+            self.descriptor(provider_id)?,
             key,
             http_client,
         )))
