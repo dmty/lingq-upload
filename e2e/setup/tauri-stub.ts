@@ -154,6 +154,13 @@ export const tauriStubInitScript = `
 
     window.__invokeLog__ = [];
     window.__eventHandlers__ = window.__eventHandlers__ || {};
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+        unregisterListener(event, id) {
+            const ids = window.__eventHandlers__[event] || [];
+            window.__eventHandlers__[event] = ids.filter((candidate) => candidate !== id);
+            delete window["_" + id];
+        },
+    };
     // Test seam: fire a Tauri event into every listener the app registered.
     window.__emitEvent__ = (event, payload) => {
         const ids = window.__eventHandlers__[event] || [];
@@ -385,10 +392,18 @@ export const tauriStubInitScript = `
             writeMappings(mappings);
             return null;
         },
-        cmd_confirm_mapping: () => null,
+        cmd_confirm_mapping: (args) => {
+            window.__confirmMappingCalls__ = window.__confirmMappingCalls__ || [];
+            window.__confirmMappingCalls__.push(args);
+            return null;
+        },
         cmd_start_project_job: () => "job-1",
         cmd_project_cancel: () => 1,
-        cmd_cancel_job: () => null,
+        cmd_cancel_job: (args) => {
+            window.__cancelJobCalls__ = window.__cancelJobCalls__ || [];
+            window.__cancelJobCalls__.push(args);
+            return null;
+        },
         cmd_list_languages: () => window.__languages__ || [],
         cmd_list_collections: () => window.__collections__ || [],
         // Course detail for the /course route. Specs pin the payload via
@@ -511,10 +526,60 @@ export const tauriStubInitScript = `
             writeTranscriptionConsents(consents);
             return null;
         },
-        cmd_detect_start_offset: () => {
+        cmd_detect_start_offset: async (args) => {
             window.__detectionStartCalls__ =
                 (window.__detectionStartCalls__ || 0) + 1;
-            return { kind: "no_transcript", reason: "content_poor" };
+            window.__detectionStartArgs__ = window.__detectionStartArgs__ || [];
+            window.__detectionStartArgs__.push(args);
+            window.__detectionListenerCountAtStart__ =
+                (window.__eventHandlers__.job || []).length;
+            if (window.__detectionGate__) await window.__detectionGate__;
+            if (window.__detectionCommandError__) throw window.__detectionCommandError__;
+            return window.__detectionResult__ || {
+                kind: "no_transcript",
+                reason: "content_poor",
+            };
+        },
+        cmd_confirm_detected_range: async (args) => {
+            window.__confirmDetectedRangeCalls__ =
+                window.__confirmDetectedRangeCalls__ || [];
+            window.__confirmDetectedRangeCalls__.push(args);
+            if (window.__confirmDetectedRangeGate__) {
+                await window.__confirmDetectedRangeGate__;
+            }
+            if (window.__confirmDetectedRangeError__) {
+                throw window.__confirmDetectedRangeError__;
+            }
+            const pid = args && args.projectId;
+            const key = (pid && pid.content_hash) || "stub-project";
+            const range = args && args.selectedRange;
+            const chapters = window.__pickerState__.chaptersByProject[key] || [];
+            const start = chapters.findIndex((chapter) =>
+                chapter.id === range.start_chapter_id
+            );
+            const end = chapters.findIndex((chapter) =>
+                chapter.id === range.end_chapter_id
+            );
+            const selected = chapters.slice(start, end + 1);
+            const skipped = readSkipped();
+            skipped[key] = chapters
+                .filter((chapter) => !selected.some((item) => item.id === chapter.id))
+                .map((chapter) => chapter.id);
+            writeSkipped(skipped);
+            const mappings = readMappings();
+            mappings[key] = {
+                pairs: selected.map((chapter, index) => ({
+                    chapter_id: chapter.id,
+                    track_id: "t" + index,
+                    confidence: 1,
+                    original_confidence: 1,
+                    touched: false,
+                })),
+                parking_lot: [],
+                op_id: 0,
+            };
+            writeMappings(mappings);
+            return null;
         },
         cmd_seed_mapping: () => null,
         // Dev backend info — defaults to file backend, debug mode off.
@@ -533,7 +598,13 @@ export const tauriStubInitScript = `
             (window.__eventHandlers__[ev] = window.__eventHandlers__[ev] || []).push(id);
             return id;
         },
-        "plugin:event|unlisten": () => null,
+        "plugin:event|unlisten": (args) => {
+            const ids = window.__eventHandlers__[args && args.event] || [];
+            window.__eventHandlers__[args && args.event] = ids.filter(
+                (candidate) => candidate !== (args && args.eventId),
+            );
+            return null;
+        },
     };
 
     window.__TAURI_INTERNALS__ = {

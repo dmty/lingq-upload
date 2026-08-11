@@ -194,7 +194,7 @@ test.describe("detected-range transcription consent", () => {
     expect(await invokeCount(page, "cmd_detect_start_offset")).toBe(0);
   });
 
-  test("accept saves consent before refreshing and starts no detection in Task 17", async ({
+  test("accept saves consent before refreshing and then starts detection", async ({
     page,
   }) => {
     await page.goto(`/match/${ELIGIBLE}`);
@@ -211,7 +211,9 @@ test.describe("detected-range transcription consent", () => {
     const refreshAt = log.lastIndexOf("cmd_detection_availability");
     expect(acceptAt).toBeGreaterThan(-1);
     expect(refreshAt).toBeGreaterThan(acceptAt);
-    expect(await invokeCount(page, "cmd_detect_start_offset")).toBe(0);
+    const startAt = log.lastIndexOf("cmd_detect_start_offset");
+    expect(startAt).toBeGreaterThan(refreshAt);
+    expect(await invokeCount(page, "cmd_detect_start_offset")).toBe(1);
   });
 
   test("consent failure stays open with an alert and starts no detection", async ({

@@ -9,7 +9,9 @@
     type AbsorbPolicy,
     type AudioSource,
     type BucketPreview,
+    type DetectedRange,
     type DetectionAvailability,
+    type DetectionPreview,
     type MappingOp,
     type MismatchCondition,
     type MismatchResponse,
@@ -337,6 +339,25 @@
       return;
     }
     goto(`/run/${projectKey}?autostart=1`);
+  }
+
+  async function handleDetectedRangeConfirm(
+    range: DetectedRange,
+    preview: DetectionPreview,
+  ) {
+    const key = projectKey;
+    const pid = projectIdValue;
+    if (!pid) throw new Error("Failed to load project");
+    const result = await commands.cmdConfirmDetectedRange(pid, range, preview);
+    if (projectKey !== key || projectIdValue !== pid) return;
+    if (result.status === "error") {
+      throw new Error(appErrorMessage(result.error));
+    }
+    await mapping.load(key);
+    if (projectKey !== key) return;
+    if (mapping.status === "error") {
+      throw new Error(mapping.error ?? "Failed to load mapping");
+    }
   }
 
   async function confirm() {
@@ -835,8 +856,10 @@
         {#if projectIdValue}
           <DetectionAssist
             projectId={projectIdValue}
+            chapters={mapping.chapters}
             availability={detectionAvailability}
             onAvailabilityChanged={(next) => (detectionAvailability = next)}
+            onConfirmDetectedRange={handleDetectedRangeConfirm}
           />
         {/if}
 
