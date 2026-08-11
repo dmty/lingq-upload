@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::path::Path;
 
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -8,7 +9,9 @@ use tauri::AppHandle;
 use super::{app_data_dir, secrets};
 use crate::error::AppError;
 use crate::secrets::{KeyringBackend, SecretsStore, GROQ_ACCOUNT, OPENAI_ACCOUNT};
-use crate::transcribe::{ProviderCatalog, ProviderDescriptor, TranscribeProviderId};
+use crate::transcribe::{
+    ProviderCatalog, ProviderDescriptor, TranscribeError, TranscribeErrorKind, TranscribeProviderId,
+};
 
 const PREFERENCES_FILE: &str = "transcription-preferences.json";
 
@@ -80,7 +83,28 @@ fn key_present(
     provider: TranscribeProviderId,
     backend: Box<dyn KeyringBackend>,
 ) -> Result<bool, AppError> {
-    Ok(provider_store(provider, backend)?.key_present()?)
+    match load_key(provider, backend) {
+        Ok(_) => Ok(true),
+        Err(AppError::Transcribe(error)) if error.kind() == TranscribeErrorKind::ApiKey => {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) fn load_key(
+    provider: TranscribeProviderId,
+    backend: Box<dyn KeyringBackend>,
+) -> Result<SecretString, AppError> {
+    let key = provider_store(provider, backend)?
+        .load_key()?
+        .ok_or_else(|| {
+            TranscribeError::new(
+                TranscribeErrorKind::ApiKey,
+                format!("no transcription API key configured for {provider:?}"),
+            )
+        })?;
+    Ok(SecretString::from(key))
 }
 
 fn clear_key(
@@ -376,6 +400,17 @@ mod tests {
 
         assert!(!key_present(TranscribeProviderId::Groq, Box::new(backend.clone())).unwrap());
         assert!(key_present(TranscribeProviderId::OpenAi, Box::new(backend)).unwrap());
+    }
+
+    #[test]
+    fn missing_provider_key_maps_to_typed_api_key_error() {
+        let error =
+            load_key(TranscribeProviderId::Groq, Box::new(FakeBackend::default())).unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Transcribe(error) if error.kind() == TranscribeErrorKind::ApiKey
+        ));
     }
 
     #[test]

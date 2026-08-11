@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::core::epub::EpubVendor;
 use crate::core::matcher::{BucketPreview, MismatchCondition, MismatchResponse};
 
-#[derive(Serialize, Type, Clone, Debug, PartialEq)]
+#[derive(Serialize, Type, Clone, Copy, Debug, Eq, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[allow(dead_code)]
 pub enum Stage {
@@ -107,48 +107,102 @@ pub enum JobEvent {
 
 /// Public state-machine snapshot used by `JobEmitter`. Mirrors what
 /// `validate(&[JobEvent])` would compute, but cheap to update incrementally.
+#[derive(Clone, Copy, PartialEq)]
+enum JobKind {
+    Standard,
+    Detection,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Lifecycle {
+    #[default]
+    AwaitingStart,
+    Running,
+    Terminal,
+}
+
 #[derive(Default, Clone, Copy)]
 struct EventState {
-    seen_started: bool,
-    seen_terminal: bool,
+    lifecycle: Lifecycle,
+    job_kind: Option<JobKind>,
+    stage: Option<Stage>,
 }
 
 impl EventState {
     fn step(self, ev: &JobEvent) -> Result<Self, &'static str> {
         let mut next = self;
         match ev {
-            JobEvent::Started { .. } => {
-                if next.seen_started {
-                    return Err("duplicate Started");
+            JobEvent::Started { stage, .. } => {
+                match next.lifecycle {
+                    Lifecycle::AwaitingStart => {}
+                    Lifecycle::Running => return Err("duplicate Started"),
+                    Lifecycle::Terminal => return Err("Started after terminal"),
                 }
-                if next.seen_terminal {
-                    return Err("Started after terminal");
-                }
-                next.seen_started = true;
+                next.lifecycle = Lifecycle::Running;
+                next.job_kind = Some(if *stage == Stage::DetectingStart {
+                    JobKind::Detection
+                } else {
+                    JobKind::Standard
+                });
+                next.stage = Some(*stage);
             }
-            JobEvent::StageChanged { .. }
-            | JobEvent::Progress { .. }
-            | JobEvent::DetectionProgress { .. }
-            | JobEvent::Log { .. }
-            | JobEvent::ChapterDone { .. } => {
-                if !next.seen_started {
-                    return Err("non-Started before Started");
+            JobEvent::StageChanged { stage, .. } => {
+                next.require_running()?;
+                let detection_job = next.job_kind == Some(JobKind::Detection);
+                if (*stage == Stage::DetectingStart) != detection_job {
+                    return Err("stage change cannot cross detection boundary");
                 }
-                if next.seen_terminal {
-                    return Err("non-terminal after terminal");
+                next.stage = Some(*stage);
+            }
+            JobEvent::DetectionProgress { .. } => {
+                next.require_running()?;
+                if next.job_kind != Some(JobKind::Detection)
+                    || next.stage != Some(Stage::DetectingStart)
+                {
+                    return Err("detection progress requires DetectingStart");
                 }
             }
-            JobEvent::Result { .. } | JobEvent::Cancelled { .. } | JobEvent::NeedsMatch { .. } => {
-                if !next.seen_started {
-                    return Err("terminal before Started");
+            JobEvent::Progress { .. } | JobEvent::Log { .. } | JobEvent::ChapterDone { .. } => {
+                next.require_running()?;
+            }
+            JobEvent::Result { .. } | JobEvent::Cancelled { .. } => {
+                return next.finish();
+            }
+            JobEvent::NeedsMatch { .. } => {
+                let finished = next.finish()?;
+                if finished.job_kind == Some(JobKind::Detection) {
+                    return Err("detection terminal must be Result or Cancelled");
                 }
-                if next.seen_terminal {
-                    return Err("duplicate terminal");
-                }
-                next.seen_terminal = true;
+                return Ok(finished);
             }
         }
         Ok(next)
+    }
+
+    fn require_running(self) -> Result<(), &'static str> {
+        match self.lifecycle {
+            Lifecycle::AwaitingStart => Err("non-Started before Started"),
+            Lifecycle::Running => Ok(()),
+            Lifecycle::Terminal => Err("non-terminal after terminal"),
+        }
+    }
+
+    fn finish(mut self) -> Result<Self, &'static str> {
+        match self.lifecycle {
+            Lifecycle::AwaitingStart => Err("terminal before Started"),
+            Lifecycle::Running => {
+                self.lifecycle = Lifecycle::Terminal;
+                Ok(self)
+            }
+            Lifecycle::Terminal => Err("duplicate terminal"),
+        }
+    }
+
+    #[cfg(test)]
+    fn complete(self) -> Result<(), &'static str> {
+        (self.lifecycle == Lifecycle::Terminal)
+            .then_some(())
+            .ok_or("missing terminal")
     }
 }
 
@@ -161,7 +215,7 @@ pub(crate) fn validate(seq: &[JobEvent]) -> Result<(), &'static str> {
     for ev in seq {
         state = state.step(ev)?;
     }
-    Ok(())
+    state.complete()
 }
 
 /// Single-job event emitter that enforces the validate() invariant at runtime.
@@ -604,6 +658,25 @@ mod tests {
     }
 
     #[test]
+    fn detection_sequence_requires_terminal() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+            JobEvent::DetectionProgress {
+                job_id: id,
+                pct: 0.5,
+                phase: DetectionPhase::TranscribeHead,
+            },
+        ];
+
+        assert_eq!(validate(&seq), Err("missing terminal"));
+    }
+
+    #[test]
     fn detection_progress_before_started_fails() {
         let id = Uuid::new_v4();
         let seq = vec![JobEvent::DetectionProgress {
@@ -613,6 +686,64 @@ mod tests {
         }];
 
         assert_eq!(validate(&seq), Err("non-Started before Started"));
+    }
+
+    #[test]
+    fn detection_progress_requires_detecting_start() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::Parsing,
+                strategy: None,
+            },
+            JobEvent::DetectionProgress {
+                job_id: id,
+                pct: 0.5,
+                phase: DetectionPhase::TranscribeHead,
+            },
+            JobEvent::Result {
+                job_id: id,
+                ok: true,
+                payload: serde_json::Value::Null,
+            },
+        ];
+
+        assert_eq!(
+            validate(&seq),
+            Err("detection progress requires DetectingStart")
+        );
+    }
+
+    #[test]
+    fn stage_changed_cannot_cross_detection_boundary() {
+        for (started, changed) in [
+            (Stage::Parsing, Stage::DetectingStart),
+            (Stage::DetectingStart, Stage::Parsing),
+        ] {
+            let id = Uuid::new_v4();
+            let seq = vec![
+                JobEvent::Started {
+                    job_id: id,
+                    stage: started,
+                    strategy: None,
+                },
+                JobEvent::StageChanged {
+                    job_id: id,
+                    stage: changed,
+                },
+                JobEvent::Result {
+                    job_id: id,
+                    ok: true,
+                    payload: serde_json::Value::Null,
+                },
+            ];
+
+            assert_eq!(
+                validate(&seq),
+                Err("stage change cannot cross detection boundary")
+            );
+        }
     }
 
     #[test]
@@ -652,6 +783,33 @@ mod tests {
         ];
 
         assert_eq!(validate(&seq), Err("duplicate terminal"));
+    }
+
+    #[test]
+    fn detection_rejects_needs_match_terminal() {
+        let id = Uuid::new_v4();
+        let seq = vec![
+            JobEvent::Started {
+                job_id: id,
+                stage: Stage::DetectingStart,
+                strategy: None,
+            },
+            JobEvent::NeedsMatch {
+                job_id: id,
+                title: "Book".into(),
+                chapters: 5,
+                tracks: 1,
+                condition: MismatchCondition::ManyToOne,
+                options: vec![MismatchResponse::SingleLesson, MismatchResponse::Cancel],
+                preselect: MismatchResponse::SingleLesson,
+                bucket_preview: None,
+            },
+        ];
+
+        assert_eq!(
+            validate(&seq),
+            Err("detection terminal must be Result or Cancelled")
+        );
     }
 
     #[test]

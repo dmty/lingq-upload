@@ -6,6 +6,7 @@
   import {
     commands,
     type Collection,
+    type DetectionPhase,
     type JobEvent,
     type Stage,
     type UploadResult,
@@ -35,7 +36,11 @@
   let title = $state<string>("");
   let titleEdited = $state(false);
 
-  const STAGE_ORDER: Stage["kind"][] = ["parsing", "transcoding", "uploading"];
+  const STAGE_ORDER: Record<"upload" | "detection", Stage["kind"][]> = {
+    upload: ["parsing", "transcoding", "uploading"],
+    detection: ["detecting_start"],
+  };
+  let stages = $state<Stage["kind"][]>(STAGE_ORDER.upload);
   let stageIndex = $state(0);
 
   let busy = $state(false);
@@ -139,7 +144,7 @@
 
   // Latest progress percent for the bar (always reflects most recent emit).
   const livePct = $derived(progress.at(-1)?.pct ?? 0);
-  const aggregatePct = $derived((stageIndex + livePct) / STAGE_ORDER.length);
+  const aggregatePct = $derived((stageIndex + livePct) / stages.length);
   const liveMessage = $derived(progress.at(-1)?.message ?? null);
 
   const submitLabel = $derived.by(() => {
@@ -162,12 +167,39 @@
         return "Uploading to LingQ";
       case "detecting_start":
         return "Detecting text start";
+      default:
+        return assertNever(stage);
     }
   }
 
+  function detectionPhaseLabel(phase: DetectionPhase): string {
+    switch (phase) {
+      case "title_check":
+        return "Checking chapter titles";
+      case "sample_head":
+        return "Sampling opening audio";
+      case "transcribe_head":
+        return "Transcribing opening sample";
+      case "align_head":
+        return "Matching opening sample";
+      case "sample_tail":
+        return "Sampling ending audio";
+      case "transcribe_tail":
+        return "Transcribing ending sample";
+      case "align_tail":
+        return "Matching ending sample";
+      default:
+        return assertNever(phase);
+    }
+  }
+
+  function assertNever(value: never): never {
+    throw new Error(`Unhandled IPC variant: ${JSON.stringify(value)}`);
+  }
+
   function advanceStage(stage: Stage["kind"]) {
-    stageIndex = Math.max(STAGE_ORDER.indexOf(stage), 0);
-    currentStage = `Step ${stageIndex + 1} of 3 · ${stageLabel(stage)}`;
+    stageIndex = Math.max(stages.indexOf(stage), 0);
+    currentStage = `Step ${stageIndex + 1} of ${stages.length} · ${stageLabel(stage)}`;
     progress = [...progress, { stage, pct: 0, message: null }];
   }
 
@@ -176,6 +208,10 @@
     switch (ev.kind) {
       case "Started":
         if (jobId === null) jobId = ev.job_id;
+        stages =
+          ev.stage.kind === "detecting_start"
+            ? STAGE_ORDER.detection
+            : STAGE_ORDER.upload;
         advanceStage(ev.stage.kind);
         break;
       case "StageChanged":
@@ -191,14 +227,28 @@
           },
         ];
         break;
+      case "DetectionProgress":
+        progress = [
+          ...progress,
+          {
+            stage: "detecting_start",
+            pct: ev.pct,
+            message: detectionPhaseLabel(ev.phase),
+          },
+        ];
+        break;
       case "Result":
         currentStage = ev.ok ? "Done" : "Failed";
         break;
       case "Log":
+      case "ChapterDone":
+      case "NeedsMatch":
         break;
       case "Cancelled":
         currentStage = "Cancelled";
         break;
+      default:
+        assertNever(ev);
     }
   }
 
