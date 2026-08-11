@@ -9,12 +9,14 @@
     preview,
     chapters,
     busy,
+    blockedReason = null,
     onConfirm,
     onRefine,
   }: {
     preview: DetectionPreview;
     chapters: ChapterMeta[];
     busy: boolean;
+    blockedReason?: string | null;
     onConfirm: (
       range: DetectedRange,
       preview: DetectionPreview,
@@ -67,11 +69,19 @@
     </details>
   {/if}
 
+  <div class="mt-3" aria-live="polite" aria-atomic="true">
+    {#if blockedReason}
+      <p data-testid="detection-range-validation" class="text-sm text-error">
+        {blockedReason}
+      </p>
+    {/if}
+  </div>
+
   <div class="mt-3 flex gap-2">
     <button
       type="button"
       class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-canvas hover:bg-accent-hover disabled:opacity-50"
-      disabled={busy}
+      disabled={busy || blockedReason !== null}
       onclick={() => onConfirm(preview.range, preview)}
     >
       {busy ? "Confirming…" : "Confirm detected range"}

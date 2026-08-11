@@ -7,6 +7,7 @@ import type {
   SecretError,
   TextError,
   TranscribeError,
+  TranscribeErrorKind,
 } from "$lib/ipc/bindings";
 
 export function secretMessage(e: SecretError): string {
@@ -142,6 +143,35 @@ export function appErrorMessage(e: AppError): string {
     case "Other":
       return e.message;
   }
+}
+
+/** Recovery affordances an operational failure justifies offering. */
+export type RecoveryAction =
+  | "settings"
+  | "switch_provider"
+  | "retry"
+  | "manual";
+
+export function transcribeActions(kind: TranscribeErrorKind): RecoveryAction[] {
+  switch (kind) {
+    case "api_key":
+    case "unauthorized":
+      return ["settings"];
+    case "rate_limit":
+    case "provider_failed":
+      return ["switch_provider", "retry"];
+    case "timeout":
+    case "network":
+      return ["retry"];
+    case "audio":
+      return ["manual"];
+  }
+}
+
+export function appErrorActions(e: AppError): RecoveryAction[] {
+  if (e.kind === "Transcribe") return transcribeActions(e.message.kind);
+  if (e.kind === "Audio") return ["manual"];
+  return ["retry"];
 }
 
 export function isMissingApiKey(e: AppError): boolean {

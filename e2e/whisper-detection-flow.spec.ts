@@ -4,8 +4,15 @@ import { tauriStubInitScriptFor } from "./setup/tauri-stub";
 
 const PROJECT_KEY = "detection-flow-fixture";
 const OTHER_PROJECT_KEY = "detection-flow-other";
+const CANDIDATE_PROJECT_KEY = "detection-flow-candidates";
 const START_ID = "spine:arrival";
 const END_ID = "spine:return";
+
+const PROJECT_TITLES: Record<string, string> = {
+  [PROJECT_KEY]: "Range Detection Fixture",
+  [OTHER_PROJECT_KEY]: "Other Detection Fixture",
+  [CANDIDATE_PROJECT_KEY]: "Candidate Detection Fixture",
+};
 
 const chapters = [
   {
@@ -25,6 +32,29 @@ const chapters = [
     kind: "back_matter",
   },
 ];
+
+const candidateChapters = [
+  { id: "idx:0", order: 0, title: "Foreword", body: "", kind: "front_matter" },
+  { id: "idx:1", order: 1, title: "Chapter One", body: "", kind: "body" },
+  { id: "idx:2", order: 2, title: "The Crossing", body: "", kind: "body" },
+  { id: "idx:3", order: 3, title: "Midpoint", body: "", kind: "body" },
+  { id: "idx:4", order: 4, title: "The Descent", body: "", kind: "body" },
+  { id: "idx:5", order: 5, title: "Epilogue", body: "", kind: "body" },
+];
+
+const lowConfidence = {
+  kind: "low_confidence",
+  transcript_head_preview: "a crossing begins",
+  transcript_tail_preview: "the descent ends",
+  top_head: [
+    { chapter_id: "idx:2", order: 2, title: "The Crossing", score: 0.62 },
+    { chapter_id: "idx:4", order: 4, title: "The Descent", score: 0.55 },
+  ],
+  top_tail: [
+    { chapter_id: "idx:4", order: 4, title: "The Descent", score: 0.58 },
+    { chapter_id: "idx:3", order: 3, title: "Midpoint", score: 0.51 },
+  ],
+};
 
 const inspection = {
   title: "Range Detection Fixture",
@@ -59,34 +89,33 @@ const transcriptPreview = {
 function fixtureScript(): string {
   return `;(() => {
     const chapters = ${JSON.stringify(chapters)};
+    const candidateChapters = ${JSON.stringify(candidateChapters)};
     const inspection = ${JSON.stringify(inspection)};
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = chapters;
-    window.__pickerState__.chaptersByProject[${JSON.stringify(OTHER_PROJECT_KEY)}] = chapters;
-    window.__matcherInspectionByProject__ = {
-      ${JSON.stringify(PROJECT_KEY)}: inspection,
-      ${JSON.stringify(OTHER_PROJECT_KEY)}: { ...inspection, title: "Other Detection Fixture" },
-    };
+    const titles = ${JSON.stringify(PROJECT_TITLES)};
+    const keys = ${JSON.stringify(Object.keys(PROJECT_TITLES))};
+    const chaptersFor = (key) =>
+      key === ${JSON.stringify(CANDIDATE_PROJECT_KEY)} ? candidateChapters : chapters;
+    window.__matcherInspectionByProject__ = {};
+    window.__transcriptionConsents__ = {};
+    window.__detectionAvailabilityByProject__ = {};
+    for (const key of keys) {
+      const projectChapters = chaptersFor(key);
+      window.__pickerState__.chaptersByProject[key] = projectChapters;
+      window.__matcherInspectionByProject__[key] = {
+        ...inspection,
+        title: titles[key],
+        chapter_count: projectChapters.length,
+      };
+      window.__transcriptionConsents__[key] = "groq";
+      window.__detectionAvailabilityByProject__[key] = {
+        eligible: true,
+        condition: "many_to_few",
+        chapter_count: projectChapters.length,
+        track_count: 2,
+        existing_evidence: null,
+      };
+    }
     window.__transcriptionKeys__ = { groq: true };
-    window.__transcriptionConsents__ = {
-      ${JSON.stringify(PROJECT_KEY)}: "groq",
-      ${JSON.stringify(OTHER_PROJECT_KEY)}: "groq",
-    };
-    window.__detectionAvailabilityByProject__ = {
-      ${JSON.stringify(PROJECT_KEY)}: {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: chapters.length,
-        track_count: 2,
-        existing_evidence: null,
-      },
-      ${JSON.stringify(OTHER_PROJECT_KEY)}: {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: chapters.length,
-        track_count: 2,
-        existing_evidence: null,
-      },
-    };
   })();`;
 }
 
@@ -103,13 +132,7 @@ async function startDetection(
   projectKey = PROJECT_KEY,
 ): Promise<string> {
   await page.goto(`/match/${projectKey}`);
-  await expect(
-    page.getByText(
-      projectKey === PROJECT_KEY
-        ? "Range Detection Fixture"
-        : "Other Detection Fixture",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText(PROJECT_TITLES[projectKey])).toBeVisible();
   await holdDetection(page);
   await page.getByRole("button", { name: "Detect audio's text range" }).click();
   await expect
@@ -138,6 +161,26 @@ async function emitDetected(
     ok: true,
     payload: { kind: "detected", preview },
   });
+}
+
+/** Return a typed detection outcome straight from the command, no events. */
+async function detectReturning(
+  page: Page,
+  projectKey: string,
+  outcome: { result?: object; error?: object },
+): Promise<void> {
+  await page.goto(`/match/${projectKey}`);
+  await expect(page.getByText(PROJECT_TITLES[projectKey])).toBeVisible();
+  await page.evaluate((next) => {
+    if (next.result) window.__detectionResult__ = next.result;
+    if (next.error) window.__detectionCommandError__ = next.error;
+  }, outcome);
+  await page.getByRole("button", { name: "Detect audio's text range" }).click();
+}
+
+function candidateRadio(page: Page, group: "Start chapter" | "End chapter") {
+  return (name: RegExp) =>
+    page.getByRole("group", { name: group }).getByRole("radio", { name });
 }
 
 test.describe("detected text range flow", () => {
@@ -280,7 +323,9 @@ test.describe("detected text range flow", () => {
       },
     });
     await expect(page.getByText("Detection needs refinement")).toBeVisible();
-    await expect(page.getByText("Arrival")).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Start chapter" }),
+    ).toContainText("Arrival");
     await expect(page.getByRole("alert")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Refine" }).click();
@@ -403,6 +448,260 @@ test.describe("detected text range flow", () => {
 
     await page.getByTestId("mapping-continue").click();
     await expect(page).toHaveURL(new RegExp(`/run/${PROJECT_KEY}`));
+  });
+
+  test("low-confidence candidates expose ordinals, scores, and keyboard choice", async ({
+    page,
+  }) => {
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: lowConfidence,
+    });
+    const startRadio = candidateRadio(page, "Start chapter");
+    const endRadio = candidateRadio(page, "End chapter");
+
+    await expect(
+      startRadio(/Chapter 3 · The Crossing · 62% match/),
+    ).toBeChecked();
+    await expect(
+      startRadio(/Chapter 5 · The Descent · 55% match/),
+    ).not.toBeChecked();
+    await expect(endRadio(/Chapter 5 · The Descent · 58% match/)).toBeChecked();
+    await expect(
+      endRadio(/Chapter 4 · Midpoint · 51% match/),
+    ).not.toBeChecked();
+    await expect(startRadio(/Epilogue/)).toHaveCount(0);
+
+    const fallback = endRadio(/Chapter 6 · Epilogue.*final chapter fallback/i);
+    await expect(fallback).not.toBeChecked();
+
+    const preview = page.getByTestId("detection-range-preview");
+    await expect(preview).toContainText("Transcription");
+    await expect(preview).toContainText("60%");
+
+    await startRadio(/Chapter 3 · The Crossing/).focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      startRadio(/Chapter 5 · The Descent · 55% match/),
+    ).toBeChecked();
+    await page.keyboard.press("ArrowUp");
+    await expect(
+      startRadio(/Chapter 3 · The Crossing · 62% match/),
+    ).toBeChecked();
+
+    await fallback.focus();
+    await page.keyboard.press("Space");
+    await expect(fallback).toBeChecked();
+    await expect(preview).toContainText("62%");
+
+    await page.getByRole("button", { name: "Confirm detected range" }).click();
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+    const args = await page.evaluate(
+      () => window.__confirmDetectedRangeCalls__[0],
+    );
+    expect(args.selectedRange).toEqual({
+      start_chapter_id: "idx:2",
+      end_chapter_id: "idx:5",
+    });
+    expect(args.evidence.range).toEqual(args.selectedRange);
+    expect(args.evidence.align_source).toBe("transcript");
+    expect(args.evidence.provider_id).toBe("groq");
+    expect(args.evidence.confidence).toBeCloseTo(0.62, 5);
+    expect(args.evidence.transcript_head_preview).toBe("a crossing begins");
+    expect(args.evidence.detected_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test("an end-before-start candidate pair cannot be confirmed", async ({
+    page,
+  }) => {
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: lowConfidence,
+    });
+    await candidateRadio(
+      page,
+      "Start chapter",
+    )(/Chapter 5 · The Descent/).check();
+    await candidateRadio(page, "End chapter")(/Chapter 4 · Midpoint/).check();
+
+    const confirm = page.getByRole("button", {
+      name: "Confirm detected range",
+    });
+    await expect(confirm).toBeDisabled();
+    await expect(page.getByTestId("detection-range-validation")).toContainText(
+      "The end chapter comes before the start chapter",
+    );
+
+    await candidateRadio(page, "End chapter")(/Chapter 6 · Epilogue/).check();
+    await expect(confirm).toBeEnabled();
+    await expect(page.getByTestId("detection-range-validation")).toHaveCount(0);
+  });
+
+  test("stale candidate IDs are refused instead of silently dropped", async ({
+    page,
+  }) => {
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: {
+        ...lowConfidence,
+        top_head: [
+          { chapter_id: "idx:99", order: 9, title: "Removed", score: 0.7 },
+        ],
+      },
+    });
+    const assist = page.getByTestId("detection-assist");
+    await expect(assist).toContainText(
+      "These suggestions no longer match this book",
+    );
+    await expect(
+      page.getByRole("group", { name: "Start chapter" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Confirm detected range" }),
+    ).toHaveCount(0);
+    await expect(
+      assist.getByRole("button", { name: "Try detection again" }),
+    ).toBeVisible();
+  });
+
+  const contentOutcomes = [
+    { reason: "empty", copy: "No speech was recognized", retry: true },
+    {
+      reason: "content_poor",
+      copy: "The sample did not contain enough distinctive words",
+      retry: true,
+    },
+    {
+      reason: "insufficient_audio",
+      copy: "The resolved audio range is too short for two safe samples.",
+      retry: false,
+    },
+  ] as const;
+
+  for (const outcome of contentOutcomes) {
+    test(`content outcome ${outcome.reason} explains the limit without blaming the provider`, async ({
+      page,
+    }) => {
+      await detectReturning(page, PROJECT_KEY, {
+        result: { kind: "no_transcript", reason: outcome.reason },
+      });
+      const assist = page.getByTestId("detection-assist");
+      await expect(page.getByTestId("detection-content-outcome")).toContainText(
+        outcome.copy,
+      );
+      await expect(assist.getByText(/provider (failed|rejected)/i)).toHaveCount(
+        0,
+      );
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(
+        assist.getByRole("button", { name: "Try detection again" }),
+      ).toHaveCount(outcome.retry ? 1 : 0);
+      await expect(
+        assist.getByRole("button", { name: "Refine" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Split by embedded chapters" }),
+      ).toBeVisible();
+    });
+  }
+
+  const operationalErrors = [
+    {
+      kind: "api_key",
+      copy: "No transcription API key configured",
+      link: "Open transcription settings",
+      retry: false,
+    },
+    {
+      kind: "unauthorized",
+      copy: "rejected the API key",
+      link: "Open transcription settings",
+      retry: false,
+    },
+    {
+      kind: "rate_limit",
+      copy: "rate limit was reached",
+      link: "Switch transcription provider",
+      retry: true,
+    },
+    {
+      kind: "provider_failed",
+      copy: "The transcription provider failed",
+      link: "Switch transcription provider",
+      retry: true,
+    },
+    {
+      kind: "timeout",
+      copy: "Transcription timed out",
+      link: null,
+      retry: true,
+    },
+    {
+      kind: "network",
+      copy: "Check your internet connection",
+      link: null,
+      retry: true,
+    },
+    {
+      kind: "audio",
+      copy: "Couldn't prepare this audio for transcription",
+      link: null,
+      retry: false,
+    },
+  ] as const;
+
+  for (const failure of operationalErrors) {
+    test(`operational error ${failure.kind} offers typed recovery actions`, async ({
+      page,
+    }) => {
+      await detectReturning(page, PROJECT_KEY, {
+        error: { kind: "Transcribe", message: { kind: failure.kind } },
+      });
+      const assist = page.getByTestId("detection-assist");
+      await expect(page.getByRole("alert")).toContainText(failure.copy);
+      if (failure.link) {
+        await expect(
+          assist.getByRole("link", { name: failure.link }),
+        ).toBeVisible();
+      } else {
+        await expect(assist.getByRole("link")).toHaveCount(0);
+      }
+      await expect(
+        assist.getByRole("button", { name: "Try detection again" }),
+      ).toHaveCount(failure.retry ? 1 : 0);
+      if (failure.kind === "audio") {
+        await expect(assist).toContainText("choose a manual response");
+      }
+      await expect(
+        assist.getByRole("button", { name: "Refine" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Split by embedded chapters" }),
+      ).toBeVisible();
+    });
+  }
+
+  test("operational error retry restarts detection only when asked", async ({
+    page,
+  }) => {
+    await detectReturning(page, PROJECT_KEY, {
+      error: { kind: "Transcribe", message: { kind: "network" } },
+    });
+    const assist = page.getByTestId("detection-assist");
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(
+      await page.evaluate(() => window.__detectionStartArgs__.length),
+    ).toBe(1);
+
+    await page.evaluate(() => {
+      window.__detectionCommandError__ = null;
+      window.__detectionResult__ = { kind: "no_transcript", reason: "empty" };
+    });
+    await assist.getByRole("button", { name: "Try detection again" }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.__detectionStartArgs__.length))
+      .toBe(2);
+    await expect(page.getByTestId("detection-content-outcome")).toContainText(
+      "No speech was recognized",
+    );
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 
   test("an old detection cannot update a newly navigated project", async ({
