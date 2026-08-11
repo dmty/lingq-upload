@@ -45,6 +45,7 @@ fn project(title: &str, receipts: Vec<ChapterReceipt>) -> Project {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     }
 }
 
@@ -133,6 +134,7 @@ fn rebuild_pending_re_enqueues_decided_but_unstarted_projects() {
         track_count: 6,
         user_overrode: false,
         decided_at: Utc::now(),
+        detection: None,
     });
     let untouched = project("Untouched", vec![]);
 

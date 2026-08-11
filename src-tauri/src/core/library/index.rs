@@ -244,6 +244,7 @@ mod tests {
             cover_use: true,
             cover_uploaded_to_lingq: false,
             cover_source_href: None,
+            transcribe_consent: None,
         }
     }
 

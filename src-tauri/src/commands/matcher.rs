@@ -36,6 +36,7 @@ pub async fn cmd_matcher_resolve(
         track_count,
         user_overrode: response != preselect,
         decided_at: Utc::now(),
+        detection: None,
     };
     // Resolve sources outside the store lock — pure read-only filesystem
     // work; the atomic write below applies decision + mapping together.
@@ -247,6 +248,7 @@ mod tests {
             track_count: 1,
             user_overrode: false,
             decided_at: Utc::now(),
+            detection: None,
         });
         p.mapping = Some(MappingState::default());
         store.put(&p).unwrap();

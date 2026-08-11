@@ -45,6 +45,7 @@ fn make_epub_project(cover_source_href: Option<&str>) -> Project {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: cover_source_href.map(str::to_owned),
+        transcribe_consent: None,
     }
 }
 

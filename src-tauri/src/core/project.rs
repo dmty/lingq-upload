@@ -10,6 +10,7 @@ use crate::core::epub::ChapterId;
 use crate::core::identity::ProjectId;
 use crate::core::matcher::{MappingState, MismatchCondition, MismatchResponse};
 use crate::ingest::{AudioSource, ChapterManifest, SeriesRef, TextSource};
+use crate::transcribe::{DetectionEvidence, TranscribeConsent};
 
 pub const SCHEMA_V1: u32 = 1;
 
@@ -78,6 +79,8 @@ pub struct MatcherDecision {
     #[serde(default)]
     pub user_overrode: bool,
     pub decided_at: DateTime<Utc>,
+    #[serde(default)]
+    pub detection: Option<DetectionEvidence>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
@@ -157,6 +160,8 @@ pub struct Project {
     /// filename-heuristic extractions.
     #[serde(default)]
     pub cover_source_href: Option<String>,
+    #[serde(default)]
+    pub transcribe_consent: Option<TranscribeConsent>,
 }
 
 fn default_cover_use() -> bool {
@@ -202,6 +207,7 @@ impl Project {
             cover_use: true,
             cover_uploaded_to_lingq: false,
             cover_source_href: None,
+            transcribe_consent: None,
         }
     }
 
@@ -391,5 +397,73 @@ mod confirmed_at_tests {
         p.confirmed_at = Some(now);
         let s: ProjectSummary = (&p).into();
         assert_eq!(s.confirmed_at, Some(now));
+    }
+}
+
+#[cfg(test)]
+mod transcription_persistence_tests {
+    use super::*;
+    use crate::transcribe::{consent_matches, TranscribeConsent, TranscribeProviderId};
+
+    #[test]
+    fn legacy_schema_v1_defaults_transcription_fields_and_round_trips() {
+        let raw = include_str!("../../tests/fixtures/projects/baseline_no_selection.json");
+
+        let project: Project = serde_json::from_str(raw).unwrap();
+
+        assert_eq!(project.schema_version, SCHEMA_V1);
+        assert!(project.transcribe_consent.is_none());
+        let round_trip: Project =
+            serde_json::from_str(&serde_json::to_string(&project).unwrap()).unwrap();
+        assert_eq!(round_trip, project);
+    }
+
+    #[test]
+    fn legacy_matcher_decision_defaults_detection_and_round_trips() {
+        let raw = r#"{
+            "condition": "count_off",
+            "response": "pair_accept",
+            "chapter_count": 5,
+            "track_count": 3,
+            "user_overrode": false,
+            "decided_at": "2026-08-12T00:00:00Z"
+        }"#;
+
+        let decision: MatcherDecision = serde_json::from_str(raw).unwrap();
+
+        assert!(decision.detection.is_none());
+        let round_trip: MatcherDecision =
+            serde_json::from_str(&serde_json::to_string(&decision).unwrap()).unwrap();
+        assert_eq!(round_trip, decision);
+    }
+
+    #[test]
+    fn consent_matches_only_the_same_provider() {
+        let consent = TranscribeConsent {
+            provider_id: TranscribeProviderId::Groq,
+            accepted_at: Utc::now(),
+        };
+
+        assert!(consent_matches(Some(&consent), TranscribeProviderId::Groq));
+        assert!(!consent_matches(
+            Some(&consent),
+            TranscribeProviderId::OpenAi
+        ));
+        assert!(!consent_matches(None, TranscribeProviderId::Groq));
+    }
+
+    #[test]
+    fn project_settings_have_no_provider_or_auto_detection_state() {
+        let settings = ProjectSettings {
+            language: "ja".into(),
+            collection_title: "Book".into(),
+            level: 1,
+            tags: vec![],
+        };
+        let value = serde_json::to_value(settings).unwrap();
+
+        assert!(value.get("provider_id").is_none());
+        assert!(value.get("auto_detect_start").is_none());
+        assert!(value.get("transcribe_consent").is_none());
     }
 }

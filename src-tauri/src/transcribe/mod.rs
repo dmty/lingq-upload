@@ -134,6 +134,19 @@ pub enum TranscribeProviderId {
     OpenAi,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct TranscribeConsent {
+    pub provider_id: TranscribeProviderId,
+    pub accepted_at: DateTime<Utc>,
+}
+
+pub fn consent_matches(
+    consent: Option<&TranscribeConsent>,
+    active_provider: TranscribeProviderId,
+) -> bool {
+    consent.is_some_and(|consent| consent.provider_id == active_provider)
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Type)]
 pub struct TranscribeOpts {
     pub language: Option<String>,
@@ -152,6 +165,27 @@ pub trait Transcriber: Send + Sync {
         audio: &Path,
         opts: &TranscribeOpts,
     ) -> BoxFuture<'_, Result<Transcript, TranscribeError>>;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct DetectionEvidence {
+    pub provider_id: Option<TranscribeProviderId>,
+    pub align_source: AlignSource,
+    pub range: DetectedRange,
+    pub confidence: f32,
+    pub transcript_head_preview: Option<String>,
+    pub transcript_tail_preview: Option<String>,
+    pub detected_at: DateTime<Utc>,
+}
+
+pub fn detection_provider_matches_source(
+    align_source: AlignSource,
+    provider_id: Option<TranscribeProviderId>,
+) -> bool {
+    matches!(
+        (align_source, provider_id),
+        (AlignSource::Title, None) | (AlignSource::Transcript, Some(_))
+    )
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
@@ -486,6 +520,60 @@ fn audio_failure(error: AudioError) -> DetectFailure {
     }
 }
 
-fn bound_preview(transcript: Option<&str>) -> Option<String> {
+pub(crate) fn bound_preview(transcript: Option<&str>) -> Option<String> {
     transcript.map(|text| text.chars().take(240).collect())
+}
+
+#[cfg(test)]
+mod evidence_tests {
+    use super::*;
+    use crate::core::epub::ChapterId;
+
+    #[test]
+    fn detection_provider_must_match_the_alignment_source() {
+        assert!(detection_provider_matches_source(AlignSource::Title, None));
+        assert!(detection_provider_matches_source(
+            AlignSource::Transcript,
+            Some(TranscribeProviderId::Groq)
+        ));
+        assert!(!detection_provider_matches_source(
+            AlignSource::Title,
+            Some(TranscribeProviderId::Groq)
+        ));
+        assert!(!detection_provider_matches_source(
+            AlignSource::Transcript,
+            None
+        ));
+    }
+
+    #[test]
+    fn persisted_evidence_contains_only_bounded_previews() {
+        let preview = bound_preview(Some(&"界".repeat(241)));
+        let evidence = DetectionEvidence {
+            provider_id: Some(TranscribeProviderId::OpenAi),
+            align_source: AlignSource::Transcript,
+            range: DetectedRange {
+                start_chapter_id: ChapterId("start".into()),
+                end_chapter_id: ChapterId("end".into()),
+            },
+            confidence: 0.9,
+            transcript_head_preview: preview,
+            transcript_tail_preview: None,
+            detected_at: Utc::now(),
+        };
+
+        assert_eq!(
+            evidence
+                .transcript_head_preview
+                .as_deref()
+                .unwrap()
+                .chars()
+                .count(),
+            240
+        );
+        let value = serde_json::to_value(evidence).unwrap();
+        assert!(value.get("transcript").is_none());
+        assert!(value.get("head_sample").is_none());
+        assert!(value.get("tail_sample").is_none());
+    }
 }

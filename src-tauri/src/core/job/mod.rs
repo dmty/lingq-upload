@@ -1426,6 +1426,7 @@ mod tests {
             track_count: 1,
             user_overrode: false,
             decided_at: Utc::now(),
+            detection: None,
         };
         let tracks = vec![track(0, "/x/a.mp3")];
 
@@ -1615,6 +1616,7 @@ mod tests {
             track_count: tracks.len(),
             user_overrode: false,
             decided_at: Utc::now(),
+            detection: None,
         };
 
         let plan = match plan_from_decision(&decision, &chapters, &tracks, 3) {
@@ -1823,6 +1825,7 @@ mod tests {
             track_count: tracks.len(),
             user_overrode: false,
             decided_at: Utc::now(),
+            detection: None,
         };
 
         let plan = match plan_from_decision(&decision, &chapters, &tracks, chapters.len()) {
@@ -1907,6 +1910,7 @@ mod tests {
             track_count: 2,
             user_overrode: false,
             decided_at: Utc::now(),
+            detection: None,
         });
         project.mapping = Some(MappingState {
             pairs: vec![

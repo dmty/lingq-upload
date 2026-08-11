@@ -224,6 +224,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     };
     store.put(&project).unwrap();
 
@@ -443,6 +444,7 @@ fn cmd_replay_receipts_returns_persisted_state() {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     };
     store.put(&project).unwrap();
 

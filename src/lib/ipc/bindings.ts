@@ -111,6 +111,14 @@ async cmdSetTranscriptionPreferences(preferences: AppTranscriptionPreferences) :
     else return { status: "error", error: e  as any };
 }
 },
+async cmdAcceptTranscribeConsent(projectId: ProjectId, providerId: TranscribeProviderId) : Promise<Result<null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_accept_transcribe_consent", { projectId, providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };
@@ -544,6 +552,7 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
  */
 export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
+export type AlignSource = "title" | "transcript"
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Transcribe"; message: TranscribeError } | { kind: "Other"; message: string }
 export type AppTranscriptionPreferences = { provider_id: TranscribeProviderId; auto_detect_start: boolean }
 export type AudioError = { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" } | { kind: "Decode"; message: string } | { kind: "Encode"; message: string }
@@ -612,6 +621,8 @@ export type CollectionDetail = { id: number; title: string; description: string 
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
+export type DetectedRange = { start_chapter_id: ChapterId; end_chapter_id: ChapterId }
+export type DetectionEvidence = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string }
 export type DetectionPhase = "title_check" | "sample_head" | "transcribe_head" | "align_head" | "sample_tail" | "transcribe_tail" | "align_tail"
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
@@ -659,7 +670,7 @@ export type MappingPair = { chapter_id: ChapterId; track_id?: string | null; con
  */
 original_confidence?: number }
 export type MappingState = { pairs: MappingPair[]; parking_lot?: string[]; op_id?: number; buckets?: BucketMeta[] }
-export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string }
+export type MatcherDecision = { condition: MismatchCondition; response: MismatchResponse; chapter_count: number; track_count: number; user_overrode?: boolean; decided_at: string; detection?: DetectionEvidence | null }
 export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | "count_off" | "unalignable" | "unknown"
 /**
  * Re-derived mismatch payload for a project parked in `needs_match`.
@@ -717,7 +728,7 @@ cover_uploaded_to_lingq?: boolean;
  * page from the chapter list. None for user-supplied covers or
  * filename-heuristic extractions.
  */
-cover_source_href?: string | null }
+cover_source_href?: string | null; transcribe_consent?: TranscribeConsent | null }
 /**
  * Canonical project identity (AD-021).
  * 
@@ -761,6 +772,7 @@ export type SeriesRef = { name: string; index: number | null }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" } | { kind: "detecting_start" }
 export type TextError = { kind: "Io"; message: string }
 export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
+export type TranscribeConsent = { provider_id: TranscribeProviderId; accepted_at: string }
 export type TranscribeError = { kind: TranscribeErrorKind; message: string }
 export type TranscribeErrorKind = "api_key" | "unauthorized" | "rate_limit" | "timeout" | "network" | "provider_failed" | "audio"
 export type TranscribeProviderId = "groq" | "open_ai"

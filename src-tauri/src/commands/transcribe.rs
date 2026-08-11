@@ -1,16 +1,21 @@
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 
+use chrono::Utc;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
 
 use super::{app_data_dir, secrets};
+use crate::core::identity::ProjectId;
+use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::secrets::{KeyringBackend, SecretsStore, GROQ_ACCOUNT, OPENAI_ACCOUNT};
 use crate::transcribe::{
-    ProviderCatalog, ProviderDescriptor, TranscribeError, TranscribeErrorKind, TranscribeProviderId,
+    ProviderCatalog, ProviderDescriptor, TranscribeConsent, TranscribeError, TranscribeErrorKind,
+    TranscribeProviderId,
 };
 
 const PREFERENCES_FILE: &str = "transcription-preferences.json";
@@ -284,6 +289,34 @@ pub fn cmd_set_transcription_preferences(
     save_preferences(&app_data_dir(&app)?, &preferences)
 }
 
+fn accept_transcribe_consent(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    provider_id: TranscribeProviderId,
+) -> Result<(), AppError> {
+    validate_provider(provider_id)?;
+    let consent = TranscribeConsent {
+        provider_id,
+        accepted_at: Utc::now(),
+    };
+    store
+        .update(project_id, &mut |project| {
+            project.transcribe_consent = Some(consent.clone());
+        })
+        .map_err(|error| AppError::Other(format!("store.update: {error}")))?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_accept_transcribe_consent(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    provider_id: TranscribeProviderId,
+) -> Result<(), AppError> {
+    accept_transcribe_consent(store.inner().as_ref(), &project_id, provider_id)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -293,6 +326,9 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::core::identity::ProjectId;
+    use crate::core::project::Project;
+    use crate::core::store::{InMemoryProjectStore, ProjectStore};
     use crate::secrets::{KeyringBackend, SecretError};
 
     #[derive(Clone, Default)]
@@ -335,6 +371,49 @@ mod tests {
             provider_id,
             auto_detect_start,
         }
+    }
+
+    #[test]
+    fn consent_for_a_registered_provider_is_persisted_with_server_time() {
+        let store = InMemoryProjectStore::new();
+        let id = ProjectId::from_title_author("Consent", "Author");
+        let project = Project::new_test(id.clone(), "Consent");
+        store.put(&project).unwrap();
+        let before = chrono::Utc::now();
+
+        accept_transcribe_consent(&store, &id, TranscribeProviderId::OpenAi).unwrap();
+
+        let after = chrono::Utc::now();
+        let saved = store.get(&id).unwrap().unwrap();
+        let consent = saved.transcribe_consent.clone().unwrap();
+        assert_eq!(consent.provider_id, TranscribeProviderId::OpenAi);
+        assert!(consent.accepted_at >= before);
+        assert!(consent.accepted_at <= after);
+        let mut expected = project;
+        expected.transcribe_consent = Some(consent);
+        assert_eq!(saved, expected);
+    }
+
+    #[test]
+    fn consent_rejects_an_unknown_serialized_provider_before_mutation() {
+        let store = InMemoryProjectStore::new();
+        let id = ProjectId::from_title_author("Consent", "Author");
+        store
+            .put(&Project::new_test(id.clone(), "Consent"))
+            .unwrap();
+
+        let provider = serde_json::from_str::<TranscribeProviderId>(r#""not_registered""#);
+        if let Ok(provider) = provider {
+            accept_transcribe_consent(&store, &id, provider).unwrap();
+        }
+
+        assert!(provider.is_err());
+        assert!(store
+            .get(&id)
+            .unwrap()
+            .unwrap()
+            .transcribe_consent
+            .is_none());
     }
 
     #[test]

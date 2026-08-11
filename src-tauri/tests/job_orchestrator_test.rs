@@ -161,6 +161,7 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     };
     store.put(&project).unwrap();
 
@@ -439,6 +440,7 @@ async fn pair_accept_uploads_leftover_tracks_as_audio_only() {
         track_count: 4,
         user_overrode: false,
         decided_at: Utc::now(),
+        detection: None,
     });
     fixture.store.put(&project).unwrap();
 

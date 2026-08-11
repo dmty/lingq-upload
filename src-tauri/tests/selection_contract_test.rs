@@ -68,6 +68,7 @@ fn sample(title: &str, n_receipts: usize) -> Project {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     }
 }
 
@@ -291,6 +292,7 @@ async fn make_fixture(chapters: usize) -> Fixture {
         cover_use: true,
         cover_uploaded_to_lingq: false,
         cover_source_href: None,
+        transcribe_consent: None,
     };
     store.put(&project).unwrap();
 
