@@ -4,9 +4,12 @@ use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tempfile::TempDir;
+use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::audio::{self, AudioError, EncoderSettings, TranscodeReport};
+use crate::core::audio::{self, AudioError, AudioTrack, EncoderSettings, TranscodeReport};
+use crate::core::project::Project;
+use crate::error::AppError;
 
 mod error;
 mod provider;
@@ -19,6 +22,43 @@ pub use sample::{
     AlignmentConfig, NoTranscriptReason, SamplePlan, SampleSide, SampleWindow, SideSamplePlan,
 };
 pub use whisper_like::WhisperLikeTranscriber;
+
+#[derive(Debug, Error)]
+pub enum SamplePlanningError {
+    #[error("no transcript: {0:?}")]
+    NoTranscript(NoTranscriptReason),
+    #[error(transparent)]
+    Audio(#[from] AudioError),
+    #[error(transparent)]
+    Resolve(#[from] AppError),
+}
+
+pub async fn resolve_and_plan_sample_windows(
+    project: &Project,
+    config: &AlignmentConfig,
+) -> Result<SamplePlan, SamplePlanningError> {
+    let tracks = crate::core::job::resolve_audio_tracks(project).await?;
+    probe_and_plan_sample_windows(&tracks, config).await
+}
+
+async fn probe_and_plan_sample_windows(
+    tracks: &[AudioTrack],
+    config: &AlignmentConfig,
+) -> Result<SamplePlan, SamplePlanningError> {
+    let Some(head_track) = tracks.first() else {
+        return Err(SamplePlanningError::NoTranscript(NoTranscriptReason::Empty));
+    };
+    let tail_track = tracks.last().expect("non-empty tracks");
+    let head_duration = audio::probe_duration(&head_track.path).await?;
+    let tail_duration = if head_track.path == tail_track.path {
+        head_duration
+    } else {
+        audio::probe_duration(&tail_track.path).await?
+    };
+
+    sample::plan_sample_windows(tracks, (head_duration, tail_duration), config)
+        .map_err(SamplePlanningError::NoTranscript)
+}
 
 pub struct ExtractedSample {
     _temp_dir: TempDir,

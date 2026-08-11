@@ -1,7 +1,12 @@
 use lingq_upload_lib::codecs::SymphoniaDecoder;
 use lingq_upload_lib::core::audio::AudioError;
-use lingq_upload_lib::transcribe::extract_sample;
+use lingq_upload_lib::core::identity::ProjectId;
+use lingq_upload_lib::core::project::Project;
+use lingq_upload_lib::ingest::AudioSource;
 use lingq_upload_lib::transcribe::sample::{SampleSide, SampleWindow};
+use lingq_upload_lib::transcribe::{
+    extract_sample, resolve_and_plan_sample_windows, AlignmentConfig,
+};
 use lingq_upload_lib::AudioDecoder;
 use tokio_util::sync::CancellationToken;
 
@@ -12,17 +17,28 @@ fn fixture(name: &str) -> std::path::PathBuf {
 }
 
 #[tokio::test]
-async fn extraction_uses_a_new_owned_temp_path_and_whisper_codec_settings() {
-    let window = SampleWindow {
-        side: SampleSide::Head,
-        attempt: 0,
-        track_index: 0,
-        path: fixture("probe_3min.mp3"),
-        start_sec: 30.0,
-        end_sec: 60.0,
-    };
+async fn sampling_orchestration_probes_real_boundaries_before_extracting() {
+    let inputs = tempfile::tempdir().expect("input tempdir");
+    let head_path = inputs.path().join("head.m4b");
+    let tail_path = inputs.path().join("tail.m4b");
+    std::fs::copy(fixture("synth_chapters_narrative.m4b"), &head_path).expect("copy head fixture");
+    std::fs::copy(fixture("synth_chapters_narrative.m4b"), &tail_path).expect("copy tail fixture");
+    let mut project = Project::new_test(ProjectId::from_title_author("samples", "test"), "samples");
+    project.sources.audio = Some(AudioSource::MultipleFiles(vec![
+        head_path.clone(),
+        tail_path.clone(),
+    ]));
 
-    let extracted = extract_sample(&window, &CancellationToken::new())
+    let plan = resolve_and_plan_sample_windows(&project, &AlignmentConfig::default())
+        .await
+        .expect("resolve tracks, probe boundary files, and plan samples");
+
+    assert_eq!(plan.head.initial.path, head_path);
+    assert_eq!(plan.tail.initial.path, tail_path);
+    assert!(plan.head.initial.end_sec - plan.head.initial.start_sec >= 10.0);
+    assert!(plan.tail.initial.end_sec - plan.tail.initial.start_sec >= 10.0);
+
+    let extracted = extract_sample(&plan.head.initial, &CancellationToken::new())
         .await
         .expect("extract sample");
 

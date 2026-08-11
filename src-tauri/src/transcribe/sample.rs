@@ -57,9 +57,9 @@ impl Default for AlignmentConfig {
             target_sample_sec: 30.0,
             min_sample_sec: 10.0,
             skip_sec: 5.0,
-            transcript_confidence: 0.72,
-            runner_up_gap: 0.08,
-            title_confidence: 0.90,
+            transcript_confidence: 0.45,
+            runner_up_gap: 0.15,
+            title_confidence: 0.70,
         }
     }
 }
@@ -227,6 +227,18 @@ mod tests {
             title: None,
             window,
         }
+    }
+
+    #[test]
+    fn alignment_defaults_match_the_detection_contract() {
+        let config = AlignmentConfig::default();
+
+        assert_eq!(config.target_sample_sec, 30.0);
+        assert_eq!(config.min_sample_sec, 10.0);
+        assert_eq!(config.skip_sec, 5.0);
+        assert_eq!(config.transcript_confidence, 0.45);
+        assert_eq!(config.runner_up_gap, 0.15);
+        assert_eq!(config.title_confidence, 0.70);
     }
 
     #[test]
