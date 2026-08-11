@@ -288,6 +288,7 @@ impl<'a> DetectionLifecycle<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn detect_start_offset(
     project: &Project,
     tracks: &[AudioTrack],

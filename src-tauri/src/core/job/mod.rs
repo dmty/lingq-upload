@@ -181,7 +181,7 @@ pub async fn run_project_job(
             return Err(error);
         }
     };
-    let chapters = eligible_chapters(&chapters, &skipped_set, &project.receipts);
+    let chapters = eligible_chapters(chapters, &skipped_set, &project.receipts);
 
     tracing::info!(
         project = %project.id.join_key(),
@@ -635,7 +635,7 @@ pub async fn plan_preview(
     let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
     let leftover_base = leftover_index_base(&chapters);
     let chapters = detected_chapter_slice(&project, &chapters)?;
-    let chapters = eligible_chapters(&chapters, &skipped, &project.receipts);
+    let chapters = eligible_chapters(chapters, &skipped, &project.receipts);
 
     match build_plan(&project, &chapters, &tracks, leftover_base) {
         PlanOrPause::Plan(p) => Ok(p.steps.iter().map(PlanStep::from).collect()),

@@ -75,11 +75,9 @@ pub fn normalize_for_alignment(input: &str) -> String {
         if c.is_alphanumeric() {
             out.push(c);
             prev_space = false;
-        } else if c.is_whitespace() {
-            if !prev_space && !out.is_empty() {
-                out.push(' ');
-                prev_space = true;
-            }
+        } else if c.is_whitespace() && !prev_space && !out.is_empty() {
+            out.push(' ');
+            prev_space = true;
         }
         // punctuation and other marks dropped
     }
