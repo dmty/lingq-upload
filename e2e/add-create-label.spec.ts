@@ -14,7 +14,11 @@ test.describe("add page create-button reasons", () => {
   test("the disabled Create button says what's missing", async ({ page }) => {
     await page.goto("/add");
     // Language auto-selects the saved/first entry; text file is the first gap.
-    await expect(page.getByRole("button", { name: "Add the book file" })).toBeDisabled();
+    // Generous first assertion: this is the suite's first navigation, so it
+    // absorbs the dev server's route compile.
+    await expect(
+      page.getByRole("button", { name: "Add the book file" }),
+    ).toBeDisabled({ timeout: 30_000 });
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/book.epub"));
     await page
