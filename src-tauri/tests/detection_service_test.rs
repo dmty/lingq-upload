@@ -10,9 +10,9 @@ use lingq_upload_lib::core::identity::ProjectId;
 use lingq_upload_lib::core::project::Project;
 use lingq_upload_lib::events::DetectionPhase;
 use lingq_upload_lib::transcribe::{
-    detect_start_offset, AlignSource, AlignmentConfig, DetectStartResult, DetectionSink,
-    NoTranscriptReason, ProviderFactory, TranscribeError, TranscribeErrorKind, TranscribeOpts,
-    TranscribeProviderId, Transcriber, Transcript,
+    detect_start_offset, AlignSource, AlignmentConfig, DetectStartResult, DetectedRange,
+    DetectionSink, NoTranscriptReason, ProviderFactory, TranscribeError, TranscribeErrorKind,
+    TranscribeOpts, TranscribeProviderId, Transcriber, Transcript,
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -20,6 +20,52 @@ use uuid::Uuid;
 const HEAD_TEXT: &str =
     "Homeward bound after many years away she finally saw the harbor lights again.";
 const TAIL_TEXT: &str = "Years later the same harbor lights guided travelers home through the fog.";
+
+trait RangeConsumer {
+    fn consume(&mut self, range: &DetectedRange, ordered_ids: &[ChapterId]);
+}
+
+struct RecordingRangeConsumer {
+    range: DetectedRange,
+    ordered_ids: Vec<ChapterId>,
+}
+
+impl RangeConsumer for RecordingRangeConsumer {
+    fn consume(&mut self, range: &DetectedRange, ordered_ids: &[ChapterId]) {
+        self.range = range.clone();
+        self.ordered_ids = ordered_ids.to_vec();
+    }
+}
+
+fn consume_detected_range(
+    result: &DetectStartResult,
+    chapters: &[Chapter],
+    consumer: &mut dyn RangeConsumer,
+) {
+    let DetectStartResult::Detected { preview } = result else {
+        return;
+    };
+    let Some(start) = chapters
+        .iter()
+        .position(|chapter| chapter.id == preview.range.start_chapter_id)
+    else {
+        return;
+    };
+    let Some(end) = chapters
+        .iter()
+        .position(|chapter| chapter.id == preview.range.end_chapter_id)
+    else {
+        return;
+    };
+    if start > end {
+        return;
+    }
+    let ordered_ids: Vec<_> = chapters[start..=end]
+        .iter()
+        .map(|chapter| chapter.id.clone())
+        .collect();
+    consumer.consume(&preview.range, &ordered_ids);
+}
 
 #[derive(Clone, Debug, PartialEq)]
 enum RecordedEvent {
@@ -644,4 +690,82 @@ async fn detected_previews_are_unicode_safe_and_bounded_to_240_scalars() {
     assert!(head.ends_with('🦀'));
     assert!(tail.ends_with('🌊'));
     assert_eq!(sink.terminal_count(), 1);
+}
+
+#[tokio::test]
+async fn walking_skeleton_delivers_the_detected_inclusive_range() {
+    let fixture_dir = tempfile::tempdir().unwrap();
+    let copied_audio = fixture_dir.path().join("walking-skeleton.mp3");
+    std::fs::copy(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio/probe_3min.mp3"),
+        &copied_audio,
+    )
+    .unwrap();
+
+    let bodies = [
+        "Morning frost covered the empty orchard before the first cart arrived.",
+        "A narrow path climbed from the mill toward a row of quiet cedar trees.",
+        "At the stone bridge Lina opened the blue letter and read every careful line.",
+        "The market clock paused at noon while rain passed over the tiled roofs.",
+        "Beyond the station a gardener tied young branches against the northern wind.",
+        "The final ferry crossed the silver inlet and reached the lantern pier at dusk.",
+    ];
+    let chapters: Vec<_> = bodies
+        .into_iter()
+        .enumerate()
+        .map(|(order, body)| Chapter {
+            order,
+            id: ChapterId::from_order(order),
+            title: format!("Section {}", order + 1),
+            body: body.into(),
+            ..Default::default()
+        })
+        .collect();
+    let track = AudioTrack {
+        order: 0,
+        path: copied_audio,
+        duration_sec: None,
+        title: Some("Track 1".into()),
+        window: None,
+    };
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &[track],
+        &chapters,
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Mutex::new(Vec::new())),
+            vec![transcript(bodies[2]), transcript(bodies[5])],
+        ),
+    )
+    .await
+    .unwrap();
+    let mut consumer = RecordingRangeConsumer {
+        range: DetectedRange {
+            start_chapter_id: ChapterId::from_order(0),
+            end_chapter_id: ChapterId::from_order(0),
+        },
+        ordered_ids: Vec::new(),
+    };
+
+    consume_detected_range(&result, &chapters, &mut consumer);
+
+    assert_eq!(
+        consumer.range,
+        DetectedRange {
+            start_chapter_id: ChapterId("idx:2".into()),
+            end_chapter_id: ChapterId("idx:5".into()),
+        }
+    );
+    assert_eq!(
+        consumer.ordered_ids,
+        vec![
+            ChapterId::from_order(2),
+            ChapterId::from_order(3),
+            ChapterId::from_order(4),
+            ChapterId::from_order(5),
+        ]
+    );
 }

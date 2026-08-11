@@ -1,0 +1,252 @@
+[
+  {
+    "id": "en-stage-a-nfkc",
+    "language": "en",
+    "chapters": [
+      { "id": "idx:0", "title": "Copper Dawn", "body": "Copper light crossed the empty square while the bakers opened their shutters." },
+      { "id": "idx:1", "title": "Glass Orchard", "body": "Every glass leaf chimed softly when the west wind entered the orchard." },
+      { "id": "idx:2", "title": "Quiet Meridian", "body": "At noon the surveyor folded her map beside the quiet stone marker." },
+      { "id": "idx:3", "title": "Blue Lantern", "body": "A blue lantern waited at the final gate until the last traveler arrived." }
+    ],
+    "first_audio_title": "Ｇｌａｓｓ　Ｏｒｃｈａｒｄ",
+    "last_audio_title": "Blue Lantern",
+    "head_transcript": "Every glass leaf chimed softly when the west wind entered the orchard.",
+    "tail_transcript": "A blue lantern waited at the final gate until the last traveler arrived.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "en-stage-b-generic",
+    "language": "en",
+    "chapters": [
+      { "id": "idx:0", "title": "North Window", "body": "Rain traced narrow paths across the north window before the town awoke." },
+      { "id": "idx:1", "title": "Paper Compass", "body": "Mara unfolded the paper compass and followed its green arrow toward the old canal." },
+      { "id": "idx:2", "title": "Clockmaker", "body": "The clockmaker counted brass wheels and listened for the smallest uneven tick." },
+      { "id": "idx:3", "title": "Harbor Bell", "body": "Beyond the final warehouse the harbor bell rang twice beneath a clearing sky." }
+    ],
+    "first_audio_title": "Chapter 02",
+    "last_audio_title": "Track 04",
+    "head_transcript": "Mara unfolded the paper compass and followed its green arrow toward the old canal.",
+    "tail_transcript": "Beyond the final warehouse the harbor bell rang twice beneath a clearing sky.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "en-negative-repeated",
+    "language": "en",
+    "chapters": [
+      { "id": "idx:0", "title": "Interlude", "body": "Two red kites circled the fountain while a silver tram waited beside the park." },
+      { "id": "idx:1", "title": "Interlude", "body": "Two red kites circled the fountain while a silver tram waited beside the park." },
+      { "id": "idx:2", "title": "Afterword", "body": "The gardener locked the shed and carried a basket along the moonlit path." }
+    ],
+    "first_audio_title": "Interlude",
+    "last_audio_title": "Interlude",
+    "head_transcript": "Two red kites circled the fountain while a silver tram waited beside the park.",
+    "tail_transcript": "Two red kites circled the fountain while a silver tram waited beside the park.",
+    "expected_start_chapter_id": "idx:0",
+    "expected_end_chapter_id": "idx:1",
+    "valid_sample": false
+  },
+  {
+    "id": "ja-stage-a",
+    "language": "ja",
+    "chapters": [
+      { "id": "idx:0", "title": "朝の港", "body": "朝の港で白い帆がゆっくり風を受けて静かな湾を進んだ。" },
+      { "id": "idx:1", "title": "星の庭", "body": "星の庭では青い花が夜ごとにひとつずつ光を灯した。" },
+      { "id": "idx:2", "title": "紙の舟", "body": "子どもたちは紙の舟に小さな手紙を載せて水路へ流した。" },
+      { "id": "idx:3", "title": "冬の岬", "body": "冬の岬に着くと遠い島の鐘が澄んだ空気を震わせた。" }
+    ],
+    "first_audio_title": "星の庭",
+    "last_audio_title": "冬の岬",
+    "head_transcript": "星の庭では青い花が夜ごとにひとつずつ光を灯した。",
+    "tail_transcript": "冬の岬に着くと遠い島の鐘が澄んだ空気を震わせた。",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "ja-stage-b-generic",
+    "language": "ja",
+    "chapters": [
+      { "id": "idx:0", "title": "雨の道", "body": "細い雨の道を古い自転車がゆっくり坂の上まで進んだ。" },
+      { "id": "idx:1", "title": "風の橋", "body": "風の橋を渡る旅人は黄色い布を結び川の音に耳を澄ませた。" },
+      { "id": "idx:2", "title": "森の時計", "body": "森の時計は木漏れ日の角度だけで正しい昼の時刻を告げた。" },
+      { "id": "idx:3", "title": "銀の庭", "body": "銀の庭で最後の雪が溶けると黒い土から若い芽が現れた。" }
+    ],
+    "first_audio_title": "Ｔｒａｃｋ　０２",
+    "last_audio_title": "Ｐａｒｔ　０４",
+    "head_transcript": "風の橋を渡る旅人は黄色い布を結び川の音に耳を澄ませた。",
+    "tail_transcript": "銀の庭で最後の雪が溶けると黒い土から若い芽が現れた。",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "ja-negative-repeated",
+    "language": "ja",
+    "chapters": [
+      { "id": "idx:0", "title": "間奏", "body": "薄明かりの川辺で二羽の鳥が静かに同じ旋律を繰り返した。" },
+      { "id": "idx:1", "title": "間奏", "body": "薄明かりの川辺で二羽の鳥が静かに同じ旋律を繰り返した。" },
+      { "id": "idx:2", "title": "帰り道", "body": "帰り道では商店の灯りが濡れた石畳に長く映っていた。" }
+    ],
+    "first_audio_title": "間奏",
+    "last_audio_title": "間奏",
+    "head_transcript": "薄明かりの川辺で二羽の鳥が静かに同じ旋律を繰り返した。",
+    "tail_transcript": "薄明かりの川辺で二羽の鳥が静かに同じ旋律を繰り返した。",
+    "expected_start_chapter_id": "idx:0",
+    "expected_end_chapter_id": "idx:1",
+    "valid_sample": false
+  },
+  {
+    "id": "ru-stage-a",
+    "language": "ru",
+    "chapters": [
+      { "id": "idx:0", "title": "Медный рассвет", "body": "Медный рассвет осветил пустую площадь и крыши маленьких домов." },
+      { "id": "idx:1", "title": "Стеклянный сад", "body": "В стеклянном саду ветер тихо звенел прозрачными листьями деревьев." },
+      { "id": "idx:2", "title": "Тихий меридиан", "body": "Путница свернула карту у каменного знака и посмотрела на север." },
+      { "id": "idx:3", "title": "Синий фонарь", "body": "Синий фонарь горел у последних ворот пока не вернулся лодочник." }
+    ],
+    "first_audio_title": "Стеклянный сад",
+    "last_audio_title": "Синий фонарь",
+    "head_transcript": "В стеклянном саду ветер тихо звенел прозрачными листьями деревьев.",
+    "tail_transcript": "Синий фонарь горел у последних ворот пока не вернулся лодочник.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "ru-stage-b-generic",
+    "language": "ru",
+    "chapters": [
+      { "id": "idx:0", "title": "Северное окно", "body": "Дождь чертил узкие дороги на северном окне ещё до пробуждения города." },
+      { "id": "idx:1", "title": "Бумажный компас", "body": "Лида раскрыла бумажный компас и пошла за зелёной стрелкой к старому каналу." },
+      { "id": "idx:2", "title": "Часовщик", "body": "Часовщик пересчитал латунные колёса и прислушался к неровному ходу." },
+      { "id": "idx:3", "title": "Портовый колокол", "body": "За последним складом портовый колокол дважды прозвучал под ясным небом." }
+    ],
+    "first_audio_title": "Chapter 02",
+    "last_audio_title": "Track 04",
+    "head_transcript": "Лида раскрыла бумажный компас и пошла за зелёной стрелкой к старому каналу.",
+    "tail_transcript": "За последним складом портовый колокол дважды прозвучал под ясным небом.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "ru-negative-repeated",
+    "language": "ru",
+    "chapters": [
+      { "id": "idx:0", "title": "Интерлюдия", "body": "Два красных змея кружили над фонтаном пока серебряный трамвай ждал у парка." },
+      { "id": "idx:1", "title": "Интерлюдия", "body": "Два красных змея кружили над фонтаном пока серебряный трамвай ждал у парка." },
+      { "id": "idx:2", "title": "Послесловие", "body": "Садовник запер сарай и понёс корзину по освещённой луной дорожке." }
+    ],
+    "first_audio_title": "Интерлюдия",
+    "last_audio_title": "Интерлюдия",
+    "head_transcript": "Два красных змея кружили над фонтаном пока серебряный трамвай ждал у парка.",
+    "tail_transcript": "Два красных змея кружили над фонтаном пока серебряный трамвай ждал у парка.",
+    "expected_start_chapter_id": "idx:0",
+    "expected_end_chapter_id": "idx:1",
+    "valid_sample": false
+  },
+  {
+    "id": "es-stage-a",
+    "language": "es",
+    "chapters": [
+      { "id": "idx:0", "title": "Amanecer de cobre", "body": "La luz de cobre cruzó la plaza vacía antes de abrirse las ventanas." },
+      { "id": "idx:1", "title": "Jardín de cristal", "body": "Cada hoja de cristal sonó suavemente cuando llegó el viento del oeste." },
+      { "id": "idx:2", "title": "Meridiano quieto", "body": "La viajera dobló su mapa junto al mojón y miró hacia las montañas." },
+      { "id": "idx:3", "title": "Linterna azul", "body": "Una linterna azul esperó en la última puerta hasta la llegada del barquero." }
+    ],
+    "first_audio_title": "Jardín de cristal",
+    "last_audio_title": "Linterna azul",
+    "head_transcript": "Cada hoja de cristal sonó suavemente cuando llegó el viento del oeste.",
+    "tail_transcript": "Una linterna azul esperó en la última puerta hasta la llegada del barquero.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "es-stage-b-generic",
+    "language": "es",
+    "chapters": [
+      { "id": "idx:0", "title": "Ventana del norte", "body": "La lluvia dibujó senderos en la ventana del norte antes del amanecer." },
+      { "id": "idx:1", "title": "Brújula de papel", "body": "Nora abrió la brújula de papel y siguió la flecha verde hasta el canal antiguo." },
+      { "id": "idx:2", "title": "Relojero", "body": "El relojero contó ruedas de latón y escuchó el tic más pequeño del taller." },
+      { "id": "idx:3", "title": "Campana del puerto", "body": "Tras el último almacén la campana del puerto sonó dos veces bajo el cielo claro." }
+    ],
+    "first_audio_title": "Part 02",
+    "last_audio_title": "Track 04",
+    "head_transcript": "Nora abrió la brújula de papel y siguió la flecha verde hasta el canal antiguo.",
+    "tail_transcript": "Tras el último almacén la campana del puerto sonó dos veces bajo el cielo claro.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "es-negative-repeated",
+    "language": "es",
+    "chapters": [
+      { "id": "idx:0", "title": "Interludio", "body": "Dos cometas rojas giraron sobre la fuente mientras un tranvía plateado esperaba." },
+      { "id": "idx:1", "title": "Interludio", "body": "Dos cometas rojas giraron sobre la fuente mientras un tranvía plateado esperaba." },
+      { "id": "idx:2", "title": "Epílogo", "body": "El jardinero cerró el cobertizo y llevó una cesta por el sendero lunar." }
+    ],
+    "first_audio_title": "Interludio",
+    "last_audio_title": "Interludio",
+    "head_transcript": "Dos cometas rojas giraron sobre la fuente mientras un tranvía plateado esperaba.",
+    "tail_transcript": "Dos cometas rojas giraron sobre la fuente mientras un tranvía plateado esperaba.",
+    "expected_start_chapter_id": "idx:0",
+    "expected_end_chapter_id": "idx:1",
+    "valid_sample": false
+  },
+  {
+    "id": "de-stage-a-nfkc",
+    "language": "de",
+    "chapters": [
+      { "id": "idx:0", "title": "Kupfermorgen", "body": "Kupfernes Licht zog über den leeren Platz und die Dächer der kleinen Häuser." },
+      { "id": "idx:1", "title": "Glasgarten", "body": "Im Glasgarten klangen die klaren Blätter leise im Wind aus dem Westen." },
+      { "id": "idx:2", "title": "Stiller Meridian", "body": "Die Wanderin faltete ihre Karte am Stein und blickte zum fernen Gebirge." },
+      { "id": "idx:3", "title": "Blaue Laterne", "body": "Eine blaue Laterne brannte am letzten Tor bis der Fährmann zurückkehrte." }
+    ],
+    "first_audio_title": "Ｇｌａｓｇａｒｔｅｎ",
+    "last_audio_title": "Blaue Laterne",
+    "head_transcript": "Im Glasgarten klangen die klaren Blätter leise im Wind aus dem Westen.",
+    "tail_transcript": "Eine blaue Laterne brannte am letzten Tor bis der Fährmann zurückkehrte.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "de-stage-b-generic",
+    "language": "de",
+    "chapters": [
+      { "id": "idx:0", "title": "Nordfenster", "body": "Der Regen zeichnete schmale Wege ans Nordfenster bevor die Stadt erwachte." },
+      { "id": "idx:1", "title": "Papierkompass", "body": "Mara öffnete den Papierkompass und folgte dem grünen Pfeil zum alten Kanal." },
+      { "id": "idx:2", "title": "Uhrmacher", "body": "Der Uhrmacher zählte Messingräder und hörte auf das kleinste unruhige Ticken." },
+      { "id": "idx:3", "title": "Hafenglocke", "body": "Hinter dem letzten Speicher schlug die Hafenglocke zweimal unter klarem Himmel." }
+    ],
+    "first_audio_title": "Chapter 02",
+    "last_audio_title": "Part 04",
+    "head_transcript": "Mara öffnete den Papierkompass und folgte dem grünen Pfeil zum alten Kanal.",
+    "tail_transcript": "Hinter dem letzten Speicher schlug die Hafenglocke zweimal unter klarem Himmel.",
+    "expected_start_chapter_id": "idx:1",
+    "expected_end_chapter_id": "idx:3",
+    "valid_sample": true
+  },
+  {
+    "id": "de-negative-repeated",
+    "language": "de",
+    "chapters": [
+      { "id": "idx:0", "title": "Zwischenspiel", "body": "Zwei rote Drachen kreisten über dem Brunnen während die silberne Bahn wartete." },
+      { "id": "idx:1", "title": "Zwischenspiel", "body": "Zwei rote Drachen kreisten über dem Brunnen während die silberne Bahn wartete." },
+      { "id": "idx:2", "title": "Nachwort", "body": "Der Gärtner schloss den Schuppen und trug einen Korb über den Mondweg." }
+    ],
+    "first_audio_title": "Zwischenspiel",
+    "last_audio_title": "Zwischenspiel",
+    "head_transcript": "Zwei rote Drachen kreisten über dem Brunnen während die silberne Bahn wartete.",
+    "tail_transcript": "Zwei rote Drachen kreisten über dem Brunnen während die silberne Bahn wartete.",
+    "expected_start_chapter_id": "idx:0",
+    "expected_end_chapter_id": "idx:1",
+    "valid_sample": false
+  }
+]
