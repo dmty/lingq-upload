@@ -72,14 +72,18 @@ export const tauriStubInitScript = `
     function readReceipts(key) {
         return (window.__receiptsByProject__ && window.__receiptsByProject__[key]) || [];
     }
+    const DEFAULT_TRANSCRIPTION_PREFERENCES = {
+        provider_id: "groq",
+        auto_detect_start: false,
+    };
     function readTranscriptionPreferences() {
         try {
-            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_PREFERENCES_KEY)) || {
-                provider_id: "groq",
-                auto_detect_start: false,
-            };
+            return JSON.parse(sessionStorage.getItem(TRANSCRIPTION_PREFERENCES_KEY)) ||
+                window.__transcriptionPreferences__ ||
+                DEFAULT_TRANSCRIPTION_PREFERENCES;
         } catch {
-            return { provider_id: "groq", auto_detect_start: false };
+            return window.__transcriptionPreferences__ ||
+                DEFAULT_TRANSCRIPTION_PREFERENCES;
         }
     }
     function writeTranscriptionPreferences(preferences) {
@@ -516,14 +520,19 @@ export const tauriStubInitScript = `
             };
             const consentMatches =
                 readTranscriptionConsents()[key] === activeProvider.id;
+            // Evidence lives on the matcher decision, so a reset clears it here
+            // exactly as it does in the backend.
+            const evidence = readDecisions()[key]?.detection ??
+                base.existing_evidence ?? null;
             return {
                 ...base,
                 active_provider: activeProvider,
                 key_present: keyPresent,
                 consent_matches: consentMatches,
+                existing_evidence: evidence,
                 can_start:
                     base.eligible &&
-                    base.existing_evidence == null &&
+                    evidence == null &&
                     keyPresent &&
                     consentMatches,
             };

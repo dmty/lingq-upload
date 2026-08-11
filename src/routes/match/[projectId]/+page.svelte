@@ -7,6 +7,7 @@
   import {
     commands,
     type AbsorbPolicy,
+    type AppTranscriptionPreferences,
     type AudioSource,
     type BucketPreview,
     type DetectedRange,
@@ -59,10 +60,17 @@
   let absorbPolicy = $state<AbsorbPolicy>("forward");
   let settingsOpen = $state(false);
   let detectionAvailability = $state<DetectionAvailability | null>(null);
+  let transcriptionPreferences = $state<AppTranscriptionPreferences | null>(
+    null,
+  );
+  let detectionAssist = $state<ReturnType<typeof DetectionAssist> | null>(null);
   let resettingDetection = $state(false);
   // One-shot: a reset returns to mismatch resolution but must never be the
   // thing that starts a detection run.
   let suppressAutoAfterReset = false;
+  // Per-mount, per-project: neither a re-running effect nor the post-reset
+  // re-hydration may start a second run.
+  let autoAttempted = false;
 
   // Audio-expand affordance (sub-case A only: no receipts yet). Toggled by the
   // "+ Add more audio" button; reveals a DropZone seeded from the project's
@@ -112,7 +120,7 @@
       projectIdValue = mapping.projectId;
       absorbPolicy = mapping.absorbPolicy;
       if (mapping.projectId) {
-        await refreshDetectionAvailability(key, mapping.projectId);
+        await refreshDetectionGate(key, mapping.projectId);
         if (cancelled || projectKey !== key) return;
       }
       await refreshAudioState(key);
@@ -171,14 +179,53 @@
     audioOriginFolder = null;
   }
 
-  async function refreshDetectionAvailability(
-    key: string,
-    projectId: ProjectIdType,
-  ) {
+  async function refreshDetectionGate(key: string, projectId: ProjectIdType) {
     const result = await commands.cmdDetectionAvailability(projectId);
     if (projectKey !== key) return;
     detectionAvailability = result.status === "ok" ? result.data : null;
+    const preferences = await commands.cmdGetTranscriptionPreferences();
+    if (projectKey !== key) return;
+    transcriptionPreferences =
+      preferences.status === "ok" ? preferences.data : null;
   }
+
+  function shouldAutoDetect(
+    preferences: AppTranscriptionPreferences,
+    availability: DetectionAvailability,
+    suppressed: boolean,
+  ): boolean {
+    return (
+      preferences.auto_detect_start &&
+      availability.eligible &&
+      availability.key_present &&
+      availability.consent_matches &&
+      availability.existing_evidence == null &&
+      availability.can_start &&
+      !suppressed
+    );
+  }
+
+  // Opt-in auto mode runs the assist's own manual start path — no second
+  // command, no bypass of the preview and the mapping grid.
+  $effect(() => {
+    const availability = detectionAvailability;
+    const preferences = transcriptionPreferences;
+    const assist = detectionAssist;
+    if (
+      hydrating ||
+      autoAttempted ||
+      !availability ||
+      !preferences ||
+      !assist
+    ) {
+      return;
+    }
+    if (!shouldAutoDetect(preferences, availability, suppressAutoAfterReset)) {
+      return;
+    }
+    autoAttempted = true;
+    void assist.startDetection();
+  });
 
   function resetProjectState() {
     title = "Untitled";
@@ -197,8 +244,10 @@
     absorbPolicy = "forward";
     settingsOpen = false;
     detectionAvailability = null;
+    transcriptionPreferences = null;
     resettingDetection = false;
     suppressAutoAfterReset = false;
+    autoAttempted = false;
     audioPaths = [];
     audioOriginFolder = null;
     receiptCount = 0;
@@ -408,7 +457,7 @@
       }
       projectIdValue = mapping.projectId;
       if (mapping.projectId) {
-        await refreshDetectionAvailability(key, mapping.projectId);
+        await refreshDetectionGate(key, mapping.projectId);
         if (projectKey !== key) return;
       }
       await hydrateFromBackend(key);
@@ -921,6 +970,7 @@
 
         {#if projectIdValue}
           <DetectionAssist
+            bind:this={detectionAssist}
             projectId={projectIdValue}
             chapters={mapping.chapters}
             skippedIds={mapping.skippedIds}

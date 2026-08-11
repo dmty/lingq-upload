@@ -343,7 +343,8 @@
     }
   }
 
-  async function startDetection() {
+  // Exported so the route's gated auto mode runs this exact path.
+  export async function startDetection() {
     if (running) return;
     clearOutcome();
     const scope = projectId.content_hash;
