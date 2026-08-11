@@ -28,12 +28,14 @@
   let {
     projectId,
     chapters,
+    skippedIds,
     availability,
     onAvailabilityChanged,
     onConfirmDetectedRange,
   }: {
     projectId: ProjectId;
     chapters: ChapterMeta[];
+    skippedIds: ChapterId[];
     availability: DetectionAvailability | null;
     onAvailabilityChanged: (next: DetectionAvailability) => void;
     onConfirmDetectedRange: (
@@ -231,8 +233,12 @@
     candidateOptions(lowConfidence?.top_tail ?? []),
   );
   // A server that never sampled the book's end still leaves the last chapter a
-  // legitimate answer — offered explicitly and warned, never preselected.
-  const finalChapter = $derived(chapters[chapters.length - 1] ?? null);
+  // legitimate answer — offered explicitly and warned, never preselected. Only
+  // eligible chapters can bound a range, so skipped trailing chapters are not
+  // offered.
+  const finalChapter = $derived(
+    chapters.findLast((chapter) => !skippedIds.includes(chapter.id)) ?? null,
+  );
   const tailOptions = $derived(
     finalChapter &&
       !lowConfidence?.top_tail.some(

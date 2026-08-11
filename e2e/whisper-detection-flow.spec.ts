@@ -510,6 +510,40 @@ test.describe("detected text range flow", () => {
     expect(args.evidence.detected_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  test("the final-chapter fallback offers the last eligible chapter", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      `;(() => { window.__pickerState__._writeSkipped(${JSON.stringify({
+        [CANDIDATE_PROJECT_KEY]: ["idx:5"],
+      })}); })();`,
+    );
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: {
+        ...lowConfidence,
+        top_tail: [
+          { chapter_id: "idx:3", order: 3, title: "Midpoint", score: 0.58 },
+        ],
+      },
+    });
+    const endRadio = candidateRadio(page, "End chapter");
+    await expect(endRadio(/Epilogue/)).toHaveCount(0);
+
+    const fallback = endRadio(/Chapter 5 · The Descent.*final chapter fallback/i);
+    await expect(fallback).not.toBeChecked();
+    await fallback.check();
+
+    await page.getByRole("button", { name: "Confirm detected range" }).click();
+    await expect(page.getByTestId("mapping-grid")).toBeVisible();
+    const args = await page.evaluate(
+      () => window.__confirmDetectedRangeCalls__[0],
+    );
+    expect(args.selectedRange).toEqual({
+      start_chapter_id: "idx:2",
+      end_chapter_id: "idx:4",
+    });
+  });
+
   test("an end-before-start candidate pair cannot be confirmed", async ({
     page,
   }) => {

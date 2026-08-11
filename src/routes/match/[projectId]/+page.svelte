@@ -857,6 +857,7 @@
           <DetectionAssist
             projectId={projectIdValue}
             chapters={mapping.chapters}
+            skippedIds={mapping.skippedIds}
             availability={detectionAvailability}
             onAvailabilityChanged={(next) => (detectionAvailability = next)}
             onConfirmDetectedRange={handleDetectedRangeConfirm}
