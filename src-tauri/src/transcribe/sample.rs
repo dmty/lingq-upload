@@ -172,42 +172,10 @@ fn plan_one_track(
         return Err(NoTranscriptReason::InsufficientAudio);
     }
     let midpoint = start + (end - start) / 2.0;
-
-    let head_end = (start + config.target_sample_sec).min(midpoint);
-    let head_initial = valid_window(SampleSide::Head, 0, track, 0, start, head_end, config)?;
-    let head_retry_start = start + config.target_sample_sec;
-    let head_retry_end = (head_retry_start + config.target_sample_sec).min(midpoint);
-    let head_retry = optional_window(
-        SampleSide::Head,
-        track,
-        0,
-        head_retry_start,
-        head_retry_end,
-        config,
-    );
-
-    let tail_start = midpoint.max(end - config.target_sample_sec);
-    let tail_initial = valid_window(SampleSide::Tail, 0, track, 0, tail_start, end, config)?;
-    let tail_retry_end = end - config.target_sample_sec;
-    let tail_retry_start = midpoint.max(tail_retry_end - config.target_sample_sec);
-    let tail_retry = optional_window(
-        SampleSide::Tail,
-        track,
-        0,
-        tail_retry_start,
-        tail_retry_end,
-        config,
-    );
-
+    // Half-bounds: plan_head/plan_tail re-apply skip and keep retries inside each half.
     Ok(SamplePlan {
-        head: SideSamplePlan {
-            initial: head_initial,
-            retry: head_retry,
-        },
-        tail: SideSamplePlan {
-            initial: tail_initial,
-            retry: tail_retry,
-        },
+        head: plan_head(track, 0, (bounds.0, midpoint), config)?,
+        tail: plan_tail(track, 0, (midpoint, bounds.1), config)?,
     })
 }
 
