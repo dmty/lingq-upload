@@ -1324,6 +1324,16 @@ fn project_chapters(project: &Project) -> Result<Vec<Chapter>, AppError> {
     ))
 }
 
+pub(crate) fn detection_chapters(project: &Project) -> Result<Vec<Chapter>, AppError> {
+    let all_chapters = project_chapters(project)?;
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    Ok(eligible_chapters(
+        &all_chapters,
+        &skipped,
+        &project.receipts,
+    ))
+}
+
 pub(crate) async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {
     let Some(source) = project.sources.audio.as_ref() else {
         return Err(AppError::Other("project has no audio source".into()));

@@ -1,24 +1,34 @@
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Utc;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use uuid::Uuid;
 
+use super::jobs::{register_caller_job, JobCancelMap};
 use super::{app_data_dir, secrets};
 use crate::core::identity::ProjectId;
+use crate::core::job::{detection_chapters, inspect_mismatch, resolve_audio_tracks};
+use crate::core::matcher::MismatchCondition;
+use crate::core::project::Project;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
+use crate::events::JobEmitter;
 use crate::secrets::{KeyringBackend, SecretsStore, GROQ_ACCOUNT, OPENAI_ACCOUNT};
 use crate::transcribe::{
-    ProviderCatalog, ProviderDescriptor, TranscribeConsent, TranscribeError, TranscribeErrorKind,
-    TranscribeProviderId,
+    consent_matches, detect_start_offset, AlignmentConfig, DetectStartResult, DetectionEvidence,
+    DetectionPreview, DetectionSink, ProviderCatalog, ProviderDescriptor, ProviderFactory,
+    TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber,
 };
 
 const PREFERENCES_FILE: &str = "transcription-preferences.json";
+const PROVIDER_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const PROVIDER_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
 pub struct AppTranscriptionPreferences {
@@ -51,6 +61,224 @@ pub struct PricingHintDto {
     pub estimated_usd_per_minute: Option<f64>,
     pub free_tier_eligible: bool,
     pub docs_url: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct DetectionAvailability {
+    pub eligible: bool,
+    pub condition: Option<MismatchCondition>,
+    pub chapter_count: usize,
+    pub track_count: usize,
+    pub active_provider: ProviderInfo,
+    pub key_present: bool,
+    pub consent_matches: bool,
+    pub existing_evidence: Option<DetectionEvidence>,
+    pub can_start: bool,
+}
+
+pub fn detection_eligible(
+    condition: MismatchCondition,
+    chapter_count: usize,
+    track_count: usize,
+) -> bool {
+    chapter_count > track_count
+        && track_count > 0
+        && matches!(
+            condition,
+            MismatchCondition::ManyToFew
+                | MismatchCondition::ManyToOne
+                | MismatchCondition::Unalignable
+        )
+}
+
+pub async fn detection_availability_impl(
+    project: &Project,
+    active_provider: TranscribeProviderId,
+    key_present: bool,
+) -> Result<DetectionAvailability, AppError> {
+    let inspection = inspect_mismatch(project).await?;
+    let (condition, chapter_count, track_count) = inspection
+        .map(|inspection| {
+            (
+                Some(inspection.condition),
+                inspection.chapter_count,
+                inspection.track_count,
+            )
+        })
+        .or_else(|| {
+            project.matcher_decision.as_ref().map(|decision| {
+                (
+                    Some(decision.condition),
+                    decision.chapter_count,
+                    decision.track_count,
+                )
+            })
+        })
+        .unwrap_or((None, 0, 0));
+    let eligible = condition
+        .is_some_and(|condition| detection_eligible(condition, chapter_count, track_count));
+    let consent_matches = consent_matches(project.transcribe_consent.as_ref(), active_provider);
+    let existing_evidence = project
+        .matcher_decision
+        .as_ref()
+        .and_then(|decision| decision.detection.clone());
+    let can_start = eligible && key_present && consent_matches && existing_evidence.is_none();
+    let descriptor = ProviderCatalog::built_in().descriptor(active_provider)?;
+
+    Ok(DetectionAvailability {
+        eligible,
+        condition,
+        chapter_count,
+        track_count,
+        active_provider: provider_info(descriptor, key_present),
+        key_present,
+        consent_matches,
+        existing_evidence,
+        can_start,
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_detection_availability(
+    app: AppHandle,
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<DetectionAvailability, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|error| AppError::Other(format!("store.get: {error}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    let preferences = load_preferences(&app_data_dir(&app)?)?;
+    let key_present = key_present(preferences.provider_id, secrets::backend(&app)?)?;
+    detection_availability_impl(&project, preferences.provider_id, key_present).await
+}
+
+fn detection_operational_error(error: AppError) -> TranscribeError {
+    match error {
+        AppError::Transcribe(error) => error,
+        error => TranscribeError::new(TranscribeErrorKind::ProviderFailed, error.to_string()),
+    }
+}
+
+pub fn load_detection_authorization(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    app_data_dir: &Path,
+    load_active_key: impl FnOnce(TranscribeProviderId) -> Result<SecretString, AppError>,
+) -> Result<(TranscribeProviderId, SecretString), TranscribeError> {
+    let preferences = load_preferences(app_data_dir).map_err(detection_operational_error)?;
+    let project = store
+        .get(project_id)
+        .map_err(|error| {
+            detection_operational_error(AppError::Other(format!("store.get: {error}")))
+        })?
+        .ok_or_else(|| {
+            TranscribeError::new(TranscribeErrorKind::ProviderFailed, "project not found")
+        })?;
+    if !consent_matches(project.transcribe_consent.as_ref(), preferences.provider_id) {
+        return Err(TranscribeError::new(
+            TranscribeErrorKind::Unauthorized,
+            format!(
+                "transcription consent does not match active provider {:?}",
+                preferences.provider_id
+            ),
+        ));
+    }
+    let key = load_active_key(preferences.provider_id).map_err(detection_operational_error)?;
+    Ok((preferences.provider_id, key))
+}
+
+pub fn detection_provider_factory<'a>(
+    store: &'a dyn ProjectStore,
+    project_id: &'a ProjectId,
+    app_data_dir: &'a Path,
+    load_active_key: impl FnOnce(TranscribeProviderId) -> Result<SecretString, AppError> + Send + 'a,
+    create_provider: impl FnOnce(TranscribeProviderId, SecretString) -> Result<Box<dyn Transcriber>, TranscribeError>
+        + Send
+        + 'a,
+) -> ProviderFactory<'a> {
+    Box::new(move || {
+        let (provider_id, key) =
+            load_detection_authorization(store, project_id, app_data_dir, load_active_key)?;
+        create_provider(provider_id, key)
+    })
+}
+
+pub async fn detect_start_offset_impl(
+    project: &Project,
+    cancels: &JobCancelMap,
+    job_id: Uuid,
+    sink: &mut dyn DetectionSink,
+    provider_factory: ProviderFactory<'_>,
+) -> Result<DetectStartResult, AppError> {
+    let (_guard, cancel) = register_caller_job(cancels, job_id, &project.id)?;
+    if let Some(evidence) = project
+        .matcher_decision
+        .as_ref()
+        .and_then(|decision| decision.detection.as_ref())
+    {
+        return Ok(DetectStartResult::Detected {
+            preview: DetectionPreview {
+                provider_id: evidence.provider_id,
+                align_source: evidence.align_source,
+                range: evidence.range.clone(),
+                confidence: evidence.confidence,
+                transcript_head_preview: evidence.transcript_head_preview.clone(),
+                transcript_tail_preview: evidence.transcript_tail_preview.clone(),
+                detected_at: evidence.detected_at,
+            },
+        });
+    }
+    let tracks = resolve_audio_tracks(project).await?;
+    let chapters = detection_chapters(project)?;
+    detect_start_offset(
+        project,
+        &tracks,
+        &chapters,
+        job_id,
+        &AlignmentConfig::default(),
+        sink,
+        cancel,
+        provider_factory,
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_detect_start_offset(
+    app: AppHandle,
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    cancels: tauri::State<'_, JobCancelMap>,
+    project_id: ProjectId,
+    job_id: Uuid,
+) -> Result<DetectStartResult, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|error| AppError::Other(format!("store.get: {error}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    let data_dir = app_data_dir(&app)?;
+    let app_for_key = app.clone();
+    let factory = detection_provider_factory(
+        store.inner().as_ref(),
+        &project_id,
+        &data_dir,
+        move |provider_id| load_key(provider_id, secrets::backend(&app_for_key)?),
+        |provider_id, key| {
+            let http_client = reqwest::Client::builder()
+                .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
+                .timeout(PROVIDER_REQUEST_TIMEOUT)
+                .build()
+                .map_err(|error| {
+                    TranscribeError::new(TranscribeErrorKind::Network, error.to_string())
+                })?;
+            ProviderCatalog::built_in().create(provider_id, key, http_client)
+        },
+    );
+    let mut emitter = JobEmitter::new(&app, job_id);
+    detect_start_offset_impl(&project, cancels.inner(), job_id, &mut emitter, factory).await
 }
 
 fn validate_provider(provider: TranscribeProviderId) -> Result<(), AppError> {

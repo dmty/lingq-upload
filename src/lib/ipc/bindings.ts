@@ -119,6 +119,22 @@ async cmdAcceptTranscribeConsent(projectId: ProjectId, providerId: TranscribePro
     else return { status: "error", error: e  as any };
 }
 },
+async cmdDetectionAvailability(projectId: ProjectId) : Promise<Result<DetectionAvailability, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_detection_availability", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cmdDetectStartOffset(projectId: ProjectId, jobId: string) : Promise<Result<DetectStartResult, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_detect_start_offset", { projectId, jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async manualSourceFromFiles(epub: string, audio: string, lang: string, title: string | null) : Promise<Result<Candidate, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("manual_source_from_files", { epub, audio, lang, title }) };
@@ -553,7 +569,7 @@ async cmdReplayReceipts(projectId: ProjectId) : Promise<Result<ReceiptSnapshot[]
 export type AbsorbPolicy = "forward" | "backward" | "drop"
 export type AccountProfile = { username: string }
 export type AlignSource = "title" | "transcript"
-export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "Transcribe"; message: TranscribeError } | { kind: "Other"; message: string }
+export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "DetectedRange"; message: DetectedRangeError } | { kind: "Transcribe"; message: TranscribeError } | { kind: "Other"; message: string }
 export type AppTranscriptionPreferences = { provider_id: TranscribeProviderId; auto_detect_start: boolean }
 export type AudioError = { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" } | { kind: "Decode"; message: string } | { kind: "Encode"; message: string }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
@@ -582,6 +598,7 @@ export type Chapter = { order: number; title: string; body: string; id?: Chapter
  * (loose-file and manifest ingest paths).
  */
 spine_href?: string }
+export type ChapterCandidate = { chapter_id: ChapterId; order: number; title: string; score: number }
 export type ChapterEntry = { title: string; start_sec: number; end_sec: number | null }
 /**
  * Stable identity for a parsed chapter.
@@ -621,9 +638,13 @@ export type CollectionDetail = { id: number; title: string; description: string 
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
+export type DetectStartResult = { kind: "detected"; preview: DetectionPreview } | { kind: "low_confidence"; transcript_head_preview: string | null; transcript_tail_preview: string | null; top_head: ChapterCandidate[]; top_tail: ChapterCandidate[] } | { kind: "no_transcript"; reason: NoTranscriptReason }
 export type DetectedRange = { start_chapter_id: ChapterId; end_chapter_id: ChapterId }
+export type DetectedRangeError = { kind: "MissingBoundary"; message: string } | { kind: "DuplicateBoundary"; message: string } | { kind: "EndBeforeStart" } | { kind: "EmptyRange" }
+export type DetectionAvailability = { eligible: boolean; condition: MismatchCondition | null; chapter_count: number; track_count: number; active_provider: ProviderInfo; key_present: boolean; consent_matches: boolean; existing_evidence: DetectionEvidence | null; can_start: boolean }
 export type DetectionEvidence = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string }
 export type DetectionPhase = "title_check" | "sample_head" | "transcribe_head" | "align_head" | "sample_tail" | "transcribe_tail" | "align_tail"
+export type DetectionPreview = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string }
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
  * hide the toggle in release builds; `env_override` flags when the choice
@@ -680,6 +701,7 @@ export type MismatchCondition = "one_to_many" | "many_to_one" | "many_to_few" | 
  */
 export type MismatchInspection = { title: string; chapter_count: number; track_count: number; condition: MismatchCondition; options: MismatchResponse[]; preselect: MismatchResponse; bucket_preview: BucketPreview[] | null }
 export type MismatchResponse = "pair_accept" | "pair_drop" | "single_lesson" | "split_proportional" | "cancel" | "unknown"
+export type NoTranscriptReason = "empty" | "insufficient_audio" | "content_poor"
 /**
  * One planned upload step, projected for the UI.
  * 

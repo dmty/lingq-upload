@@ -100,7 +100,7 @@ fn is_project_active(map: &HashMap<Uuid, JobCancelEntry>, project_id: &ProjectId
 /// RAII guard that removes a job from the cancel map on drop. A panic inside
 /// the spawned task would otherwise leak the entry forever — the explicit
 /// `.remove()` only runs on the happy / Err return paths.
-struct JobMapGuard {
+pub(crate) struct JobMapGuard {
     map: JobCancelMap,
     job_id: Uuid,
 }
@@ -115,6 +115,21 @@ impl Drop for JobMapGuard {
     fn drop(&mut self) {
         lock_cancels(&self.map).remove(&self.job_id);
     }
+}
+
+pub(crate) fn register_caller_job(
+    map: &JobCancelMap,
+    job_id: Uuid,
+    project_id: &ProjectId,
+) -> Result<(JobMapGuard, CancellationToken), AppError> {
+    let token = CancellationToken::new();
+    let mut jobs = lock_cancels(map);
+    if jobs.contains_key(&job_id) {
+        return Err(AppError::Other(format!("job id already active: {job_id}")));
+    }
+    jobs.insert(job_id, (project_id.clone(), token.clone()));
+    drop(jobs);
+    Ok((JobMapGuard::new(map.clone(), job_id), token))
 }
 
 /// Start an end-to-end project job. Returns immediately with the new job id;
