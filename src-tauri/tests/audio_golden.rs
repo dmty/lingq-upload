@@ -19,6 +19,8 @@ struct Golden {
     codec_name: String,
     sample_rate: u32,
     channels: u32,
+    bit_rate_target: u32,
+    bit_rate_tolerance_pct: f64,
     duration_sec_target: f64,
     duration_sec_tolerance: f64,
 }
@@ -53,8 +55,6 @@ async fn silence_transcode_matches_golden() {
     assert_eq!(info.sample_rate, golden.sample_rate, "sample_rate");
     assert_eq!(info.channels as u32, golden.channels, "channels");
 
-    // bit_rate tolerance — symphonia doesn't expose bit_rate so we skip that check.
-    // ponytail: bit_rate check removed; symphonia StreamInfo has no bit_rate field.
     let duration = info.duration_sec;
     let dur_delta = (duration - golden.duration_sec_target).abs();
     assert!(
@@ -63,6 +63,18 @@ async fn silence_transcode_matches_golden() {
         duration,
         golden.duration_sec_tolerance,
         golden.duration_sec_target
+    );
+
+    let bytes = std::fs::metadata(&dst).expect("mp3 metadata").len();
+    let bit_rate = (bytes as f64 * 8.0) / duration;
+    let pct = (bit_rate - f64::from(golden.bit_rate_target)).abs()
+        / f64::from(golden.bit_rate_target)
+        * 100.0;
+    assert!(
+        pct <= golden.bit_rate_tolerance_pct,
+        "bit_rate {bit_rate} outside ±{}% of {}",
+        golden.bit_rate_tolerance_pct,
+        golden.bit_rate_target
     );
 }
 
