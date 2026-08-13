@@ -1,8 +1,10 @@
 pub mod mismatch;
 pub mod ops;
 pub mod pack;
+pub mod titles;
 
 pub use mismatch::{allowed, classify, MismatchCondition, MismatchResponse};
+pub use titles::{align_by_title, Leftovers};
 pub use ops::{
     apply as apply_mapping_op, gate_continue, MappingError, MappingOp, MappingPair, MappingState,
     TrackId,

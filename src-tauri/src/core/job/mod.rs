@@ -18,8 +18,8 @@ use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::ops::{build_bucket_meta, TrackId, TrackMeta, RECOMPUTED_CONFIDENCE};
 use crate::core::matcher::pack::{anchored_ranges, build_preview, proportional_pack};
 use crate::core::matcher::{
-    auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
-    MatchOutcome, MismatchCondition, MismatchResponse,
+    align_by_title, auto_match, seed_mapping_state, track_id_for, BucketPreview, Leftovers,
+    MappingPair, MappingState, MatchOutcome, MismatchCondition, MismatchResponse,
 };
 use crate::core::project::{
     filter_cover_chapter, ChapterReceipt, MatcherDecision, Project, ProjectStage,
@@ -808,19 +808,24 @@ pub async fn seed_mapping_for_response(
             return Ok(Some(seed_split_mapping_from_resolved(&chapters, &tracks)))
         }
         MismatchResponse::PairAccept | MismatchResponse::PairDrop => {
-            let n = chapters.len().min(tracks.len());
-            chapters
+            let assignment = title_or_index_assignment(&chapters, &tracks, response);
+            let pairs: Vec<MappingPair> = chapters
                 .iter()
-                .enumerate()
-                .map(|(i, c)| {
-                    let tid = if i < n {
-                        Some(track_id_for(&tracks[i]))
-                    } else {
-                        None
-                    };
-                    new_pair(c.id.clone(), tid)
-                })
-                .collect()
+                .zip(&assignment)
+                .map(|(c, t)| new_pair(c.id.clone(), t.map(|i| track_id_for(&tracks[i]))))
+                .collect();
+            let mut state = mapping_state_from_resolved(pairs, &chapters, &tracks);
+            if response == MismatchResponse::PairDrop {
+                // Drop means drop: a track no chapter claims must not resurface
+                // as an audio-only lesson.
+                state.parking_lot = tracks
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| !assignment.contains(&Some(*i)))
+                    .map(|(_, t)| track_id_for(t))
+                    .collect();
+            }
+            return Ok(Some(state));
         }
         MismatchResponse::Cancel | MismatchResponse::Unknown => return Ok(None),
     };
@@ -983,6 +988,28 @@ fn anchored_split_pairs(
         }
     }
     pairs
+}
+
+/// Chapter → track index assignment for the `PairAccept` / `PairDrop`
+/// responses. Titles win when both sides label their chapters well enough to
+/// anchor — front and back matter the audiobook omits would otherwise shift
+/// every later pair. Index order is the fallback.
+fn title_or_index_assignment(
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+    response: MismatchResponse,
+) -> Vec<Option<usize>> {
+    let leftovers = if response == MismatchResponse::PairDrop {
+        Leftovers::Drop
+    } else {
+        Leftovers::Squeeze
+    };
+    let chapter_titles: Vec<&str> = chapters.iter().map(|c| c.title.as_str()).collect();
+    let track_titles: Vec<Option<&str>> = tracks.iter().map(|t| t.title.as_deref()).collect();
+    align_by_title(&chapter_titles, &track_titles, leftovers).unwrap_or_else(|| {
+        let n = chapters.len().min(tracks.len());
+        (0..chapters.len()).map(|i| (i < n).then_some(i)).collect()
+    })
 }
 
 fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {

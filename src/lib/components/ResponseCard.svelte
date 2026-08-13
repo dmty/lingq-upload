@@ -13,12 +13,12 @@
 
   const COPY: Record<MismatchResponse, { title: string; body: string }> = {
     pair_accept: {
-      title: "Pair by order",
-      body: "Match chapters 1↔1, 2↔2, …; extras become standalone lessons.",
+      title: "Pair, keep extras",
+      body: "Match on chapter titles where they agree; fold cover, contents and afterword into the neighbouring audio.",
     },
     pair_drop: {
       title: "Pair, drop extras",
-      body: "Match in order; discard the unmatched tail to keep counts aligned.",
+      body: "Match on chapter titles where they agree; leave everything unmatched out of the upload.",
     },
     single_lesson: {
       title: "Single lesson",
