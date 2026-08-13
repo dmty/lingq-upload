@@ -174,4 +174,5 @@ fn namespaced_opf_item_manifest_extracts_cover() {
     assert_eq!(cov.mime, "image/jpeg");
     assert_eq!(cov.path.file_name().unwrap().to_string_lossy(), "cover.jpg");
     assert!(std::fs::metadata(&cov.path).unwrap().len() > 0);
+    assert_eq!(cov.source_spine_href.as_deref(), Some("Text/cover.xhtml"));
 }

@@ -15,14 +15,14 @@
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
 use quick_xml::XmlVersion;
+use quick_xml::events::Event;
 use zip::ZipArchive;
 
 use super::{
-    local_name, parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip,
-    EpubError,
+    EpubError, local_name, parent_dir, read_bytes_from_zip, read_container_opf_path,
+    read_to_string_from_zip,
 };
 
 #[derive(Debug, Clone)]
@@ -57,26 +57,16 @@ pub fn extract_to_dir_from_bytes(
     // Rung 1: EPUB3 properties="cover-image"
     if let Some(item) = manifest.iter().find(|m| m.is_cover_image_property) {
         let href = join_opf(&opf_dir, &item.href);
-        return write_sidecar(
-            &mut zip,
-            &href,
-            &item.media_type,
-            dest_dir,
-            host_spine_href(&spine, &manifest, &item.href),
-        );
+        let host = host_spine_href(&mut zip, &opf_dir, &spine, &manifest, &item.href);
+        return write_sidecar(&mut zip, &href, &item.media_type, dest_dir, host);
     }
 
     // Rung 2: EPUB2 <meta name="cover" content="ID"/>
     if let Some(meta_id) = parse_meta_cover_id(&opf_xml) {
         if let Some(item) = manifest.iter().find(|m| m.id == meta_id) {
             let href = join_opf(&opf_dir, &item.href);
-            return write_sidecar(
-                &mut zip,
-                &href,
-                &item.media_type,
-                dest_dir,
-                host_spine_href(&spine, &manifest, &item.href),
-            );
+            let host = host_spine_href(&mut zip, &opf_dir, &spine, &manifest, &item.href);
+            return write_sidecar(&mut zip, &href, &item.media_type, dest_dir, host);
         }
     }
 
@@ -352,31 +342,48 @@ fn first_img_src(xhtml: &str) -> Option<String> {
 }
 
 /// Find the spine href whose XHTML wraps the given image href, if any.
-// SIMPLIFY: host_spine_href heuristic — matches "cover" in filename; upgrade by
-// parsing the XHTML body and matching <img src> to the cover image href when
-// false positives appear.
-fn host_spine_href(
+fn host_spine_href<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    opf_dir: &str,
     spine: &[String],
     manifest: &[ManifestItem],
-    _image_href: &str,
+    image_href: &str,
 ) -> Option<String> {
+    let image_path = normalize_zip_path(&join_opf(opf_dir, image_href));
     for idref in spine {
-        let item = manifest.iter().find(|m| &m.id == idref)?;
+        let Some(item) = manifest.iter().find(|m| &m.id == idref) else {
+            continue;
+        };
         if !item.media_type.contains("xhtml") && !item.media_type.contains("html") {
             continue;
         }
-        // We don't read the xhtml here for performance; the most common case
-        // is that the cover host page name contains "cover".
-        let lower = item.href.to_ascii_lowercase();
-        if lower.contains("cover") {
-            // Confirm by checking whether this page's <img src> resolves to the target.
-            // Caller already opened the zip; we don't have it here. Return the href
-            // optimistically — the filter helper is best-effort and a stale match is
-            // harmless because chapters are user-confirmed before upload.
+        let xhtml_path = join_opf(opf_dir, &item.href);
+        let Ok(xhtml) = read_to_string_from_zip(zip, &xhtml_path) else {
+            continue;
+        };
+        let Some(src) = first_img_src(&xhtml) else {
+            continue;
+        };
+        let resolved = normalize_zip_path(&join_relative(&xhtml_path, &src));
+        if resolved == image_path {
             return Some(item.href.clone());
         }
     }
     None
+}
+
+fn normalize_zip_path(p: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for part in p.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                out.pop();
+            }
+            _ => out.push(part),
+        }
+    }
+    out.join("/")
 }
 
 fn join_opf(opf_dir: &str, href: &str) -> String {

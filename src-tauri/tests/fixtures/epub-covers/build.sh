@@ -28,7 +28,6 @@ cat > chapter1.xhtml <<EOF
 <body><h1>Chapter 1</h1><p>Body text for chapter one.</p></body></html>
 EOF
 
-# SIMPLIFY: Factor repeated zip sequence into helper function
 build_epub() {
   local name=$1
   rm -f "../$name"

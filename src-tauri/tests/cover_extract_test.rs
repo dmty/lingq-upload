@@ -76,3 +76,38 @@ fn returns_none_when_no_cover() {
     let res = extract_to_dir(&epub_path, out_dir.path()).unwrap();
     assert!(res.is_none());
 }
+
+#[test]
+fn host_spine_href_matches_img_src_not_filename() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub_path = dir.path().join("titlepage.epub");
+    let mut zw = zip::ZipWriter::new(std::fs::File::create(&epub_path).unwrap());
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    zw.start_file(
+        "mimetype",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+    )
+    .unwrap();
+    zw.write_all(b"application/epub+zip").unwrap();
+    zw.start_file("META-INF/container.xml", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(br#"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#).unwrap();
+    zw.start_file("content.opf", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(br#"<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier><dc:title>t</dc:title><dc:language>en</dc:language></metadata><manifest><item id="cov" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="tp" href="titlepage.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="tp"/></spine></package>"#).unwrap();
+    zw.start_file("titlepage.xhtml", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(br#"<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><img src="cover.jpg" alt="c"/></body></html>"#).unwrap();
+    zw.start_file("cover.jpg", SimpleFileOptions::default())
+        .unwrap();
+    zw.write_all(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+        .unwrap();
+    zw.finish().unwrap();
+
+    let out_dir = tempfile::tempdir().unwrap();
+    let cov = extract_to_dir(&epub_path, out_dir.path())
+        .unwrap()
+        .expect("cover present");
+    assert_eq!(cov.source_spine_href.as_deref(), Some("titlepage.xhtml"));
+}
