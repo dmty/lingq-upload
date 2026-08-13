@@ -745,9 +745,7 @@ pub async fn cmd_accept_transcribe_consent(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::fs;
-    use std::sync::{Arc, Mutex};
 
     use tempfile::tempdir;
 
@@ -755,39 +753,7 @@ mod tests {
     use crate::core::identity::ProjectId;
     use crate::core::project::Project;
     use crate::core::store::{InMemoryProjectStore, ProjectStore};
-    use crate::secrets::{KeyringBackend, SecretError};
-
-    #[derive(Clone, Default)]
-    struct FakeBackend {
-        entries: Arc<Mutex<HashMap<(String, String), String>>>,
-    }
-
-    impl KeyringBackend for FakeBackend {
-        fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError> {
-            self.entries
-                .lock()
-                .expect("fake entries lock")
-                .insert((service.into(), account.into()), value.into());
-            Ok(())
-        }
-
-        fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError> {
-            Ok(self
-                .entries
-                .lock()
-                .expect("fake entries lock")
-                .get(&(service.into(), account.into()))
-                .cloned())
-        }
-
-        fn delete(&self, service: &str, account: &str) -> Result<(), SecretError> {
-            self.entries
-                .lock()
-                .expect("fake entries lock")
-                .remove(&(service.into(), account.into()));
-            Ok(())
-        }
-    }
+    use crate::secrets::InMemoryKeyring;
 
     fn prefs(
         provider_id: TranscribeProviderId,
@@ -887,7 +853,7 @@ mod tests {
 
     #[test]
     fn provider_keys_have_independent_presence_and_clear() {
-        let backend = FakeBackend::default();
+        let backend = InMemoryKeyring::default();
         save_key(
             TranscribeProviderId::Groq,
             "groq-key",
@@ -910,7 +876,7 @@ mod tests {
     #[test]
     fn missing_provider_key_maps_to_typed_api_key_error() {
         let error =
-            load_key(TranscribeProviderId::Groq, Box::new(FakeBackend::default())).unwrap_err();
+            load_key(TranscribeProviderId::Groq, Box::new(InMemoryKeyring::default())).unwrap_err();
 
         assert!(matches!(
             error,
@@ -920,7 +886,7 @@ mod tests {
 
     #[test]
     fn provider_list_reports_presence_without_exposing_keys() {
-        let backend = FakeBackend::default();
+        let backend = InMemoryKeyring::default();
         save_key(
             TranscribeProviderId::Groq,
             "groq-key",
@@ -948,7 +914,7 @@ mod tests {
         let project_path = dir.path().join("projects/book/project.json");
         fs::create_dir_all(project_path.parent().unwrap()).unwrap();
         fs::write(&project_path, b"project sentinel").unwrap();
-        let backend = FakeBackend::default();
+        let backend = InMemoryKeyring::default();
         save_key(
             TranscribeProviderId::Groq,
             "groq-key",

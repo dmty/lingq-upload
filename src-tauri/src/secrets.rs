@@ -1,4 +1,6 @@
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -49,6 +51,40 @@ pub trait KeyringBackend: Send + Sync {
     fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError>;
     fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError>;
     fn delete(&self, service: &str, account: &str) -> Result<(), SecretError>;
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub(crate) struct InMemoryKeyring {
+    entries: Arc<Mutex<std::collections::HashMap<(String, String), String>>>,
+}
+
+#[cfg(test)]
+impl KeyringBackend for InMemoryKeyring {
+    fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError> {
+        self.entries
+            .lock()
+            .expect("in-memory keyring lock")
+            .insert((service.into(), account.into()), value.into());
+        Ok(())
+    }
+
+    fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError> {
+        Ok(self
+            .entries
+            .lock()
+            .expect("in-memory keyring lock")
+            .get(&(service.into(), account.into()))
+            .cloned())
+    }
+
+    fn delete(&self, service: &str, account: &str) -> Result<(), SecretError> {
+        self.entries
+            .lock()
+            .expect("in-memory keyring lock")
+            .remove(&(service.into(), account.into()));
+        Ok(())
+    }
 }
 
 pub struct RealKeyring;
@@ -328,7 +364,6 @@ pub fn dev_prefs_save(app_data_dir: &Path, prefs: &DevPrefs) -> std::io::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::io::{self, Write};
     use std::sync::{Arc, Mutex};
 
@@ -382,39 +417,6 @@ mod tests {
         String::from_utf8(bytes).expect("utf8 logs")
     }
 
-    // ponytail: Arc inside fake so two stores share one map; no wrapper type.
-    #[derive(Clone, Default)]
-    struct FakeBackend {
-        store: Arc<Mutex<HashMap<(String, String), String>>>,
-    }
-
-    impl KeyringBackend for FakeBackend {
-        fn set(&self, service: &str, account: &str, value: &str) -> Result<(), SecretError> {
-            self.store
-                .lock()
-                .expect("fake store lock")
-                .insert((service.into(), account.into()), value.into());
-            Ok(())
-        }
-
-        fn get(&self, service: &str, account: &str) -> Result<Option<String>, SecretError> {
-            Ok(self
-                .store
-                .lock()
-                .expect("fake store lock")
-                .get(&(service.into(), account.into()))
-                .cloned())
-        }
-
-        fn delete(&self, service: &str, account: &str) -> Result<(), SecretError> {
-            self.store
-                .lock()
-                .expect("fake store lock")
-                .remove(&(service.into(), account.into()));
-            Ok(())
-        }
-    }
-
     struct FailingBackend {
         err: SecretError,
     }
@@ -433,7 +435,7 @@ mod tests {
 
     #[test]
     fn provider_accounts_are_isolated_and_presence_is_boolean() {
-        let backend = FakeBackend::default();
+        let backend = InMemoryKeyring::default();
         let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(backend.clone()));
         let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(backend));
         groq.save_key("groq-secret").unwrap();
@@ -445,7 +447,7 @@ mod tests {
 
     #[test]
     fn lingq_account_round_trip_unchanged() {
-        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(InMemoryKeyring::default()));
         store.save_key("lingq-secret").expect("save");
         assert_eq!(store.load_key().expect("load"), Some("lingq-secret".into()));
         assert!(store.key_present().expect("present"));
@@ -483,7 +485,7 @@ mod tests {
 
         // Audit logs: account + char count only — never the key value.
         let logs = captured_logs(|| {
-            let backend = FakeBackend::default();
+            let backend = InMemoryKeyring::default();
             let groq = SecretsStore::new(GROQ_ACCOUNT, Box::new(backend.clone()));
             let openai = SecretsStore::new(OPENAI_ACCOUNT, Box::new(backend));
             groq.save_key(GROQ_SECRET).unwrap();
@@ -504,7 +506,7 @@ mod tests {
 
     #[test]
     fn round_trip_save_load_clear() {
-        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(InMemoryKeyring::default()));
 
         assert_eq!(store.load_key().expect("load empty"), None);
 
@@ -520,7 +522,7 @@ mod tests {
 
     #[test]
     fn save_overwrites_existing() {
-        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(FakeBackend::default()));
+        let store = SecretsStore::new(LINGQ_ACCOUNT, Box::new(InMemoryKeyring::default()));
         store.save_key("first").expect("save first");
         store.save_key("second").expect("save second");
         assert_eq!(store.load_key().expect("load"), Some("second".into()));
