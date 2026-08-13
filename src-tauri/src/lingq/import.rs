@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
+use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -38,7 +38,7 @@ pub struct ImportLessonRequest<'a> {
     pub save: bool,
 }
 
-const MAX_ATTEMPTS: u32 = 3;
+pub(crate) const MAX_ATTEMPTS: u32 = 3;
 
 impl LingqClient {
     /// Import a single lesson with full multipart fields. Language comes from
@@ -129,7 +129,7 @@ impl LingqClient {
 
 /// 200ms * 2^attempt, +/-25% jitter. Pseudo-random based on nanosecond clock —
 /// good enough to desynchronise thundering retries; not crypto.
-fn backoff(attempt: u32) -> Duration {
+pub(crate) fn backoff(attempt: u32) -> Duration {
     let base_ms = 200u64.checked_shl(attempt).unwrap_or(u64::MAX);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

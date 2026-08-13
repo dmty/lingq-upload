@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use reqwest::multipart::{Form, Part};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::StatusCode;
+use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::sync::Arc;
@@ -206,9 +206,8 @@ impl LingqClient {
     /// Upload `img` as the cover image for `cid`. Returns `Ok(true)` on the
     /// first probe that yields 2xx (cached for the process lifetime). Returns
     /// `Ok(false)` when all probes exhaust with 4xx — caller should log and
-    /// continue. Returns `Err` on 5xx or transport errors.
-    // SIMPLIFY: no retry on cover 5xx; surface to caller (soft-fail). Add
-    // retry if telemetry shows transient 5xx is common.
+    /// continue. Retries 5xx with the same backoff as lesson import, then
+    /// `Err`; transport errors fail immediately.
     pub async fn set_collection_image(
         &self,
         cid: CollectionId,
@@ -229,32 +228,39 @@ impl LingqClient {
             None => &CoverProbe::ALL,
         };
 
-        for probe in probes {
+        'probes: for probe in probes {
             let url = probe.url(self.base_url(), self.lang(), cid.0);
-            let part = Part::bytes(bytes.clone())
-                .file_name(file_name.clone())
-                .mime_str(mime)
-                .map_err(|e| LingqError::Transport(e.to_string()))?;
-            let form = Form::new().part(probe.field_name(), part);
+            let mut last_5xx = None;
+            for attempt in 0..super::import::MAX_ATTEMPTS {
+                if attempt > 0 {
+                    tokio::time::sleep(super::import::backoff(attempt)).await;
+                }
+                let part = Part::bytes(bytes.clone())
+                    .file_name(file_name.clone())
+                    .mime_str(mime)
+                    .map_err(|e| LingqError::Transport(e.to_string()))?;
+                let form = Form::new().part(probe.field_name(), part);
 
-            let resp = self
-                .http()
-                .patch(&url)
-                .header("Authorization", self.auth_header())
-                .multipart(form)
-                .send()
-                .await
-                .map_err(|e| LingqError::Transport(e.to_string()))?;
-            let status = resp.status();
-            if status.is_success() {
-                let _ = WINNER.set(*probe);
-                tracing::info!(probe = probe.label(), "lingq cover upload succeeded");
-                return Ok(true);
+                let resp = self
+                    .http()
+                    .patch(&url)
+                    .header("Authorization", self.auth_header())
+                    .multipart(form)
+                    .send()
+                    .await
+                    .map_err(|e| LingqError::Transport(e.to_string()))?;
+                let status = resp.status();
+                if status.is_success() {
+                    let _ = WINNER.set(*probe);
+                    tracing::info!(probe = probe.label(), "lingq cover upload succeeded");
+                    return Ok(true);
+                }
+                if status.is_client_error() {
+                    continue 'probes;
+                }
+                last_5xx = Some(LingqError::Server(format!("PATCH {url} → {status}")));
             }
-            if status.is_client_error() {
-                continue;
-            }
-            return Err(LingqError::Server(format!("PATCH {url} → {status}")));
+            return Err(last_5xx.expect("retry loop ran at least once"));
         }
         Ok(false)
     }

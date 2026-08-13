@@ -45,12 +45,19 @@ async fn cover_upload_cascade_and_winner_cache() {
         .expect(1)
         .create_async()
         .await;
+    let probe3_fail = server_a
+        .mock("PATCH", format!("/api/v3/{lang}/collections/42/").as_str())
+        .match_body(Matcher::Regex(r#"name="cover""#.into()))
+        .with_status(503)
+        .expect(1)
+        .create_async()
+        .await;
     let probe3 = server_a
         .mock("PATCH", format!("/api/v3/{lang}/collections/42/").as_str())
         .match_body(Matcher::Regex(r#"name="cover""#.into()))
         .with_status(200)
         .with_body("{}")
-        // Called twice: initial cascade + second call hitting cached winner.
+        // Retry after 503 + second call hitting cached winner.
         .expect(2)
         .create_async()
         .await;
@@ -68,6 +75,7 @@ async fn cover_upload_cascade_and_winner_cache() {
 
     probe1.assert_async().await;
     probe2.assert_async().await;
+    probe3_fail.assert_async().await;
     probe3.assert_async().await;
 
     // --- Scenario B: winner is cached; new server's probe 3 returns 4xx → Ok(false) ---
