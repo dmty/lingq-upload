@@ -18,7 +18,7 @@ pub struct SymphoniaDecoder {
     decoder: Box<dyn Decoder>,
     track_id: u32,
     info: StreamInfo,
-    // SIMPLIFY: AAC ESDS hides channel-config; first packet reveals it
+    // First decoded packet when stsd/ESDS omit channel config; replayed by next_frame.
     prebuffered: Option<PcmFrame>,
 }
 
@@ -50,6 +50,7 @@ impl AudioDecoder for SymphoniaDecoder {
         let codec_params_sample_rate = track.codec_params.sample_rate;
         let codec_params_channels = track.codec_params.channels;
         let codec_params_n_frames = track.codec_params.n_frames;
+        let extra_data = track.codec_params.extra_data.clone();
         let codec_label = match track.codec_params.codec {
             symphonia::core::codecs::CODEC_TYPE_MP3 => "mp3",
             symphonia::core::codecs::CODEC_TYPE_AAC => "aac",
@@ -64,11 +65,16 @@ impl AudioDecoder for SymphoniaDecoder {
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|e| AudioError::Decode(format!("decoder init: {e}")))?;
 
-        let (sample_rate, channels, prebuffered) =
-            match (codec_params_sample_rate, codec_params_channels) {
-                (Some(sr), Some(ch)) => (sr, ch.count() as u8, None),
-                _ => {
-                    // Decode the first matching packet to learn spec (AAC ESDS path).
+        let (sample_rate, channels, prebuffered) = {
+            let from_params =
+                codec_params_sample_rate.zip(codec_params_channels.map(|c| c.count() as u8));
+            let from_asc = extra_data
+                .as_deref()
+                .and_then(parse_aac_asc)
+                .map(|(sr, ch)| (codec_params_sample_rate.unwrap_or(sr), ch));
+            match from_params.or(from_asc) {
+                Some((sr, ch)) => (sr, ch, None),
+                None => {
                     let (spec, first_frame) = loop {
                         let pkt = reader
                             .next_packet()
@@ -94,7 +100,8 @@ impl AudioDecoder for SymphoniaDecoder {
                     let sr = codec_params_sample_rate.unwrap_or(spec.rate);
                     (sr, spec.channels.count() as u8, Some(first_frame))
                 }
-            };
+            }
+        };
 
         let duration_sec = codec_params_n_frames
             .map(|n| n as f64 / sample_rate as f64)
@@ -162,6 +169,49 @@ impl AudioDecoder for SymphoniaDecoder {
             }));
         }
     }
+}
+
+/// AAC AudioSpecificConfig: 5-bit AOT, 4-bit sampling index, 4-bit channel config.
+/// Accepts raw ASC or MPEG-4 ESDS wrapping (DecoderSpecificInfo tag 0x05).
+fn parse_aac_asc(extra: &[u8]) -> Option<(u32, u8)> {
+    const RATES: [u32; 13] = [
+        96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000, 11_025,
+        8_000, 7_350,
+    ];
+    let asc = aac_asc_payload(extra);
+    if asc.len() < 2 {
+        return None;
+    }
+    let aot = asc[0] >> 3;
+    if aot == 0 || aot == 31 {
+        return None;
+    }
+    let sf_idx = ((asc[0] & 7) << 1) | (asc[1] >> 7);
+    let sr = *RATES.get(sf_idx as usize)?;
+    let ch = (asc[1] >> 3) & 0x0F;
+    if ch == 0 || ch > 8 {
+        return None;
+    }
+    Some((sr, ch))
+}
+
+fn aac_asc_payload(extra: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i + 1 < extra.len() {
+        if extra[i] == 0x05 {
+            let mut j = i + 1;
+            while j < extra.len() && extra[j] & 0x80 != 0 {
+                j += 1;
+            }
+            j += 1;
+            if j < extra.len() {
+                return &extra[j..];
+            }
+            break;
+        }
+        i += 1;
+    }
+    extra
 }
 
 impl AudioMetadata for SymphoniaMetadata {
@@ -247,5 +297,13 @@ mod tests {
         w.finalize().expect("finalize");
         let atoms = SymphoniaMetadata::probe_chapters(&p).expect("probe");
         assert!(atoms.is_empty());
+    }
+
+    #[test]
+    fn parse_aac_lc_44100_stereo_asc() {
+        assert_eq!(parse_aac_asc(&[0x12, 0x10]), Some((44_100, 2)));
+        // ESDS DecoderSpecificInfo tag 0x05, length 2, then ASC.
+        assert_eq!(parse_aac_asc(&[0x05, 0x02, 0x12, 0x10]), Some((44_100, 2)));
+        assert_eq!(parse_aac_asc(&[0x00]), None);
     }
 }

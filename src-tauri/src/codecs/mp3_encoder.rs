@@ -7,14 +7,14 @@ use mp3lame_encoder::{Bitrate, Builder, FlushNoGap, InterleavedPcm, MonoPcm, Qua
 use super::{AudioDecoder, PcmFrame, StreamInfo};
 use crate::codecs::symphonia_impl::SymphoniaDecoder;
 use crate::core::audio::{
-    AudioError, EncoderSettings, TranscodeReport, DURATION_DELTA_THRESHOLD_SEC,
+    AudioError, DURATION_DELTA_THRESHOLD_SEC, EncoderSettings, TranscodeReport,
 };
 
 /// Encode an interleaved-PCM stream to MP3.
 ///
 /// Callers must ensure `info` describes the frames yielded by `stream`.
 /// If `enc.sample_rate` / `enc.channels` differ from the source, frames are
-/// adapted (downmix + linear resample) before encoding.
+/// adapted (downmix + windowed-sinc resample) before encoding.
 pub fn encode_mp3<S: Iterator<Item = PcmFrame>>(
     stream: S,
     info: &StreamInfo,
@@ -118,8 +118,6 @@ struct AdaptedFrame {
 }
 
 /// Adapt channel count and sample rate. Zero-cost pass-through when src == dst.
-/// SIMPLIFY: linear resample — sufficient for narration-band 22.05 kHz target;
-/// upgrade to sinc if quality issues arise with music content.
 fn adapt_frame(
     frame: &PcmFrame,
     in_channels: usize,
@@ -127,64 +125,86 @@ fn adapt_frame(
     in_sr: usize,
     out_sr: usize,
 ) -> AdaptedFrame {
-    // Step 1: channel adapt.
-    let downmixed: Vec<f32> = if in_channels > 1 && out_channels == 1 {
-        // SIMPLIFY: mono-downmix via explicit averaging; all other cases use generic loop.
-        (0..frame.frames)
-            .map(|i| {
-                let sum: f32 = (0..in_channels)
-                    .map(|c| {
-                        frame
-                            .samples
-                            .get(i * in_channels + c)
-                            .copied()
-                            .unwrap_or(0.0)
-                    })
-                    .sum();
-                sum / in_channels as f32
-            })
-            .collect()
-    } else {
-        // Generic loop covers: in == out (copy), mono → stereo (duplicate), and mismatches.
-        let mut v = Vec::with_capacity(frame.frames * out_channels);
-        for i in 0..frame.frames {
-            for c in 0..out_channels {
-                v.push(
-                    frame
-                        .samples
-                        .get(i * in_channels + c.min(in_channels.saturating_sub(1)))
-                        .copied()
-                        .unwrap_or(0.0),
-                );
-            }
-        }
-        v
-    };
-
-    // Step 2: sample-rate adapt (linear interpolation).
+    let downmixed = adapt_channels(&frame.samples, frame.frames, in_channels, out_channels);
     let samples = if in_sr == out_sr {
         downmixed
     } else {
-        let ratio = out_sr as f64 / in_sr as f64;
-        let in_frames = downmixed.len() / out_channels.max(1);
-        let out_frames = ((in_frames as f64) * ratio) as usize;
-        let mut v = Vec::with_capacity(out_frames * out_channels);
-        for i in 0..out_frames {
-            let src_pos = i as f64 / ratio;
-            let lo = src_pos.floor() as usize;
-            let hi = (lo + 1).min(in_frames.saturating_sub(1));
-            let t = (src_pos - lo as f64) as f32;
-            for c in 0..out_channels {
-                let a = downmixed.get(lo * out_channels + c).copied().unwrap_or(0.0);
-                let b = downmixed.get(hi * out_channels + c).copied().unwrap_or(0.0);
-                v.push(a + (b - a) * t);
-            }
-        }
-        v
+        resample_sinc(&downmixed, out_channels, in_sr, out_sr)
     };
-
     let frames = samples.len() / out_channels.max(1);
     AdaptedFrame { samples, frames }
+}
+
+fn adapt_channels(
+    samples: &[f32],
+    frames: usize,
+    in_channels: usize,
+    out_channels: usize,
+) -> Vec<f32> {
+    if in_channels == out_channels {
+        return samples.to_vec();
+    }
+    let mut v = Vec::with_capacity(frames * out_channels);
+    for i in 0..frames {
+        if out_channels == 1 && in_channels > 1 {
+            let sum: f32 = (0..in_channels)
+                .map(|c| samples.get(i * in_channels + c).copied().unwrap_or(0.0))
+                .sum();
+            v.push(sum / in_channels as f32);
+            continue;
+        }
+        for c in 0..out_channels {
+            v.push(
+                samples
+                    .get(i * in_channels + c.min(in_channels.saturating_sub(1)))
+                    .copied()
+                    .unwrap_or(0.0),
+            );
+        }
+    }
+    v
+}
+
+/// Hann-windowed sinc, 8 zero-crossings. Fine for narration-band rates.
+fn resample_sinc(input: &[f32], channels: usize, in_sr: usize, out_sr: usize) -> Vec<f32> {
+    const HALF: i32 = 8;
+    let channels = channels.max(1);
+    let in_frames = input.len() / channels;
+    let ratio = out_sr as f64 / in_sr as f64;
+    let out_frames = ((in_frames as f64) * ratio).round() as usize;
+    let mut v = vec![0.0f32; out_frames * channels];
+    for i in 0..out_frames {
+        let src_pos = i as f64 / ratio;
+        let center = src_pos.floor() as i32;
+        let frac = src_pos - f64::from(center);
+        for c in 0..channels {
+            let mut acc = 0.0f64;
+            let mut wsum = 0.0f64;
+            for tap in -HALF..=HALF {
+                let idx = center + tap;
+                if idx < 0 || (idx as usize) >= in_frames {
+                    continue;
+                }
+                let x = f64::from(tap) - frac;
+                let sinc = if x.abs() < 1e-12 {
+                    1.0
+                } else {
+                    let pi_x = std::f64::consts::PI * x;
+                    pi_x.sin() / pi_x
+                };
+                let window = 0.5 + 0.5 * (std::f64::consts::PI * x / f64::from(HALF)).cos();
+                let w = sinc * window;
+                acc += w * f64::from(input[idx as usize * channels + c]);
+                wsum += w;
+            }
+            v[i * channels + c] = if wsum.abs() > 1e-12 {
+                (acc / wsum) as f32
+            } else {
+                0.0
+            };
+        }
+    }
+    v
 }
 
 #[cfg(test)]
@@ -284,5 +304,29 @@ mod tests {
         }
         let expected = std::fs::read_to_string(&golden_path).expect("read golden");
         assert_eq!(md5, expected.trim(), "encoder output drifted from golden");
+    }
+
+    #[test]
+    fn stereo_to_mono_averages_channels() {
+        let frame = PcmFrame {
+            samples: vec![1.0, -1.0, 0.5, 0.5],
+            frames: 2,
+        };
+        let out = adapt_frame(&frame, 2, 1, 22_050, 22_050);
+        assert_eq!(out.frames, 2);
+        assert!((out.samples[0] - 0.0).abs() < 1e-6);
+        assert!((out.samples[1] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sinc_resample_holds_dc() {
+        let frame = PcmFrame {
+            samples: vec![0.25; 200],
+            frames: 100,
+        };
+        let out = adapt_frame(&frame, 2, 2, 44_100, 22_050);
+        assert!(out.frames > 40);
+        let mean = out.samples.iter().sum::<f32>() / out.samples.len() as f32;
+        assert!((mean - 0.25).abs() < 0.02, "dc mean {mean}");
     }
 }
