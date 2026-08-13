@@ -43,6 +43,7 @@
 
 <button
   type="button"
+  data-testid="mismatch-response-{response}"
   onclick={onSelect}
   class="flex w-full flex-col items-start gap-1 rounded-md border bg-surface px-4 py-3 text-left transition-colors duration-120 {selected
     ? 'border-accent ring-1 ring-accent shadow-card'

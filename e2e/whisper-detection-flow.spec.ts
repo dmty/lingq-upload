@@ -248,7 +248,7 @@ test.describe("detected text range flow", () => {
     ).toHaveCount(0);
   });
 
-  test("renders title and collapsed Unicode transcript previews while Refine stays local", async ({
+  test("renders title and Unicode transcript quotes while Refine stays local", async ({
     page,
   }) => {
     let jobId = await startDetection(page);
@@ -285,15 +285,12 @@ test.describe("detected text range flow", () => {
 
     await expect(preview).toContainText("Transcription");
     await expect(preview).toContainText("81%");
-    const details = preview.locator("details");
-    await expect(details).toHaveCount(2);
-    await expect(details.first()).not.toHaveAttribute("open", "");
+    await expect(preview.locator("details")).toHaveCount(0);
     await expect(
       preview.getByText(transcriptPreview.transcript_head_preview),
-    ).not.toBeVisible();
-    await details.first().locator("summary").click();
+    ).toBeVisible();
     await expect(
-      preview.getByText(transcriptPreview.transcript_head_preview),
+      preview.getByText(transcriptPreview.transcript_tail_preview),
     ).toBeVisible();
   });
 
@@ -567,6 +564,45 @@ test.describe("detected text range flow", () => {
     await candidateRadio(page, "End chapter")(/Chapter 6 · Epilogue/).check();
     await expect(confirm).toBeEnabled();
     await expect(page.getByTestId("detection-range-validation")).toHaveCount(0);
+  });
+
+  test("title collision leaves the end unset and offers a whole-book split", async ({
+    page,
+  }) => {
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: {
+        kind: "low_confidence",
+        transcript_head_preview: "時をかける少女",
+        transcript_tail_preview: "時をかける少女",
+        top_head: [
+          { chapter_id: "idx:2", order: 2, title: "The Crossing", score: 1 },
+          { chapter_id: "idx:1", order: 1, title: "Chapter One", score: 0.2 },
+        ],
+        top_tail: [
+          { chapter_id: "idx:2", order: 2, title: "The Crossing", score: 1 },
+          { chapter_id: "idx:5", order: 5, title: "Epilogue", score: 0.13 },
+        ],
+      },
+    });
+
+    const assist = page.getByTestId("detection-cue-sheet");
+    await expect(assist).toContainText("opening of audio part 1");
+    await expect(assist).toContainText("時をかける少女");
+    await expect(page.getByTestId("detection-title-collision")).toBeVisible();
+    await expect(page.getByTestId("detection-range-preview")).toHaveCount(0);
+
+    await page.getByText("Or trim title page / credits first").click();
+    await expect(
+      candidateRadio(page, "Start chapter")(/Chapter 3 · The Crossing/),
+    ).toBeChecked();
+    await expect(
+      candidateRadio(page, "End chapter")(/Chapter 3 · The Crossing/),
+    ).not.toBeChecked();
+
+    await page.getByTestId("detection-use-whole-book").click();
+    await expect(
+      page.getByTestId("mismatch-response-split_proportional"),
+    ).toHaveClass(/ring-accent/);
   });
 
   test("a single-chapter range cannot be confirmed when other chapters exist", async ({

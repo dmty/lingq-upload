@@ -34,39 +34,29 @@
   data-testid="detection-range-preview"
   class="mt-3 rounded-md border border-success/40 bg-success-soft/30 p-3"
 >
-  <p class="text-sm font-medium text-fg">Detected text range</p>
-  <dl class="mt-2 grid gap-1 text-sm text-fg">
-    <div>
-      <dt class="inline text-fg-muted">Start:</dt>
-      <dd class="inline">{chapterLabel(preview.range.start_chapter_id)}</dd>
-    </div>
-    <div>
-      <dt class="inline text-fg-muted">End:</dt>
-      <dd class="inline">{chapterLabel(preview.range.end_chapter_id)}</dd>
-    </div>
-    <div>
-      <dt class="inline text-fg-muted">Source:</dt>
-      <dd class="inline">
-        {preview.align_source === "title" ? "Embedded titles" : "Transcription"}
-      </dd>
-    </div>
-    <div>
-      <dt class="inline text-fg-muted">Confidence:</dt>
-      <dd class="inline">{Math.round(preview.confidence * 100)}%</dd>
-    </div>
-  </dl>
+  <p class="font-serif text-[10px] tracking-[0.18em] text-success uppercase">
+    Proposed EPUB span
+  </p>
+  <p class="mt-1 text-sm font-medium text-fg">
+    {chapterLabel(preview.range.start_chapter_id)}
+    <span class="text-fg-muted"> → </span>
+    {chapterLabel(preview.range.end_chapter_id)}
+  </p>
+  <p class="mt-1 text-xs text-fg-muted">
+    {preview.align_source === "title" ? "Embedded titles" : "Transcription"}
+    · {Math.round(preview.confidence * 100)}%
+    · every text chapter in this span shares the audio parts
+  </p>
 
   {#if preview.transcript_head_preview}
-    <details class="mt-2 text-sm text-fg">
-      <summary class="cursor-pointer text-fg-muted">Start transcript</summary>
-      <p class="mt-1 whitespace-pre-wrap">{preview.transcript_head_preview}</p>
-    </details>
+    <p class="mt-2 font-serif text-sm italic text-fg">
+      “{preview.transcript_head_preview}”
+    </p>
   {/if}
   {#if preview.transcript_tail_preview}
-    <details class="mt-2 text-sm text-fg">
-      <summary class="cursor-pointer text-fg-muted">End transcript</summary>
-      <p class="mt-1 whitespace-pre-wrap">{preview.transcript_tail_preview}</p>
-    </details>
+    <p class="mt-1 font-serif text-sm italic text-fg">
+      “{preview.transcript_tail_preview}”
+    </p>
   {/if}
 
   <div class="mt-3" aria-live="polite" aria-atomic="true">

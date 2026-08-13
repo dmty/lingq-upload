@@ -972,6 +972,14 @@
             availability={detectionAvailability}
             onAvailabilityChanged={(next) => (detectionAvailability = next)}
             onConfirmDetectedRange={handleDetectedRangeConfirm}
+            onUseWholeBook={() => {
+              selected = "split_proportional";
+              queueMicrotask(() =>
+                document
+                  .querySelector('[data-testid="mismatch-response-split_proportional"]')
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+              );
+            }}
           />
         {/if}
 

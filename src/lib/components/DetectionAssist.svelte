@@ -32,6 +32,7 @@
     availability,
     onAvailabilityChanged,
     onConfirmDetectedRange,
+    onUseWholeBook,
   }: {
     projectId: ProjectId;
     chapters: ChapterMeta[];
@@ -42,6 +43,7 @@
       range: DetectedRange,
       preview: DetectionPreview,
     ) => Promise<void>;
+    onUseWholeBook?: () => void;
   } = $props();
 
   let modalOpen = $state(false);
@@ -159,9 +161,15 @@
       case "low_confidence":
         contentResult = result;
         // Seeded from real top candidates only — the final-chapter option is
-        // never an implicit fallback.
+        // never an implicit fallback. Identical top hits are intro+credits
+        // colliding on the book title: leave the end unset so we don't
+        // pretend one EPUB chapter spans the whole file.
         selectedHead = result.top_head[0]?.chapter_id ?? null;
-        selectedTail = result.top_tail[0]?.chapter_id ?? null;
+        selectedTail =
+          result.top_head[0]?.chapter_id &&
+          result.top_head[0].chapter_id === result.top_tail[0]?.chapter_id
+            ? null
+            : (result.top_tail[0]?.chapter_id ?? null);
         break;
       case "no_transcript":
         contentResult = result;
@@ -276,6 +284,16 @@
   const eligibleCount = $derived(
     chapters.filter((chapter) => !skippedIds.includes(chapter.id)).length,
   );
+  const partCount = $derived(Math.max(1, availability?.track_count ?? 1));
+  const sameTopHit = $derived(
+    Boolean(
+      lowConfidence?.top_head[0] &&
+        lowConfidence.top_tail[0] &&
+        lowConfidence.top_head[0].chapter_id ===
+          lowConfidence.top_tail[0].chapter_id &&
+        eligibleCount > 1,
+    ),
+  );
 
   function rangeBlockedReason(
     startId: ChapterId | null,
@@ -287,7 +305,7 @@
       return "The end chapter comes before the start chapter. Choose an end chapter at or after it.";
     }
     if (startId !== null && endId !== null && startId === endId && eligibleCount > 1) {
-      return "This range is a single chapter and would drop the rest of the book. Choose a later end chapter, or use Split proportionally.";
+      return "Start and end are the same chapter. That would drop the rest of the book onto one lesson. Pick a later end, or split all audio parts across the book.";
     }
     return null;
   }
@@ -542,62 +560,213 @@
         onRefine={clearOutcome}
       />
     {:else if lowConfidence}
-      <div class="mt-3 rounded-md border border-border bg-surface p-3">
-        <p class="text-sm font-medium text-fg">Detection needs refinement</p>
-        {#if staleCandidates}
-          <p class="mt-1 text-xs text-fg-muted">
-            These suggestions no longer match this book. Re-run detection or
-            choose a manual response below.
+      <div
+        data-testid="detection-cue-sheet"
+        class="mt-3 overflow-hidden rounded-md border border-border bg-surface"
+      >
+        <div class="border-b border-border bg-surface-sunken px-3 py-2">
+          <p class="text-sm font-medium text-fg">Detection needs refinement</p>
+          <p class="mt-0.5 text-xs text-fg-muted">
+            Listened to the <span class="text-fg">opening of audio part 1</span>
+            and the
+            <span class="text-fg">close of part {partCount}</span>. Not the
+            chapters inside those parts.
           </p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              class={buttonClass}
-              onclick={() => void startDetection()}
+        </div>
+
+        <div class="px-3 pt-3">
+          <div class="flex items-end gap-1" aria-hidden="true">
+            {#each Array.from({ length: partCount }) as _, index (index)}
+              <span
+                class="h-2 min-w-0 flex-1 rounded-sm {index === 0
+                  ? 'bg-accent'
+                  : index === partCount - 1
+                    ? 'bg-warning'
+                    : 'bg-border'}"
+              ></span>
+            {/each}
+          </div>
+          <div class="mt-1 flex justify-between font-serif text-[10px] tracking-[0.18em] text-fg-subtle uppercase">
+            <span>In · part 1</span>
+            {#if partCount > 1}
+              <span>Out · part {partCount}</span>
+            {/if}
+          </div>
+        </div>
+
+        <div class="mt-3 grid gap-2 px-3 sm:grid-cols-2">
+          <figure class="rounded-sm border border-accent/30 bg-accent-soft/40 px-3 py-2">
+            <figcaption
+              class="font-serif text-[10px] tracking-[0.18em] text-accent uppercase"
             >
-              Try detection again
-            </button>
-            <button type="button" class={buttonClass} onclick={clearOutcome}>
-              Refine
-            </button>
+              Heard at start
+            </figcaption>
+            <blockquote
+              class="mt-1 font-serif text-sm leading-snug text-fg italic"
+            >
+              {lowConfidence.transcript_head_preview?.trim() ||
+                "No start transcript kept."}
+            </blockquote>
+          </figure>
+          <figure class="rounded-sm border border-warning/30 bg-warning-soft/40 px-3 py-2">
+            <figcaption
+              class="font-serif text-[10px] tracking-[0.18em] text-warning uppercase"
+            >
+              Heard at end
+            </figcaption>
+            <blockquote
+              class="mt-1 font-serif text-sm leading-snug text-fg italic"
+            >
+              {lowConfidence.transcript_tail_preview?.trim() ||
+                "No end transcript kept."}
+            </blockquote>
+          </figure>
+        </div>
+
+        {#if staleCandidates}
+          <div class="px-3 py-3">
+            <p class="text-xs text-fg-muted">
+              These suggestions no longer match this book. Re-run detection or
+              choose a manual response below.
+            </p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class={buttonClass}
+                onclick={() => void startDetection()}
+              >
+                Try detection again
+              </button>
+              <button type="button" class={buttonClass} onclick={clearOutcome}>
+                Refine
+              </button>
+            </div>
           </div>
         {:else}
-          <p class="mt-1 text-xs text-fg-muted">
-            The samples matched more than one possible boundary. Pick the start
-            and end chapters to confirm.
-          </p>
-          <fieldset class="mt-3">
-            <legend class="text-xs font-medium text-fg-muted">
-              Start chapter
-            </legend>
-            {#each headOptions as option (option.id)}
-              <label class="mt-1 flex items-center gap-2 text-sm text-fg">
-                <input
-                  type="radio"
-                  name="detection-head"
-                  value={option.id}
-                  bind:group={selectedHead}
-                />
-                <span>{option.label}</span>
-              </label>
-            {/each}
-          </fieldset>
-          <fieldset class="mt-3">
-            <legend class="text-xs font-medium text-fg-muted">
-              End chapter
-            </legend>
-            {#each tailOptions as option (option.id)}
-              <label class="mt-1 flex items-center gap-2 text-sm text-fg">
-                <input
-                  type="radio"
-                  name="detection-tail"
-                  value={option.id}
-                  bind:group={selectedTail}
-                />
-                <span>{option.label}</span>
-              </label>
-            {/each}
-          </fieldset>
+          {#if sameTopHit}
+            <p
+              class="mx-3 mt-3 rounded-sm border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-fg"
+              data-testid="detection-title-collision"
+            >
+              Same EPUB chapter scored 100% at both ends — usually the book
+              title in the intro and credits, not a story span. Do not pick it
+              for both.
+            </p>
+          {/if}
+
+          {#if onUseWholeBook && partCount > 1}
+            <div class="px-3 pt-3">
+              <button
+                type="button"
+                data-testid="detection-use-whole-book"
+                class="w-full rounded-sm bg-accent px-3 py-2 text-sm font-medium text-canvas hover:bg-accent-hover"
+                onclick={onUseWholeBook}
+              >
+                Split all {partCount} audio parts across the book
+              </button>
+              <p class="mt-1 text-xs text-fg-muted">
+                Uses each M4B chapter’s duration. Skips this start/end guess.
+              </p>
+            </div>
+          {/if}
+
+          {#if sameTopHit}
+            <details class="px-3 py-3">
+              <summary
+                class="cursor-pointer text-xs font-medium text-fg-muted hover:text-fg"
+              >
+                Or trim title page / credits first
+              </summary>
+              <p class="mt-2 text-xs text-fg-muted">
+                Start = first story chapter. End = last story chapter. Text
+                between those two is then packed onto the {partCount} audio
+                {partCount === 1 ? "part" : "parts"} — this does not map interiors.
+              </p>
+              <fieldset class="mt-3">
+                <legend class="text-xs font-medium text-fg-muted">
+                  Start chapter
+                </legend>
+                <p class="mt-0.5 text-[11px] text-fg-subtle">
+                  First EPUB chapter that is actual story.
+                </p>
+                {#each headOptions as option (option.id)}
+                  <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                    <input
+                      type="radio"
+                      name="detection-head"
+                      value={option.id}
+                      bind:group={selectedHead}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                {/each}
+              </fieldset>
+              <fieldset class="mt-3">
+                <legend class="text-xs font-medium text-fg-muted">
+                  End chapter
+                </legend>
+                <p class="mt-0.5 text-[11px] text-fg-subtle">
+                  Last EPUB chapter this audiobook covers. Must be after start.
+                </p>
+                {#each tailOptions as option (option.id)}
+                  <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                    <input
+                      type="radio"
+                      name="detection-tail"
+                      value={option.id}
+                      bind:group={selectedTail}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                {/each}
+              </fieldset>
+            </details>
+          {:else}
+            <p class="px-3 pt-3 text-xs text-fg-muted">
+              Optional trim: start is the first story chapter (skip title page),
+              end is the last story chapter (skip credits). Everything between is
+              then packed onto the {partCount} audio
+              {partCount === 1 ? "part" : "parts"}.
+            </p>
+            <fieldset class="mt-3 px-3">
+              <legend class="text-xs font-medium text-fg-muted">
+                Start chapter
+              </legend>
+              <p class="mt-0.5 text-[11px] text-fg-subtle">
+                First EPUB chapter that is actual story.
+              </p>
+              {#each headOptions as option (option.id)}
+                <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="radio"
+                    name="detection-head"
+                    value={option.id}
+                    bind:group={selectedHead}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              {/each}
+            </fieldset>
+            <fieldset class="mt-3 px-3 pb-3">
+              <legend class="text-xs font-medium text-fg-muted">
+                End chapter
+              </legend>
+              <p class="mt-0.5 text-[11px] text-fg-subtle">
+                Last EPUB chapter this audiobook covers. Must be after start.
+              </p>
+              {#each tailOptions as option (option.id)}
+                <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="radio"
+                    name="detection-tail"
+                    value={option.id}
+                    bind:group={selectedTail}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              {/each}
+            </fieldset>
+          {/if}
         {/if}
       </div>
       {#if candidatePreview}
