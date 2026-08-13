@@ -273,15 +273,36 @@
     return hit ? [Math.min(1, Math.max(0, hit.score))] : [];
   }
 
+  const eligibleCount = $derived(
+    chapters.filter((chapter) => !skippedIds.includes(chapter.id)).length,
+  );
+
+  function rangeBlockedReason(
+    startId: ChapterId | null,
+    endId: ChapterId | null,
+  ): string | null {
+    const start = orderOf(startId);
+    const end = orderOf(endId);
+    if (start !== null && end !== null && start > end) {
+      return "The end chapter comes before the start chapter. Choose an end chapter at or after it.";
+    }
+    if (startId !== null && endId !== null && startId === endId && eligibleCount > 1) {
+      return "This range is a single chapter and would drop the rest of the book. Choose a later end chapter, or use Split proportionally.";
+    }
+    return null;
+  }
+
   // Recomputed from current chapter metadata, not from the candidate orders the
   // server reported.
-  const blockedReason = $derived.by(() => {
-    const start = orderOf(selectedHead);
-    const end = orderOf(selectedTail);
-    return start !== null && end !== null && start > end
-      ? "The end chapter comes before the start chapter. Choose an end chapter at or after it."
-      : null;
-  });
+  const blockedReason = $derived(rangeBlockedReason(selectedHead, selectedTail));
+  const detectedBlockedReason = $derived(
+    preview
+      ? rangeBlockedReason(
+          preview.range.start_chapter_id,
+          preview.range.end_chapter_id,
+        )
+      : null,
+  );
 
   const candidatePreview = $derived.by<DetectionPreview | null>(() => {
     if (!lowConfidence || staleCandidates || !availability) return null;
@@ -516,6 +537,7 @@
         {preview}
         {chapters}
         busy={confirming}
+        blockedReason={detectedBlockedReason}
         onConfirm={confirmDetectedRange}
         onRefine={clearOutcome}
       />

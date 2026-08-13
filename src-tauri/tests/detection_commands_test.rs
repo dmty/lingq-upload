@@ -872,6 +872,36 @@ async fn json_store_passes_detection_confirmation_reset_contract() {
     run_detection_confirmation_reset_contract(&store).await;
 }
 
+#[tokio::test]
+async fn collapsed_range_confirm_packs_all_eligible_chapters() {
+    let store = InMemoryProjectStore::new();
+    let probe = UpdateProbeStore::new(&store);
+    let fixture = availability_project(6, 3);
+    probe.put(&fixture.project).unwrap();
+    let selected = range(2, 2);
+
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        selected.clone(),
+        preview(selected.clone()),
+    )
+    .await
+    .unwrap();
+
+    let project = probe.get(&fixture.project.id).unwrap().unwrap();
+    let mapping = project.mapping.expect("mapping seeded");
+    assert_eq!(
+        mapping.pairs.len(),
+        6,
+        "degenerate start=end must keep every eligible chapter, got {mapping:?}"
+    );
+    assert_eq!(
+        project.matcher_decision.unwrap().detection.unwrap().range,
+        selected
+    );
+}
+
 #[test]
 fn availability_is_chapters_heavy_and_condition_limited() {
     let cases = [

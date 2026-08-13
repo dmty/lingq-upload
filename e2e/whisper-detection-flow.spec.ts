@@ -569,6 +569,27 @@ test.describe("detected text range flow", () => {
     await expect(page.getByTestId("detection-range-validation")).toHaveCount(0);
   });
 
+  test("a single-chapter range cannot be confirmed when other chapters exist", async ({
+    page,
+  }) => {
+    await detectReturning(page, CANDIDATE_PROJECT_KEY, {
+      result: lowConfidence,
+    });
+    await candidateRadio(
+      page,
+      "Start chapter",
+    )(/Chapter 5 · The Descent/).check();
+    await candidateRadio(page, "End chapter")(/Chapter 5 · The Descent/).check();
+
+    const confirm = page.getByRole("button", {
+      name: "Confirm detected range",
+    });
+    await expect(confirm).toBeDisabled();
+    await expect(page.getByTestId("detection-range-validation")).toContainText(
+      "would drop the rest of the book",
+    );
+  });
+
   test("stale candidate IDs are refused instead of silently dropped", async ({
     page,
   }) => {

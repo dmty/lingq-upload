@@ -441,20 +441,22 @@ async fn detect_start_offset_inner(
                 score: tail_score,
                 ..
             },
-        ) => Ok(DetectStartResult::Detected {
-            preview: DetectionPreview {
-                provider_id: Some(provider_id),
-                align_source: AlignSource::Transcript,
-                range: DetectedRange {
-                    start_chapter_id: start_chapter_id.clone(),
-                    end_chapter_id: end_chapter_id.clone(),
+        ) if start_chapter_id != end_chapter_id || chapters.len() <= 1 => {
+            Ok(DetectStartResult::Detected {
+                preview: DetectionPreview {
+                    provider_id: Some(provider_id),
+                    align_source: AlignSource::Transcript,
+                    range: DetectedRange {
+                        start_chapter_id: start_chapter_id.clone(),
+                        end_chapter_id: end_chapter_id.clone(),
+                    },
+                    confidence: (head_score + tail_score) * 0.5,
+                    transcript_head_preview: bound_preview(Some(&head_text)),
+                    transcript_tail_preview: bound_preview(Some(&tail_text)),
+                    detected_at: Utc::now(),
                 },
-                confidence: (head_score + tail_score) * 0.5,
-                transcript_head_preview: bound_preview(Some(&head_text)),
-                transcript_tail_preview: bound_preview(Some(&tail_text)),
-                detected_at: Utc::now(),
-            },
-        }),
+            })
+        }
         (BoundaryResult::ContentPoor, _) | (_, BoundaryResult::ContentPoor) => {
             Err(DetectFailure::Content(NoTranscriptReason::ContentPoor))
         }

@@ -769,3 +769,57 @@ async fn walking_skeleton_delivers_the_detected_inclusive_range() {
         ]
     );
 }
+
+#[tokio::test]
+async fn same_id_confident_span_is_low_confidence_when_other_chapters_exist() {
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &[fixture_track(None)],
+        &chapters(),
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Mutex::new(Vec::new())),
+            vec![transcript(HEAD_TEXT), transcript(HEAD_TEXT)],
+        ),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(result, DetectStartResult::LowConfidence { .. }),
+        "collapsed start=end must not be Detected, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn single_chapter_book_may_detect_the_same_id_range() {
+    let chapters = vec![Chapter {
+        order: 0,
+        title: "Return".into(),
+        body: HEAD_TEXT.into(),
+        id: ChapterId::from_chapter_parts("test", "spine-0", "Return"),
+        ..Default::default()
+    }];
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &[fixture_track(None)],
+        &chapters,
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Mutex::new(Vec::new())),
+            vec![transcript(HEAD_TEXT), transcript(HEAD_TEXT)],
+        ),
+    )
+    .await
+    .unwrap();
+
+    let DetectStartResult::Detected { preview } = result else {
+        panic!("single eligible chapter must stay Detected, got {result:?}");
+    };
+    assert_eq!(preview.range.start_chapter_id, chapters[0].id);
+    assert_eq!(preview.range.end_chapter_id, chapters[0].id);
+}

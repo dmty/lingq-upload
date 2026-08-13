@@ -251,9 +251,11 @@ fn rank_boundary<'a>(
     config: &AlignmentConfig,
     force_low: bool,
 ) -> BoundaryResult {
-    let len = probe_len(transcript_norm.chars().count());
+    let chapters: Vec<&Chapter> = chapters.into_iter().collect();
+    let transcript_len = transcript_norm.chars().count();
+    let len = probe_len(transcript_len);
     let mut scored: Vec<ChapterCandidate> = chapters
-        .into_iter()
+        .iter()
         .map(|ch| {
             let body = normalize_for_alignment(&ch.body);
             let probe = if head {
@@ -278,7 +280,18 @@ fn rank_boundary<'a>(
     scored.truncate(3);
     let best = scored.first().map(|c| c.score).unwrap_or(0.0);
     let runner_up = scored.get(1).map(|c| c.score).unwrap_or(0.0);
+    let best_chapter = scored.first().and_then(|best_c| {
+        chapters
+            .iter()
+            .copied()
+            .find(|ch| ch.id == best_c.chapter_id)
+    });
+    let ambiguous = best_chapter.is_some_and(|best_ch| {
+        duplicate_title(best_ch, &chapters)
+            || (head && title_page_body(best_ch, transcript_len, &chapters))
+    });
     if !force_low
+        && !ambiguous
         && best >= config.transcript_confidence
         && best - runner_up >= config.runner_up_gap
     {
@@ -290,6 +303,24 @@ fn rank_boundary<'a>(
         };
     }
     BoundaryResult::LowConfidence { top: scored }
+}
+
+fn duplicate_title(best: &Chapter, chapters: &[&Chapter]) -> bool {
+    let norm = normalize_for_alignment(&best.title);
+    if norm.is_empty() {
+        return false;
+    }
+    chapters
+        .iter()
+        .any(|ch| ch.id != best.id && normalize_for_alignment(&ch.title) == norm)
+}
+
+fn title_page_body(best: &Chapter, transcript_len: usize, chapters: &[&Chapter]) -> bool {
+    let body_len = normalize_for_alignment(&best.body).chars().count();
+    body_len < transcript_len
+        && chapters.iter().any(|ch| {
+            ch.id != best.id && normalize_for_alignment(&ch.body).chars().count() > body_len
+        })
 }
 
 fn prepare_transcript(transcript: &str) -> Result<String, BoundaryResult> {
@@ -854,5 +885,85 @@ mod tests {
         );
         assert!(matches!(tail, BoundaryResult::LowConfidence { .. }));
         assert!(tail.confident_id().is_none());
+    }
+
+    #[test]
+    fn transcript_duplicate_titles_are_low_confidence() {
+        let intro = "コトノハブック筒井康隆作 時をかける少女朗読ゆかだ音楽斉藤明";
+        let chapters = chapters_with_bodies(&[
+            ("時をかける少女", intro),
+            (
+                "時をかける少女",
+                "理科教室の黒い影が窓の外に広がって生徒たちは息をのんだ長い本文が続く。",
+            ),
+            (
+                "ラベンダーのかおり",
+                "花の匂いが教室いっぱいに広がって春の風が吹き込んできた午後だった。",
+            ),
+        ]);
+        let head = transcript_match_head(intro, &chapters, &AlignmentConfig::default());
+        assert!(
+            matches!(head, BoundaryResult::LowConfidence { .. }),
+            "duplicate titles must not be Confident, got {head:?}"
+        );
+        assert!(head.confident_id().is_none());
+    }
+
+    #[test]
+    fn transcript_title_page_body_is_low_confidence_when_longer_chapters_exist() {
+        let intro = "Once upon a quiet morning the bells rang over the titled book.";
+        let chapters = chapters_with_bodies(&[
+            ("Title Page", "the titled book"),
+            (
+                "Valley",
+                "The wind swept through the valley of stone and scattered dust across the road for many miles of narrative.",
+            ),
+            (
+                "Return",
+                "Homeward bound after many years away she finally saw the harbor lights again in the evening.",
+            ),
+        ]);
+        let head = transcript_match_head(intro, &chapters, &AlignmentConfig::default());
+        assert!(
+            matches!(head, BoundaryResult::LowConfidence { .. }),
+            "short title-page body must not be Confident, got {head:?}"
+        );
+        assert!(head.confident_id().is_none());
+    }
+
+    #[test]
+    fn transcript_blank_titles_are_not_a_duplicate_veto() {
+        let body = "Homeward bound after many years away she finally saw the harbor lights again.";
+        let chapters = chapters_with_bodies(&[
+            (
+                "---",
+                "Once upon a quiet morning in the village the bells rang softly over the hills.",
+            ),
+            ("***", body),
+        ]);
+        let head = transcript_match_head(body, &chapters, &AlignmentConfig::default());
+        assert_eq!(
+            head.confident_id(),
+            Some(&chapters[1].id),
+            "empty normalized titles must not veto a unique body match, got {head:?}"
+        );
+    }
+
+    #[test]
+    fn transcript_short_tail_chapter_can_still_be_confident() {
+        let tail = "the lantern pier at dusk now.";
+        let chapters = chapters_with_bodies(&[
+            (
+                "Long",
+                "lots of narrative text here that is much longer than the tail sample for sure.",
+            ),
+            ("End", "dusk now"),
+        ]);
+        let result = transcript_match_tail(tail, &chapters, None, &AlignmentConfig::default());
+        assert_eq!(
+            result.confident_id(),
+            Some(&chapters[1].id),
+            "short last chapter must remain Confident on tail, got {result:?}"
+        );
     }
 }

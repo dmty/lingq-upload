@@ -15,6 +15,7 @@ use super::{app_data_dir, secrets};
 use crate::core::identity::ProjectId;
 use crate::core::job::{
     detection_chapters, inspect_mismatch, resolve_audio_tracks, seed_bounded_mapping,
+    seed_mapping_for_response,
 };
 use crate::core::matcher::{MismatchCondition, MismatchResponse};
 use crate::core::project::{MatcherDecision, Project};
@@ -354,9 +355,18 @@ pub async fn confirm_detected_range_impl(
             .await
             .map_err(stale_text_source)?;
     }
-    let mapping = seed_bounded_mapping(&project, &selected_range)
-        .await
-        .map_err(stale_text_source)?;
+    let mapping = if selected_range.start_chapter_id == selected_range.end_chapter_id
+        && inspection.chapter_count > 1
+    {
+        seed_mapping_for_response(&project, MismatchResponse::SplitProportional)
+            .await
+            .map_err(stale_text_source)?
+            .ok_or_else(|| AppError::Other("split-proportional needs chapters and tracks".into()))?
+    } else {
+        seed_bounded_mapping(&project, &selected_range)
+            .await
+            .map_err(stale_text_source)?
+    };
     let now = Utc::now();
     let evidence = DetectionEvidence {
         provider_id: preview.provider_id,
@@ -875,8 +885,11 @@ mod tests {
 
     #[test]
     fn missing_provider_key_maps_to_typed_api_key_error() {
-        let error =
-            load_key(TranscribeProviderId::Groq, Box::new(InMemoryKeyring::default())).unwrap_err();
+        let error = load_key(
+            TranscribeProviderId::Groq,
+            Box::new(InMemoryKeyring::default()),
+        )
+        .unwrap_err();
 
         assert!(matches!(
             error,
