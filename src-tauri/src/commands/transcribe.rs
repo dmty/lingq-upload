@@ -14,8 +14,8 @@ use super::jobs::{register_caller_job, JobCancelMap};
 use super::{app_data_dir, secrets};
 use crate::core::identity::ProjectId;
 use crate::core::job::{
-    detection_chapters, inspect_mismatch, resolve_audio_tracks, seed_bounded_mapping,
-    seed_mapping_for_response,
+    detection_chapters, inspect_mismatch, resolve_audio_tracks, seed_anchored_mapping,
+    seed_bounded_mapping, seed_mapping_for_response,
 };
 use crate::core::matcher::{MismatchCondition, MismatchResponse};
 use crate::core::project::{MatcherDecision, Project};
@@ -231,6 +231,7 @@ pub async fn detect_start_offset_impl(
                 transcript_head_preview: evidence.transcript_head_preview.clone(),
                 transcript_tail_preview: evidence.transcript_tail_preview.clone(),
                 detected_at: evidence.detected_at,
+                atom_starts: evidence.atom_starts.clone(),
             },
         });
     }
@@ -355,7 +356,11 @@ pub async fn confirm_detected_range_impl(
             .await
             .map_err(stale_text_source)?;
     }
-    let mapping = if selected_range.start_chapter_id == selected_range.end_chapter_id
+    let mapping = if !preview.atom_starts.is_empty() {
+        seed_anchored_mapping(&project, &preview.atom_starts)
+            .await
+            .map_err(stale_text_source)?
+    } else if selected_range.start_chapter_id == selected_range.end_chapter_id
         && inspection.chapter_count > 1
     {
         seed_mapping_for_response(&project, MismatchResponse::SplitProportional)
@@ -376,6 +381,7 @@ pub async fn confirm_detected_range_impl(
         transcript_head_preview: preview.transcript_head_preview,
         transcript_tail_preview: preview.transcript_tail_preview,
         detected_at: now,
+        atom_starts: preview.atom_starts.clone(),
     };
     let decision = MatcherDecision {
         condition: inspection.condition,

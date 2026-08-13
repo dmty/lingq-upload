@@ -116,6 +116,54 @@ pub fn proportional_pack(atoms: &[ChapterAtom], text_chars: &[usize]) -> Vec<Buc
         .collect()
 }
 
+/// Split text chapters onto audio parts using Whisper-matched atom openings.
+/// `starts[i]` is the chapter index where audio part `i` begins. Missing
+/// openings interpolate between neighboring known starts; an unknown first
+/// part keeps the prefix on atom 0.
+pub fn anchored_ranges(n_text: usize, starts: &[Option<usize>]) -> Vec<std::ops::Range<usize>> {
+    let n_atoms = starts.len();
+    if n_atoms == 0 {
+        return Vec::new();
+    }
+
+    let mut bounds = vec![None; n_atoms + 1];
+    bounds[n_atoms] = Some(n_text);
+    for (index, start) in starts.iter().enumerate() {
+        bounds[index] = start.filter(|&idx| idx <= n_text);
+    }
+    bounds[0] = Some(bounds[0].unwrap_or(0));
+
+    let mut last = 0usize;
+    for bound in &mut bounds {
+        if let Some(value) = bound {
+            if *value < last {
+                *value = last;
+            }
+            last = *value;
+        }
+    }
+
+    let mut index = 0;
+    while index < n_atoms {
+        let mut next = index + 1;
+        while bounds[next].is_none() {
+            next += 1;
+        }
+        let left = bounds[index].expect("start bound filled");
+        let right = bounds[next].expect("end bound filled");
+        let span = next - index;
+        for step in 1..span {
+            bounds[index + step] = Some(left + (right - left) * step / span);
+        }
+        index = next;
+    }
+
+    bounds
+        .windows(2)
+        .map(|pair| pair[0].expect("filled")..pair[1].expect("filled"))
+        .collect()
+}
+
 /// Build a UI-friendly preview from packer output. Empty buckets get
 /// `chars_per_sec == 0.0`; a degenerate `atom.end == atom.start` also yields
 /// `0.0` so the helper never divides by zero even if a future caller breaks
@@ -156,6 +204,30 @@ mod tests {
 
     fn ranges(buckets: &[Bucket]) -> Vec<std::ops::Range<usize>> {
         buckets.iter().map(|b| b.text_range.clone()).collect()
+    }
+
+    #[test]
+    fn anchored_ranges_split_on_known_atom_starts() {
+        assert_eq!(
+            anchored_ranges(6, &[Some(0), Some(2), Some(4)]),
+            vec![0..2, 2..4, 4..6]
+        );
+    }
+
+    #[test]
+    fn anchored_ranges_interpolate_a_missing_middle_start() {
+        assert_eq!(
+            anchored_ranges(6, &[Some(0), None, Some(4)]),
+            vec![0..2, 2..4, 4..6]
+        );
+    }
+
+    #[test]
+    fn anchored_ranges_keep_prefix_on_atom_zero_when_the_first_start_is_unknown() {
+        assert_eq!(
+            anchored_ranges(6, &[None, Some(3), Some(5)]),
+            vec![0..3, 3..5, 5..6]
+        );
     }
 
     #[test]

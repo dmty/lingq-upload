@@ -103,6 +103,26 @@ pub fn plan_sample_windows(
     Ok(SamplePlan { head, tail })
 }
 
+/// One head window per audio part. Used when the file already has embedded
+/// chapters — sampling the last part's tail cannot see interiors.
+pub fn plan_atom_head_windows(
+    tracks: &[AudioTrack],
+    durations: &[f64],
+    config: &AlignmentConfig,
+) -> Result<Vec<SideSamplePlan>, NoTranscriptReason> {
+    if tracks.is_empty() {
+        return Err(NoTranscriptReason::Empty);
+    }
+    tracks
+        .iter()
+        .zip(durations)
+        .enumerate()
+        .map(|(index, (track, duration))| {
+            plan_head(track, index, verified_bounds(track, *duration)?, config)
+        })
+        .collect()
+}
+
 fn verified_bounds(
     track: &AudioTrack,
     verified_duration_sec: f64,
@@ -394,6 +414,42 @@ mod tests {
         assert_eq!(
             plan_sample_windows(&[], (0.0, 0.0), &AlignmentConfig::default()),
             Err(NoTranscriptReason::Empty)
+        );
+    }
+
+    #[test]
+    fn atom_heads_sample_the_opening_of_every_track() {
+        let tracks = vec![
+            track(0, "book.m4b", Some((0.0, 600.0))),
+            track(1, "book.m4b", Some((600.0, 1200.0))),
+            track(2, "book.m4b", Some((1200.0, 1800.0))),
+        ];
+        let plans = plan_atom_head_windows(
+            &tracks,
+            &[1800.0, 1800.0, 1800.0],
+            &AlignmentConfig::default(),
+        )
+        .unwrap();
+
+        assert_eq!(plans.len(), 3);
+        let windows: Vec<_> = plans
+            .iter()
+            .map(|plan| {
+                (
+                    plan.initial.track_index,
+                    plan.initial.side,
+                    plan.initial.start_sec,
+                    plan.initial.end_sec,
+                )
+            })
+            .collect();
+        assert_eq!(
+            windows,
+            [
+                (0, SampleSide::Head, 5.0, 35.0),
+                (1, SampleSide::Head, 605.0, 635.0),
+                (2, SampleSide::Head, 1205.0, 1235.0),
+            ]
         );
     }
 }

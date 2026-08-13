@@ -20,6 +20,12 @@ pub struct DetectedRange {
     pub end_chapter_id: ChapterId,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct AtomStart {
+    pub track_index: usize,
+    pub chapter_id: ChapterId,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
 pub struct AlignmentMatch {
     pub range: DetectedRange,
@@ -340,6 +346,69 @@ pub fn transcript_match_head(
         return BoundaryResult::ContentPoor;
     };
     rank_boundary(&norm, chapters.iter(), true, config, false)
+}
+
+/// Score a clip against whole chapter bodies. Interior M4B parts start
+/// mid-book, so chapter-head probes miss them.
+pub fn transcript_match_body(
+    clip: &str,
+    chapters: &[Chapter],
+    config: &AlignmentConfig,
+) -> BoundaryResult {
+    let Ok(norm) = prepare_transcript(clip) else {
+        return BoundaryResult::ContentPoor;
+    };
+    rank_in_bodies(&norm, chapters, config)
+}
+
+fn rank_in_bodies(
+    transcript_norm: &str,
+    chapters: &[Chapter],
+    config: &AlignmentConfig,
+) -> BoundaryResult {
+    let transcript_len = transcript_norm.chars().count();
+    let mut scored: Vec<ChapterCandidate> = chapters
+        .iter()
+        .map(|ch| {
+            let body = normalize_for_alignment(&ch.body);
+            ChapterCandidate {
+                chapter_id: ch.id.clone(),
+                order: ch.order,
+                title: ch.title.clone(),
+                score: transcript_lcs_score(transcript_norm, &body),
+            }
+        })
+        .collect();
+    scored.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.order.cmp(&b.order))
+    });
+    scored.truncate(3);
+    let best = scored.first().map(|c| c.score).unwrap_or(0.0);
+    let runner_up = scored.get(1).map(|c| c.score).unwrap_or(0.0);
+    let best_chapter = scored.first().and_then(|best_c| {
+        chapters
+            .iter()
+            .find(|ch| ch.id == best_c.chapter_id)
+    });
+    let ambiguous = best_chapter.is_some_and(|best_ch| {
+        duplicate_title(best_ch, &chapters.iter().collect::<Vec<_>>())
+            || title_page_body(best_ch, transcript_len, &chapters.iter().collect::<Vec<_>>())
+    });
+    if !ambiguous
+        && best >= config.transcript_confidence
+        && best - runner_up >= config.runner_up_gap
+    {
+        let best_c = scored[0].clone();
+        return BoundaryResult::Confident {
+            chapter_id: best_c.chapter_id.clone(),
+            score: best_c.score,
+            top: scored,
+        };
+    }
+    BoundaryResult::LowConfidence { top: scored }
 }
 
 pub fn transcript_match_tail(
@@ -734,6 +803,34 @@ mod tests {
         assert!(
             late_score < 0.45,
             "late-only content past probe must not score high: {late_score}"
+        );
+    }
+
+    #[test]
+    fn transcript_match_body_finds_content_past_the_head_probe() {
+        let interior =
+            "Then the narrow bridge groaned under the cart wheels as dawn broke over the ridge.";
+        let opening =
+            "The wind swept through the valley of stone and scattered dust across the road.";
+        let late_only = format!("{}{}", "padding ".repeat(80), interior);
+        let chapters = chapters_with_bodies(&[
+            ("Late", &late_only),
+            ("Early", opening),
+            (
+                "Other",
+                "A market clock paused at noon while rain passed over the tiled roofs.",
+            ),
+        ]);
+        let head = transcript_match_head(interior, &chapters, &AlignmentConfig::default());
+        assert!(
+            head.confident_id() != Some(&chapters[0].id),
+            "head probe must not lock onto late-only content, got {head:?}"
+        );
+        let body = transcript_match_body(interior, &chapters, &AlignmentConfig::default());
+        assert_eq!(
+            body.confident_id(),
+            Some(&chapters[0].id),
+            "interior audio must match the chapter that contains it, got {body:?}"
         );
     }
 

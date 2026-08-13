@@ -56,6 +56,7 @@ const detectedPreview = {
   transcript_head_preview: "arrival",
   transcript_tail_preview: "return",
   detected_at: DETECTED_AT,
+  atom_starts: [],
 };
 
 const lowConfidence = {

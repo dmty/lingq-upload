@@ -74,6 +74,7 @@ const titlePreview = {
   transcript_head_preview: null,
   transcript_tail_preview: null,
   detected_at: "2026-08-12T00:00:00Z",
+  atom_starts: [],
 };
 
 const transcriptPreview = {
@@ -84,6 +85,7 @@ const transcriptPreview = {
   transcript_head_preview: "始まり 🐉 café — arrival",
   transcript_tail_preview: "帰還 🌊 fin — return",
   detected_at: "2026-08-12T00:01:00Z",
+  atom_starts: [],
 };
 
 function fixtureScript(): string {
@@ -423,6 +425,26 @@ test.describe("detected text range flow", () => {
     ).toHaveCount(0);
   });
 
+  test("detected atom starts list each audio part", async ({ page }) => {
+    const jobId = await startDetection(page);
+    await emitDetected(page, jobId, {
+      ...transcriptPreview,
+      atom_starts: [
+        { track_index: 0, chapter_id: START_ID },
+        { track_index: 1, chapter_id: END_ID },
+      ],
+    });
+
+    const starts = page.getByTestId("detection-atom-starts");
+    await expect(starts).toContainText("Part 1");
+    await expect(starts).toContainText("Chapter 2 · Arrival");
+    await expect(starts).toContainText("Part 2");
+    await expect(starts).toContainText("Chapter 3 · Return");
+    await expect(page.getByTestId("detection-range-preview")).toContainText(
+      "Heard each audio part",
+    );
+  });
+
   test("confirms stable IDs into MappingGrid and routes only from mapping confirmation", async ({
     page,
   }) => {
@@ -586,7 +608,7 @@ test.describe("detected text range flow", () => {
     });
 
     const assist = page.getByTestId("detection-cue-sheet");
-    await expect(assist).toContainText("opening of audio part 1");
+    await expect(assist).toContainText("opening of each audio part");
     await expect(assist).toContainText("時をかける少女");
     await expect(page.getByTestId("detection-title-collision")).toBeVisible();
     await expect(page.getByTestId("detection-range-preview")).toHaveCount(0);

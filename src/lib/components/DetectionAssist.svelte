@@ -339,6 +339,7 @@
       transcript_head_preview: lowConfidence.transcript_head_preview,
       transcript_tail_preview: lowConfidence.transcript_tail_preview,
       detected_at: completedAt ?? new Date().toISOString(),
+      atom_starts: [],
     };
   });
 
@@ -567,10 +568,9 @@
         <div class="border-b border-border bg-surface-sunken px-3 py-2">
           <p class="text-sm font-medium text-fg">Detection needs refinement</p>
           <p class="mt-0.5 text-xs text-fg-muted">
-            Listened to the <span class="text-fg">opening of audio part 1</span>
-            and the
-            <span class="text-fg">close of part {partCount}</span>. Not the
-            chapters inside those parts.
+            Listened to the <span class="text-fg">opening of each audio part</span>.
+            Interior parts are matched to the chapter they contain, not only
+            the first and last files.
           </p>
         </div>
 
@@ -578,18 +578,14 @@
           <div class="flex items-end gap-1" aria-hidden="true">
             {#each Array.from({ length: partCount }) as _, index (index)}
               <span
-                class="h-2 min-w-0 flex-1 rounded-sm {index === 0
-                  ? 'bg-accent'
-                  : index === partCount - 1
-                    ? 'bg-warning'
-                    : 'bg-border'}"
+                class="h-2 min-w-0 flex-1 rounded-sm bg-accent"
               ></span>
             {/each}
           </div>
           <div class="mt-1 flex justify-between font-serif text-[10px] tracking-[0.18em] text-fg-subtle uppercase">
-            <span>In · part 1</span>
+            <span>Part 1</span>
             {#if partCount > 1}
-              <span>Out · part {partCount}</span>
+              <span>Part {partCount}</span>
             {/if}
           </div>
         </div>

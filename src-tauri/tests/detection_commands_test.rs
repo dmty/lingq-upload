@@ -27,7 +27,7 @@ use lingq_upload_lib::error::AppError;
 use lingq_upload_lib::events::DetectionPhase;
 use lingq_upload_lib::ingest::{AudioSource, TextSource};
 use lingq_upload_lib::transcribe::{
-    AlignSource, DetectStartResult, DetectedRange, DetectionEvidence, DetectionPreview,
+    AlignSource, AtomStart, DetectStartResult, DetectedRange, DetectionEvidence, DetectionPreview,
     DetectionSink, TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeOpts,
     TranscribeProviderId, Transcriber, Transcript,
 };
@@ -122,6 +122,7 @@ fn evidence() -> DetectionEvidence {
         transcript_head_preview: Some("head preview".into()),
         transcript_tail_preview: Some("tail preview".into()),
         detected_at: Utc::now(),
+        atom_starts: Vec::new(),
     }
 }
 
@@ -342,6 +343,7 @@ fn preview(range: DetectedRange) -> DetectionPreview {
         transcript_head_preview: Some("head preview".into()),
         transcript_tail_preview: Some("tail preview".into()),
         detected_at: Utc::now() - ChronoDuration::days(1),
+        atom_starts: Vec::new(),
     }
 }
 
@@ -900,6 +902,53 @@ async fn collapsed_range_confirm_packs_all_eligible_chapters() {
         project.matcher_decision.unwrap().detection.unwrap().range,
         selected
     );
+}
+
+#[tokio::test]
+async fn atom_start_confirm_packs_chapters_between_audio_parts() {
+    let store = InMemoryProjectStore::new();
+    let probe = UpdateProbeStore::new(&store);
+    let fixture = availability_project(6, 3);
+    probe.put(&fixture.project).unwrap();
+    let selected = range(0, 5);
+    let mut preview = preview(selected.clone());
+    preview.atom_starts = vec![
+        AtomStart {
+            track_index: 0,
+            chapter_id: ChapterId::from_order(0),
+        },
+        AtomStart {
+            track_index: 1,
+            chapter_id: ChapterId::from_order(1),
+        },
+        AtomStart {
+            track_index: 2,
+            chapter_id: ChapterId::from_order(4),
+        },
+    ];
+
+    confirm_detected_range_impl(&probe, &fixture.project.id, selected, preview)
+        .await
+        .unwrap();
+
+    let mapping = probe
+        .get(&fixture.project.id)
+        .unwrap()
+        .unwrap()
+        .mapping
+        .expect("mapping seeded");
+    let tracks: Vec<_> = mapping
+        .pairs
+        .iter()
+        .map(|pair| pair.track_id.clone())
+        .collect();
+    assert_eq!(mapping.pairs.len(), 6);
+    assert_eq!(tracks[0], tracks[0]);
+    assert_ne!(tracks[0], tracks[1]);
+    assert_eq!(tracks[1], tracks[2]);
+    assert_eq!(tracks[2], tracks[3]);
+    assert_ne!(tracks[3], tracks[4]);
+    assert_eq!(tracks[4], tracks[5]);
 }
 
 #[test]

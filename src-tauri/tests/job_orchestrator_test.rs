@@ -232,6 +232,7 @@ async fn stale_detected_range_emits_terminal_failure() {
                     transcript_head_preview: None,
                     transcript_tail_preview: None,
                     detected_at: Utc::now(),
+                    atom_starts: Vec::new(),
                 }),
             });
         })

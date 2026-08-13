@@ -33,6 +33,7 @@ const transcriptEvidence = {
   transcript_head_preview: "始まり 🐉 café — arrival",
   transcript_tail_preview: "帰還 🌊 fin — return",
   detected_at: DETECTED_AT,
+  atom_starts: [],
 };
 
 const titleEvidence = {
@@ -43,6 +44,7 @@ const titleEvidence = {
   transcript_head_preview: null,
   transcript_tail_preview: null,
   detected_at: DETECTED_AT,
+  atom_starts: [],
 };
 
 const staleEvidence = {

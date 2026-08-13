@@ -7,7 +7,7 @@ pub use ops::{
     apply as apply_mapping_op, gate_continue, MappingError, MappingOp, MappingPair, MappingState,
     TrackId,
 };
-pub use pack::{build_preview, proportional_pack, Bucket, BucketPreview};
+pub use pack::{anchored_ranges, build_preview, proportional_pack, Bucket, BucketPreview};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;

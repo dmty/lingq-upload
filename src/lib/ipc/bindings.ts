@@ -587,6 +587,7 @@ export type AccountProfile = { username: string }
 export type AlignSource = "title" | "transcript"
 export type AppError = { kind: "Io"; message: string } | { kind: "Internal"; message: string } | { kind: "MissingApiKey" } | { kind: "Unsupported"; message: string } | { kind: "Secrets"; message: SecretError } | { kind: "Text"; message: TextError } | { kind: "Audio"; message: AudioError } | { kind: "Lingq"; message: LingqError } | { kind: "Ingest"; message: IngestError } | { kind: "Mapping"; message: MappingError } | { kind: "MappingStaleOp"; message: { server: number; expected: number } } | { kind: "DetectedRange"; message: DetectedRangeError } | { kind: "Transcribe"; message: TranscribeError } | { kind: "Other"; message: string }
 export type AppTranscriptionPreferences = { provider_id: TranscribeProviderId; auto_detect_start: boolean }
+export type AtomStart = { track_index: number; chapter_id: ChapterId }
 export type AudioError = { kind: "Probe"; message: string } | { kind: "DurationMismatch"; message: { delta_sec: number; threshold_sec: number } } | { kind: "Io"; message: string } | { kind: "Cancelled" } | { kind: "Decode"; message: string } | { kind: "Encode"; message: string }
 export type AudioSource = { kind: "single_file"; value: string } | { kind: "folder"; value: string } | { kind: "libation_manifest"; value: string } | { kind: "multiple_files"; value: string[] }
 /**
@@ -658,9 +659,9 @@ export type DetectStartResult = { kind: "detected"; preview: DetectionPreview } 
 export type DetectedRange = { start_chapter_id: ChapterId; end_chapter_id: ChapterId }
 export type DetectedRangeError = { kind: "MissingBoundary"; message: string } | { kind: "DuplicateBoundary"; message: string } | { kind: "EndBeforeStart" } | { kind: "EmptyRange" }
 export type DetectionAvailability = { eligible: boolean; condition: MismatchCondition | null; chapter_count: number; track_count: number; active_provider: ProviderInfo; key_present: boolean; consent_matches: boolean; existing_evidence: DetectionEvidence | null; can_start: boolean }
-export type DetectionEvidence = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string }
+export type DetectionEvidence = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string; atom_starts?: AtomStart[] }
 export type DetectionPhase = "title_check" | "sample_head" | "transcribe_head" | "align_head" | "sample_tail" | "transcribe_tail" | "align_tail"
-export type DetectionPreview = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string }
+export type DetectionPreview = { provider_id: TranscribeProviderId | null; align_source: AlignSource; range: DetectedRange; confidence: number; transcript_head_preview: string | null; transcript_tail_preview: string | null; detected_at: string; atom_starts?: AtomStart[] }
 /**
  * Snapshot of the dev-secrets backend selection. `is_debug` lets the UI
  * hide the toggle in release builds; `env_override` flags when the choice

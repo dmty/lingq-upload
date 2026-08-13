@@ -22,13 +22,15 @@ pub mod sample;
 mod whisper_like;
 
 pub use align::{
-    normalize_for_alignment, title_match, transcript_match_head, transcript_match_tail,
-    AlignSource, AlignmentMatch, BoundaryResult, ChapterCandidate, DetectedRange,
+    normalize_for_alignment, title_match, transcript_match_body, transcript_match_head,
+    transcript_match_tail, AlignSource, AlignmentMatch, AtomStart, BoundaryResult,
+    ChapterCandidate, DetectedRange,
 };
 pub use error::{TranscribeError, TranscribeErrorKind};
 pub use provider::{provider_language_hint, PricingHint, ProviderCatalog, ProviderDescriptor};
 pub use sample::{
-    AlignmentConfig, NoTranscriptReason, SamplePlan, SampleSide, SampleWindow, SideSamplePlan,
+    plan_atom_head_windows, AlignmentConfig, NoTranscriptReason, SamplePlan, SampleSide,
+    SampleWindow, SideSamplePlan,
 };
 pub use whisper_like::WhisperLikeTranscriber;
 
@@ -189,6 +191,8 @@ pub struct DetectionEvidence {
     pub transcript_head_preview: Option<String>,
     pub transcript_tail_preview: Option<String>,
     pub detected_at: DateTime<Utc>,
+    #[serde(default)]
+    pub atom_starts: Vec<AtomStart>,
 }
 
 pub fn detection_provider_matches_source(
@@ -210,6 +214,8 @@ pub struct DetectionPreview {
     pub transcript_head_preview: Option<String>,
     pub transcript_tail_preview: Option<String>,
     pub detected_at: DateTime<Utc>,
+    #[serde(default)]
+    pub atom_starts: Vec<AtomStart>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
@@ -360,8 +366,22 @@ async fn detect_start_offset_inner(
                 transcript_head_preview: None,
                 transcript_tail_preview: None,
                 detected_at: Utc::now(),
+                atom_starts: Vec::new(),
             },
         });
+    }
+
+    if tracks.len() > 1 {
+        return detect_from_atom_heads(
+            project,
+            tracks,
+            chapters,
+            config,
+            lifecycle,
+            cancel,
+            provider_factory,
+        )
+        .await;
     }
 
     lifecycle.progress(0.15, DetectionPhase::SampleHead);
@@ -454,6 +474,7 @@ async fn detect_start_offset_inner(
                     transcript_head_preview: bound_preview(Some(&head_text)),
                     transcript_tail_preview: bound_preview(Some(&tail_text)),
                     detected_at: Utc::now(),
+                    atom_starts: Vec::new(),
                 },
             })
         }
@@ -466,6 +487,223 @@ async fn detect_start_offset_inner(
             top_head: head.top().to_vec(),
             top_tail: tail.top().to_vec(),
         }),
+    }
+}
+
+async fn detect_from_atom_heads(
+    project: &Project,
+    tracks: &[AudioTrack],
+    chapters: &[Chapter],
+    config: &AlignmentConfig,
+    lifecycle: &mut DetectionLifecycle<'_>,
+    cancel: &CancellationToken,
+    provider_factory: ProviderFactory<'_>,
+) -> Result<DetectStartResult, DetectFailure> {
+    lifecycle.progress(0.12, DetectionPhase::SampleHead);
+    ensure_not_cancelled(cancel)?;
+    let durations = probe_track_durations(tracks).await?;
+    let plans = match plan_atom_head_windows(tracks, &durations, config) {
+        Ok(plans) => plans,
+        Err(reason) => return Ok(DetectStartResult::NoTranscript { reason }),
+    };
+    ensure_not_cancelled(cancel)?;
+
+    let n = plans.len() as f32;
+    let mut texts: Vec<Option<String>> = Vec::with_capacity(plans.len());
+    let mut matches: Vec<BoundaryResult> = Vec::with_capacity(plans.len());
+
+    let first_plan = &plans[0];
+    lifecycle.progress(0.15, DetectionPhase::SampleHead);
+    ensure_not_cancelled(cancel)?;
+    let first_sample = extract_sample(&first_plan.initial, cancel)
+        .await
+        .map_err(audio_failure)?;
+    lifecycle.progress(0.15 + 0.80 / n * 0.4, DetectionPhase::TranscribeHead);
+    ensure_not_cancelled(cancel)?;
+    let transcriber = provider_factory().map_err(DetectFailure::Operational)?;
+    let provider_id = transcriber.provider_id();
+    let language = ProviderCatalog::built_in()
+        .descriptor(provider_id)
+        .ok()
+        .and_then(|descriptor| provider_language_hint(&project.settings.language, descriptor));
+    let opts = TranscribeOpts {
+        language,
+        prompt: None,
+    };
+
+    let mut first_sample = Some(first_sample);
+
+    for (index, plan) in plans.iter().enumerate() {
+        let start = 0.15 + (index as f32 / n) * 0.80;
+        let step = 0.80 / n;
+        let sample = if index == 0 {
+            first_sample.take().expect("first sample")
+        } else {
+            lifecycle.progress(start, DetectionPhase::SampleHead);
+            ensure_not_cancelled(cancel)?;
+            extract_sample(&plan.initial, cancel)
+                .await
+                .map_err(audio_failure)?
+        };
+        if index != 0 {
+            lifecycle.progress(start + step * 0.4, DetectionPhase::TranscribeHead);
+            ensure_not_cancelled(cancel)?;
+        }
+        let text = match transcribe_side(
+            transcriber.as_ref(),
+            sample,
+            plan.retry.as_ref(),
+            &opts,
+            cancel,
+        )
+        .await
+        {
+            Ok(text) => Some(text),
+            Err(DetectFailure::Content(_)) => None,
+            Err(error) => return Err(error),
+        };
+        lifecycle.progress(start + step * 0.8, DetectionPhase::AlignHead);
+        ensure_not_cancelled(cancel)?;
+        let boundary = text
+            .as_deref()
+            .map(|clip| {
+                let head = transcript_match_head(clip, chapters, config);
+                if index == 0 || head.confident_id().is_some() {
+                    return head;
+                }
+                let body = transcript_match_body(clip, chapters, config);
+                match (head.top().first(), body.top().first()) {
+                    (_, Some(_)) if body.confident_id().is_some() => body,
+                    (Some(head_best), Some(body_best)) if body_best.score > head_best.score => {
+                        body
+                    }
+                    _ => head,
+                }
+            })
+            .unwrap_or(BoundaryResult::ContentPoor);
+        texts.push(text);
+        matches.push(boundary);
+    }
+
+    Ok(compose_atom_result(
+        provider_id,
+        chapters,
+        &texts,
+        &matches,
+    ))
+}
+
+async fn probe_track_durations(tracks: &[AudioTrack]) -> Result<Vec<f64>, DetectFailure> {
+    let mut cache = std::collections::HashMap::new();
+    let mut durations = Vec::with_capacity(tracks.len());
+    for track in tracks {
+        if let Some(&duration) = cache.get(&track.path) {
+            durations.push(duration);
+            continue;
+        }
+        let duration = audio::probe_duration(&track.path)
+            .await
+            .map_err(audio_failure)?;
+        cache.insert(track.path.clone(), duration);
+        durations.push(duration);
+    }
+    Ok(durations)
+}
+
+fn compose_atom_result(
+    provider_id: TranscribeProviderId,
+    chapters: &[Chapter],
+    texts: &[Option<String>],
+    matches: &[BoundaryResult],
+) -> DetectStartResult {
+    if matches
+        .iter()
+        .all(|boundary| matches!(boundary, BoundaryResult::ContentPoor))
+    {
+        return DetectStartResult::NoTranscript {
+            reason: NoTranscriptReason::ContentPoor,
+        };
+    }
+
+    let mut start_indexes = vec![None; matches.len()];
+    let mut atom_starts = Vec::new();
+    let mut scores = Vec::new();
+    let mut last_order: Option<usize> = None;
+    for (index, boundary) in matches.iter().enumerate() {
+        let Some(best) = boundary.top().first() else {
+            continue;
+        };
+        let Some(position) = chapters.iter().position(|chapter| chapter.id == best.chapter_id)
+        else {
+            continue;
+        };
+        if last_order.is_some_and(|order| chapters[position].order <= order) {
+            continue;
+        }
+        last_order = Some(chapters[position].order);
+        start_indexes[index] = Some(position);
+        atom_starts.push(AtomStart {
+            track_index: index,
+            chapter_id: best.chapter_id.clone(),
+        });
+        scores.push(best.score);
+    }
+
+    if atom_starts.is_empty() {
+        return DetectStartResult::LowConfidence {
+            transcript_head_preview: bound_preview(texts.first().and_then(|text| text.as_deref())),
+            transcript_tail_preview: bound_preview(texts.last().and_then(|text| text.as_deref())),
+            top_head: matches
+                .first()
+                .map(|boundary| boundary.top().to_vec())
+                .unwrap_or_default(),
+            top_tail: matches
+                .last()
+                .map(|boundary| boundary.top().to_vec())
+                .unwrap_or_default(),
+        };
+    }
+
+    let ranges = crate::core::matcher::anchored_ranges(chapters.len(), &start_indexes);
+    let start_chapter = ranges
+        .iter()
+        .find(|range| !range.is_empty())
+        .map(|range| &chapters[range.start]);
+    let end_chapter = ranges
+        .iter()
+        .rev()
+        .find(|range| !range.is_empty())
+        .map(|range| &chapters[range.end - 1]);
+    let (Some(start_chapter), Some(end_chapter)) = (start_chapter, end_chapter) else {
+        return DetectStartResult::LowConfidence {
+            transcript_head_preview: bound_preview(texts.first().and_then(|text| text.as_deref())),
+            transcript_tail_preview: bound_preview(texts.last().and_then(|text| text.as_deref())),
+            top_head: matches
+                .first()
+                .map(|boundary| boundary.top().to_vec())
+                .unwrap_or_default(),
+            top_tail: matches
+                .last()
+                .map(|boundary| boundary.top().to_vec())
+                .unwrap_or_default(),
+        };
+    };
+
+    let confidence = scores.iter().copied().sum::<f32>() / scores.len() as f32;
+    DetectStartResult::Detected {
+        preview: DetectionPreview {
+            provider_id: Some(provider_id),
+            align_source: AlignSource::Transcript,
+            range: DetectedRange {
+                start_chapter_id: start_chapter.id.clone(),
+                end_chapter_id: end_chapter.id.clone(),
+            },
+            confidence,
+            transcript_head_preview: bound_preview(texts.first().and_then(|text| text.as_deref())),
+            transcript_tail_preview: bound_preview(texts.last().and_then(|text| text.as_deref())),
+            detected_at: Utc::now(),
+            atom_starts,
+        },
     }
 }
 
@@ -576,6 +814,7 @@ mod evidence_tests {
             transcript_head_preview: preview,
             transcript_tail_preview: None,
             detected_at: Utc::now(),
+            atom_starts: Vec::new(),
         };
 
         assert_eq!(

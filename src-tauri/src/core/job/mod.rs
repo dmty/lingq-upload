@@ -16,7 +16,7 @@ use crate::core::epub::{Chapter, ChapterId, EpubVendor, HeadingStrategy};
 use crate::core::identity::ProjectId;
 use crate::core::lesson::single_lesson_concat;
 use crate::core::matcher::ops::{build_bucket_meta, TrackId, TrackMeta, RECOMPUTED_CONFIDENCE};
-use crate::core::matcher::pack::{build_preview, proportional_pack};
+use crate::core::matcher::pack::{anchored_ranges, build_preview, proportional_pack};
 use crate::core::matcher::{
     auto_match, seed_mapping_state, track_id_for, BucketPreview, MappingPair, MappingState,
     MatchOutcome, MismatchCondition, MismatchResponse,
@@ -29,7 +29,7 @@ use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
 use crate::ingest::{audio_source_paths, AudioSource, TextSource};
 use crate::lingq::{ImportLessonRequest, LessonStatus, LingqClient};
-use crate::transcribe::{DetectedRange, DetectedRangeError};
+use crate::transcribe::{AtomStart, DetectedRange, DetectedRangeError};
 
 /// Returns the next lifecycle stage the project should advance to, or `None`
 /// when the project is already `Done`. Pure function; does not look at receipts
@@ -928,6 +928,61 @@ pub async fn seed_bounded_mapping(
         ));
     }
     Ok(seed_split_mapping_from_resolved(chapters, &tracks))
+}
+
+/// Pack eligible chapters onto audio parts using Whisper-matched openings
+/// instead of a single start/end slice.
+pub async fn seed_anchored_mapping(
+    project: &Project,
+    starts: &[AtomStart],
+) -> Result<MappingState, AppError> {
+    let all_chapters = project_chapters(project)?;
+    let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+    let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
+    let tracks = resolve_audio_tracks(project).await?;
+    if chapters.is_empty() || tracks.is_empty() {
+        return Err(AppError::Other(
+            "split-proportional needs chapters and tracks".into(),
+        ));
+    }
+    Ok(mapping_state_from_resolved(
+        anchored_split_pairs(&chapters, &tracks, starts),
+        &chapters,
+        &tracks,
+    ))
+}
+
+fn anchored_split_pairs(
+    chapters: &[Chapter],
+    tracks: &[AudioTrack],
+    starts: &[AtomStart],
+) -> Vec<MappingPair> {
+    let mut start_indexes = vec![None; tracks.len()];
+    for start in starts {
+        if start.track_index >= tracks.len() {
+            continue;
+        }
+        start_indexes[start.track_index] = chapters
+            .iter()
+            .position(|chapter| chapter.id == start.chapter_id);
+    }
+    let ranges = anchored_ranges(chapters.len(), &start_indexes);
+    let mut pairs: Vec<MappingPair> = Vec::with_capacity(chapters.len());
+    for (bucket_idx, range) in ranges.iter().enumerate() {
+        let tid = track_id_for(&tracks[bucket_idx]);
+        for chapter_index in range.clone() {
+            pairs.push(new_pair(
+                chapters[chapter_index].id.clone(),
+                Some(tid.clone()),
+            ));
+        }
+    }
+    for chapter in chapters {
+        if !pairs.iter().any(|pair| pair.chapter_id == chapter.id) {
+            pairs.push(new_pair(chapter.id.clone(), None));
+        }
+    }
+    pairs
 }
 
 fn new_pair(chapter_id: ChapterId, track_id: Option<String>) -> MappingPair {

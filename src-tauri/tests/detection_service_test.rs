@@ -823,3 +823,190 @@ async fn single_chapter_book_may_detect_the_same_id_range() {
     assert_eq!(preview.range.start_chapter_id, chapters[0].id);
     assert_eq!(preview.range.end_chapter_id, chapters[0].id);
 }
+
+#[tokio::test]
+async fn multi_track_samples_each_atom_head_and_records_starts() {
+    let chapters = chapters();
+    let tracks = vec![
+        fixture_track_at(0, Some((0.0, 60.0))),
+        fixture_track_at(1, Some((60.0, 120.0))),
+        fixture_track_at(2, Some((120.0, 180.0))),
+    ];
+    let paths = Arc::new(Mutex::new(Vec::new()));
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &tracks,
+        &chapters,
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::clone(&paths),
+            vec![
+                transcript(chapters[0].body.clone()),
+                transcript(chapters[1].body.clone()),
+                transcript(chapters[2].body.clone()),
+            ],
+        ),
+    )
+    .await
+    .unwrap();
+
+    let DetectStartResult::Detected { preview } = result else {
+        panic!("per-atom heads must detect, got {result:?}");
+    };
+    let names: Vec<_> = paths
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["head-0.mp3", "head-0.mp3", "head-0.mp3"]);
+    assert_eq!(
+        preview
+            .atom_starts
+            .iter()
+            .map(|start| (start.track_index, start.chapter_id.clone()))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, chapters[0].id.clone()),
+            (1, chapters[1].id.clone()),
+            (2, chapters[2].id.clone()),
+        ]
+    );
+    assert_eq!(preview.range.start_chapter_id, chapters[0].id);
+    assert_eq!(preview.range.end_chapter_id, chapters[3].id);
+}
+
+#[tokio::test]
+async fn multi_track_keeps_best_hit_per_atom_when_titles_collide() {
+    let bodies = [
+        "Once upon a quiet morning in the village the bells rang softly over the hills.",
+        "The wind swept through the valley of stone and scattered dust across the road.",
+        HEAD_TEXT,
+        TAIL_TEXT,
+    ];
+    let chapters: Vec<_> = bodies
+        .into_iter()
+        .enumerate()
+        .map(|(order, body)| Chapter {
+            order,
+            title: "時をかける少女".into(),
+            body: body.into(),
+            id: ChapterId::from_chapter_parts("test", &format!("spine-{order}"), body),
+            ..Default::default()
+        })
+        .collect();
+    let tracks = vec![
+        fixture_track_at(0, Some((0.0, 60.0))),
+        fixture_track_at(1, Some((60.0, 120.0))),
+        fixture_track_at(2, Some((120.0, 180.0))),
+    ];
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &tracks,
+        &chapters,
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Mutex::new(Vec::new())),
+            vec![
+                transcript(bodies[0]),
+                transcript(bodies[1]),
+                transcript(bodies[2]),
+            ],
+        ),
+    )
+    .await
+    .unwrap();
+
+    let DetectStartResult::Detected { preview } = result else {
+        panic!("best per-atom hits must still detect when titles collide, got {result:?}");
+    };
+    assert_eq!(
+        preview
+            .atom_starts
+            .iter()
+            .map(|start| (start.track_index, start.chapter_id.clone()))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, chapters[0].id.clone()),
+            (1, chapters[1].id.clone()),
+            (2, chapters[2].id.clone()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn multi_track_interior_clip_maps_the_chapter_that_contains_it() {
+    let interior =
+        "Then the narrow bridge groaned under the cart wheels as dawn broke over the ridge.";
+    let valley = format!("{} {interior}", "paddingword ".repeat(50));
+    let chapters = [
+        (
+            "Prologue",
+            "Once upon a quiet morning in the village the bells rang softly over the hills."
+                .to_string(),
+        ),
+        ("Valley", valley),
+        ("Return", HEAD_TEXT.to_string()),
+        ("Epilogue", TAIL_TEXT.to_string()),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(order, (title, body))| Chapter {
+        order,
+        title: title.into(),
+        body,
+        id: ChapterId::from_chapter_parts("test", &format!("spine-{order}"), title),
+        ..Default::default()
+    })
+    .collect::<Vec<_>>();
+    let tracks = vec![
+        fixture_track_at(0, Some((0.0, 60.0))),
+        fixture_track_at(1, Some((60.0, 120.0))),
+        fixture_track_at(2, Some((120.0, 180.0))),
+    ];
+    let mut sink = RecordingDetectionSink::default();
+    let result = run(
+        &tracks,
+        &chapters,
+        &mut sink,
+        CancellationToken::new(),
+        counting_factory(
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Mutex::new(Vec::new())),
+            vec![
+                transcript(chapters[0].body.clone()),
+                transcript(interior),
+                transcript(HEAD_TEXT),
+            ],
+        ),
+    )
+    .await
+    .unwrap();
+
+    let DetectStartResult::Detected { preview } = result else {
+        panic!("interior atom clip must detect, got {result:?}");
+    };
+    assert_eq!(
+        preview
+            .atom_starts
+            .iter()
+            .map(|start| start.chapter_id.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            chapters[0].id.clone(),
+            chapters[1].id.clone(),
+            chapters[2].id.clone(),
+        ]
+    );
+}
+
+fn fixture_track_at(order: usize, window: Option<(f64, f64)>) -> AudioTrack {
+    AudioTrack {
+        order,
+        ..fixture_track(window)
+    }
+}
