@@ -97,16 +97,57 @@ impl Transcriber for CountingFakeTranscriber {
     }
 }
 
-// ponytail: no-op sink — Task 15 asserts provider/store contracts, not event logs
+#[derive(Clone, Debug, PartialEq)]
+pub enum DetectionEvent {
+    Started,
+    Progress(DetectionPhase),
+    Result,
+    Error(TranscribeErrorKind),
+    Cancelled,
+}
+
 #[derive(Clone, Default)]
-pub struct RecordingDetectionSink;
+pub struct RecordingDetectionSink {
+    events: Arc<Mutex<Vec<DetectionEvent>>>,
+}
+
+impl RecordingDetectionSink {
+    pub fn events(&self) -> Vec<DetectionEvent> {
+        self.events.lock().expect("sink events").clone()
+    }
+}
 
 impl DetectionSink for RecordingDetectionSink {
-    fn started(&mut self, _: Uuid) {}
-    fn progress(&mut self, _: Uuid, _: f32, _: DetectionPhase) {}
-    fn result(&mut self, _: Uuid, _: &DetectStartResult) {}
-    fn error(&mut self, _: Uuid, _: &TranscribeError) {}
-    fn cancelled(&mut self, _: Uuid) {}
+    fn started(&mut self, _: Uuid) {
+        self.events
+            .lock()
+            .expect("sink events")
+            .push(DetectionEvent::Started);
+    }
+    fn progress(&mut self, _: Uuid, _: f32, phase: DetectionPhase) {
+        self.events
+            .lock()
+            .expect("sink events")
+            .push(DetectionEvent::Progress(phase));
+    }
+    fn result(&mut self, _: Uuid, _: &DetectStartResult) {
+        self.events
+            .lock()
+            .expect("sink events")
+            .push(DetectionEvent::Result);
+    }
+    fn error(&mut self, _: Uuid, error: &TranscribeError) {
+        self.events
+            .lock()
+            .expect("sink events")
+            .push(DetectionEvent::Error(error.kind()));
+    }
+    fn cancelled(&mut self, _: Uuid) {
+        self.events
+            .lock()
+            .expect("sink events")
+            .push(DetectionEvent::Cancelled);
+    }
 }
 
 pub struct BackendFixture {

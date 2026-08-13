@@ -14,7 +14,7 @@ use lingq_upload_lib::transcribe::{
 };
 use uuid::Uuid;
 
-use support::{backend_fixture, BackendFixture, StoreKind};
+use support::{backend_fixture, BackendFixture, DetectionEvent, StoreKind};
 
 fn cid(order: usize) -> ChapterId {
     ChapterId::from_order(order)
@@ -40,6 +40,15 @@ async fn detect_and_confirm(fixture: &BackendFixture) -> DetectionPreview {
     assert!(availability.can_start);
 
     let preview = detected_preview(fixture.detect().await.unwrap());
+    let events = fixture.sink.events();
+    assert_eq!(events.first(), Some(&DetectionEvent::Started));
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, DetectionEvent::Progress(_))),
+        "detect must emit progress: {events:?}"
+    );
+    assert_eq!(events.last(), Some(&DetectionEvent::Result));
     assert_eq!(
         preview.range,
         DetectedRange {
@@ -118,6 +127,7 @@ async fn reloaded_evidence_is_reused_without_another_transcriber_call() {
     assert_eq!(availability.existing_evidence.unwrap().range, preview.range);
 
     let cancels: JobCancelMap = Arc::new(Mutex::new(HashMap::new()));
+    let before = fixture.sink.events().len();
     let mut sink = fixture.sink.clone();
     let transcriber = fixture.transcriber.clone();
     let result = detect_start_offset_impl(
@@ -132,4 +142,9 @@ async fn reloaded_evidence_is_reused_without_another_transcriber_call() {
 
     assert_eq!(detected_preview(result).range, preview.range);
     assert_eq!(fixture.provider_calls(), 2);
+    assert_eq!(
+        fixture.sink.events().len(),
+        before,
+        "reused evidence must not emit detection lifecycle events"
+    );
 }
