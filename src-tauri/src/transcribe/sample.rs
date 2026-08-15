@@ -88,6 +88,18 @@ pub fn plan_sample_windows(
         );
     }
 
+    // The same file listed twice would sample identical audio on both sides.
+    if head_track.path == tail_track.path
+        && head_track.window.is_none()
+        && tail_track.window.is_none()
+    {
+        return plan_one_track(
+            head_track,
+            verified_bounds(head_track, boundary_file_durations.0)?,
+            config,
+        );
+    }
+
     let head = plan_head(
         head_track,
         0,
@@ -127,14 +139,23 @@ fn verified_bounds(
     track: &AudioTrack,
     verified_duration_sec: f64,
 ) -> Result<(f64, f64), NoTranscriptReason> {
-    if !verified_duration_sec.is_finite() || verified_duration_sec <= 0.0 {
-        return Err(NoTranscriptReason::InsufficientAudio);
-    }
-    let (start, end) = track.window.unwrap_or((0.0, verified_duration_sec));
+    // A probe reports 0.0 when the container carries no frame count (an MP3
+    // without a Xing header); the track's declared duration still holds.
+    let duration = [verified_duration_sec, track.duration_sec.unwrap_or(0.0)]
+        .into_iter()
+        .find(|candidate| candidate.is_finite() && *candidate > 0.0)
+        .ok_or(NoTranscriptReason::InsufficientAudio)?;
+    let (start, end) = track.window.unwrap_or((0.0, duration));
     if !start.is_finite() || !end.is_finite() {
         return Err(NoTranscriptReason::InsufficientAudio);
     }
-    Ok((start.max(0.0), end.min(verified_duration_sec)))
+    let (start, end) = (start.max(0.0), end.min(duration));
+    // Nero chpl files synthesize a final atom with end == start; the window is
+    // unusable, the file itself is not.
+    if end <= start {
+        return Ok((0.0, duration));
+    }
+    Ok((start, end))
 }
 
 fn plan_head(
@@ -406,6 +427,68 @@ mod tests {
         assert_eq!(
             (plan.tail.initial.start_sec, plan.tail.initial.end_sec),
             (95.0, 125.0)
+        );
+    }
+
+    #[test]
+    fn collapsed_embedded_windows_fall_back_to_the_whole_file() {
+        for window in [Some((3_600.0, 3_600.0)), Some((50.0, 10.0))] {
+            let tracks = vec![track(0, "book.m4b", window)];
+
+            let plan =
+                plan_sample_windows(&tracks, (7_200.0, 7_200.0), &AlignmentConfig::default())
+                    .expect("collapsed window must not block detection");
+
+            assert_eq!(
+                (plan.head.initial.start_sec, plan.head.initial.end_sec),
+                (5.0, 35.0)
+            );
+            assert!(plan.tail.initial.start_sec > plan.head.initial.end_sec);
+        }
+    }
+
+    #[test]
+    fn unknown_probe_duration_falls_back_to_the_track_duration() {
+        let tracks = vec![track(0, "head.mp3", None), track(1, "tail.mp3", None)];
+
+        let plan = plan_sample_windows(&tracks, (0.0, 0.0), &AlignmentConfig::default())
+            .expect("a container without a frame count still has audio");
+
+        assert_eq!(
+            (plan.head.initial.start_sec, plan.head.initial.end_sec),
+            (5.0, 35.0)
+        );
+        assert_eq!(
+            (plan.tail.initial.start_sec, plan.tail.initial.end_sec),
+            (9_964.0, 9_994.0)
+        );
+    }
+
+    #[test]
+    fn unknown_probe_and_track_duration_is_insufficient_audio() {
+        let mut only = track(0, "book.mp3", None);
+        only.duration_sec = None;
+
+        assert_eq!(
+            plan_sample_windows(&[only], (0.0, 0.0), &AlignmentConfig::default()),
+            Err(NoTranscriptReason::InsufficientAudio)
+        );
+    }
+
+    #[test]
+    fn the_same_file_on_both_sides_splits_at_the_midpoint() {
+        let tracks = vec![track(0, "book.mp3", None), track(1, "book.mp3", None)];
+
+        let plan =
+            plan_sample_windows(&tracks, (200.0, 200.0), &AlignmentConfig::default()).unwrap();
+
+        assert_eq!(
+            (plan.head.initial.start_sec, plan.head.initial.end_sec),
+            (5.0, 35.0)
+        );
+        assert_eq!(
+            (plan.tail.initial.start_sec, plan.tail.initial.end_sec),
+            (165.0, 195.0)
         );
     }
 
