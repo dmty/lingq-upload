@@ -360,18 +360,21 @@ dialog::backdrop {
     animation: none !important;
   }
 
-  /* Accessibility floor: reduced motion suppresses transforms and shrinks
-     durations everywhere, not just the sheet. 0.01ms rather than 0s so any
-     transitionend/animationend listener still fires. The only static transform
-     in the app is ChapterInspector's active:scale-95 press effect — decorative,
-     not layout-critical — so neutralising transform outright is safe. */
+  /* Accessibility floor: reduced motion shrinks animation/transition durations
+     everywhere, not just the sheet. 0.01ms rather than 0s so any
+     transitionend/animationend listener still fires. Collapsing the duration
+     is enough on its own: it makes active:scale-95 (the one transform-driven
+     effect in the app) snap instantly instead of animating, which is already
+     "no motion". A blanket `transform: none` would go further and strip
+     several layout-positioning translates (centring dots, an input's inline
+     button) that are static, not animated — those aren't motion and reduced
+     motion has no business touching them. */
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    transform: none !important;
   }
 }
 
