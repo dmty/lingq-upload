@@ -60,11 +60,16 @@
 
 <div class="app-shell">
   <div
-    class="flex flex-col gap-[4px] border-r border-sidebar-border bg-sidebar px-[8px] pt-[12px]"
+    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
   >
-    <span class="px-2 pb-2 text-xs font-semibold text-fg-muted">
-      LingQ Importer
-    </span>
+    <div
+      data-tauri-drag-region
+      class="flex h-[52px] flex-none items-end px-[8px] pb-[6px]"
+    >
+      <span class="pl-[64px] text-xs font-semibold text-fg-muted">
+        LingQ Importer
+      </span>
+    </div>
     <nav aria-label="Sections" class="flex flex-col gap-[2px]">
       {#each sections as section (section.href)}
         <a

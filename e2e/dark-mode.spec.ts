@@ -12,7 +12,7 @@ test.describe("dark color scheme", () => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
     const canvas = await page.evaluate(
-      () => getComputedStyle(document.body).backgroundColor,
+      () => getComputedStyle(document.querySelector("main")!).backgroundColor,
     );
     expect(canvas).toBe("rgb(30, 30, 30)"); // --color-canvas dark #1e1e1e
     const fg = await page.evaluate(() => getComputedStyle(document.body).color);
@@ -29,7 +29,7 @@ test.describe("light color scheme stays default", () => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
     const backgroundColor = await page.evaluate(
-      () => getComputedStyle(document.body).backgroundColor,
+      () => getComputedStyle(document.querySelector("main")!).backgroundColor,
     );
     expect(backgroundColor).toBe("rgb(242, 242, 247)"); // #f2f2f7
   });

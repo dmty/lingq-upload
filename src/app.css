@@ -118,7 +118,7 @@
 @layer base {
   html,
   body {
-    background: var(--color-canvas);
+    background: transparent;
     color: var(--color-fg);
     font-family: var(--font-sans);
     font-size: var(--text-base);
@@ -194,6 +194,17 @@
 
 .app-shell > main {
   overflow-y: auto;
+  background: var(--color-canvas);
+}
+
+.app-sidebar {
+  background: var(--color-sidebar);
+}
+
+@supports (-webkit-backdrop-filter: blur(0px)) {
+  .app-sidebar {
+    background: color-mix(in srgb, var(--color-sidebar) 55%, transparent);
+  }
 }
 
 .source-row {

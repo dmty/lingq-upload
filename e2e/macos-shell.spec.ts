@@ -82,8 +82,38 @@ test.describe("source list sidebar", () => {
       el.style.height = "200px";
       el.scrollTop = 400;
     });
+    const scrollTop = await page.locator("main").evaluate((el) => el.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
     const after = await nav.boundingBox();
     expect(before).not.toBeNull();
     expect(after!.y).toBe(before!.y);
+  });
+});
+
+test.describe("overlay titlebar", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("a drag strip reserves room above the sidebar sections", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    const strip = page.locator("[data-tauri-drag-region]").first();
+    await expect(strip).toBeVisible();
+    const box = await strip.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBe(0);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test("the first section row clears the traffic lights", async ({ page }) => {
+    await page.goto("/library");
+    const first = page
+      .getByRole("navigation", { name: "Sections" })
+      .getByRole("link", { name: "Library", exact: true });
+    const box = await first.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(44);
   });
 });
