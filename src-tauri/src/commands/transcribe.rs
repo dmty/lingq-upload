@@ -25,9 +25,9 @@ use crate::events::JobEmitter;
 use crate::secrets::{KeyringBackend, SecretsStore, GROQ_ACCOUNT, OPENAI_ACCOUNT};
 use crate::transcribe::{
     bound_preview, consent_matches, detect_start_offset, detection_provider_matches_source,
-    AlignmentConfig, DetectStartResult, DetectedRange, DetectionEvidence, DetectionPreview,
-    DetectionSink, ProviderCatalog, ProviderDescriptor, ProviderFactory, TranscribeConsent,
-    TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber,
+    AlignmentConfig, DetectStartResult, DetectedRange, DetectedRangeError, DetectionEvidence,
+    DetectionPreview, DetectionSink, ProviderCatalog, ProviderDescriptor, ProviderFactory,
+    TranscribeConsent, TranscribeError, TranscribeErrorKind, TranscribeProviderId, Transcriber,
 };
 
 const PREFERENCES_FILE: &str = "transcription-preferences.json";
@@ -101,6 +101,11 @@ pub async fn detection_availability_impl(
     key_present: bool,
 ) -> Result<DetectionAvailability, AppError> {
     let inspection = inspect_mismatch(project).await?;
+    let inspection_was_live = inspection.is_some();
+    let existing_evidence = project
+        .matcher_decision
+        .as_ref()
+        .and_then(|decision| decision.detection.clone());
     let (condition, chapter_count, track_count) = inspection
         .map(|inspection| {
             (
@@ -119,13 +124,15 @@ pub async fn detection_availability_impl(
             })
         })
         .unwrap_or((None, 0, 0));
+    // `inspect_mismatch` returns None once `matcher_decision` is set, and
+    // confirmation re-derives eligibility the same way. Honouring the
+    // decision-derived condition is therefore only safe once evidence exists —
+    // there `can_start` is false anyway. Without evidence it would advertise a
+    // detection that confirmation always refuses, billing the user per attempt.
     let eligible = condition
-        .is_some_and(|condition| detection_eligible(condition, chapter_count, track_count));
+        .is_some_and(|condition| detection_eligible(condition, chapter_count, track_count))
+        && (inspection_was_live || existing_evidence.is_some());
     let consent_matches = consent_matches(project.transcribe_consent.as_ref(), active_provider);
-    let existing_evidence = project
-        .matcher_decision
-        .as_ref()
-        .and_then(|decision| decision.detection.clone());
     let can_start = eligible && key_present && consent_matches && existing_evidence.is_none();
     let descriptor = ProviderCatalog::built_in().descriptor(active_provider)?;
 
@@ -308,14 +315,56 @@ fn validate_detection_preview(preview: &DetectionPreview) -> Result<(), AppError
     Ok(())
 }
 
+/// Receipts are prepopulated at plan time with `lesson_id: None`, so a job that
+/// died before its first upload still leaves them behind. Only a receipt that
+/// carries a lesson id means anything actually reached LingQ.
+fn uploads_started(project: &Project) -> bool {
+    project
+        .receipts
+        .iter()
+        .any(|receipt| receipt.lesson_id.is_some())
+}
+
+/// Destructured rather than field-listed so that adding a field to `Project`
+/// forces a decision here instead of silently widening what counts as
+/// "unchanged" — `transcribe_consent` and `settings` were both missed that way.
 fn detection_inputs_unchanged(resolved: &Project, current: &Project) -> bool {
-    current.sources == resolved.sources
-        && current.cover_source_href == resolved.cover_source_href
-        && current.skipped_chapters == resolved.skipped_chapters
-        && current.receipts == resolved.receipts
-        && current.matcher_decision == resolved.matcher_decision
-        && current.mapping == resolved.mapping
-        && current.confirmed_at == resolved.confirmed_at
+    let Project {
+        sources,
+        settings,
+        receipts,
+        matcher_decision,
+        skipped_chapters,
+        mapping,
+        confirmed_at,
+        cover_source_href,
+        transcribe_consent,
+        // Not detection inputs: identity, cover and catalog metadata, upload
+        // bookkeeping, and stage transitions.
+        schema_version: _,
+        id: _,
+        queue_cursor: _,
+        completed_lesson_ids: _,
+        cover_path: _,
+        authors: _,
+        series: _,
+        lingq_collection_id: _,
+        last_activity_at: _,
+        stage: _,
+        last_transition_at: _,
+        absorb_policy: _,
+        cover_use: _,
+        cover_uploaded_to_lingq: _,
+    } = current;
+    sources == &resolved.sources
+        && settings == &resolved.settings
+        && receipts == &resolved.receipts
+        && matcher_decision == &resolved.matcher_decision
+        && skipped_chapters == &resolved.skipped_chapters
+        && mapping == &resolved.mapping
+        && confirmed_at == &resolved.confirmed_at
+        && cover_source_href == &resolved.cover_source_href
+        && transcribe_consent == &resolved.transcribe_consent
 }
 
 fn stale_text_source(error: AppError) -> AppError {
@@ -332,12 +381,33 @@ pub async fn confirm_detected_range_impl(
     project_id: &ProjectId,
     selected_range: DetectedRange,
     preview: DetectionPreview,
+    active_provider: TranscribeProviderId,
 ) -> Result<(), AppError> {
     validate_detection_preview(&preview)?;
     let project = store
         .get(project_id)
         .map_err(|error| AppError::Other(format!("store.get: {error}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
+    // Evidence arrives from the client, so the paid-operation gates are
+    // re-checked here rather than trusted from the preview payload. A Stage-A
+    // title match carries no provider and sends no audio, so it needs neither.
+    if let Some(provider_id) = preview.provider_id {
+        if provider_id != active_provider {
+            return Err(AppError::Unsupported(
+                "detection evidence names a different provider than the active one".into(),
+            ));
+        }
+        if !consent_matches(project.transcribe_consent.as_ref(), active_provider) {
+            return Err(AppError::Unsupported(
+                "transcription consent does not match the active provider".into(),
+            ));
+        }
+    }
+    if uploads_started(&project) {
+        return Err(AppError::Unsupported(
+            "cannot confirm a detected range after uploads have begun".into(),
+        ));
+    }
     let inspection = inspect_mismatch(&project)
         .await
         .map_err(stale_text_source)?
@@ -352,9 +422,33 @@ pub async fn confirm_detected_range_impl(
             AppError::Unsupported("project is not eligible for text-range detection".into())
         })?;
     if preview.range != selected_range {
-        seed_bounded_mapping(&project, &preview.range)
-            .await
-            .map_err(stale_text_source)?;
+        // A narrowed selection is expected; a widened one would confirm a range
+        // no transcription ever covered.
+        let chapters = detection_chapters(&project).map_err(stale_text_source)?;
+        let order_of = |wanted| chapters.iter().position(|chapter| &chapter.id == wanted);
+        let (Some(preview_start), Some(preview_end)) = (
+            order_of(&preview.range.start_chapter_id),
+            order_of(&preview.range.end_chapter_id),
+        ) else {
+            return Err(AppError::Unsupported(
+                "text source changed; rerun or refine detection".into(),
+            ));
+        };
+        if preview_start > preview_end {
+            return Err(AppError::DetectedRange(DetectedRangeError::EndBeforeStart));
+        }
+        // Unresolvable *selected* bounds fall through to seeding, which reports
+        // precisely which boundary is missing.
+        if let (Some(selected_start), Some(selected_end)) = (
+            order_of(&selected_range.start_chapter_id),
+            order_of(&selected_range.end_chapter_id),
+        ) {
+            if selected_start < preview_start || selected_end > preview_end {
+                return Err(AppError::Unsupported(
+                    "selected range must lie within the detected range".into(),
+                ));
+            }
+        }
     }
     let mapping = if !preview.atom_starts.is_empty() {
         seed_anchored_mapping(&project, &preview.atom_starts)
@@ -414,16 +508,19 @@ pub async fn confirm_detected_range_impl(
 #[tauri::command]
 #[specta::specta]
 pub async fn cmd_confirm_detected_range(
+    app: AppHandle,
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
     project_id: ProjectId,
     selected_range: DetectedRange,
     evidence: DetectionPreview,
 ) -> Result<(), AppError> {
+    let preferences = load_preferences(&app_data_dir(&app)?)?;
     confirm_detected_range_impl(
         store.inner().as_ref(),
         &project_id,
         selected_range,
         evidence,
+        preferences.provider_id,
     )
     .await
 }
@@ -436,7 +533,7 @@ pub fn reset_detection_impl(
         .get(project_id)
         .map_err(|error| AppError::Other(format!("store.get: {error}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
-    if !project.receipts.is_empty() {
+    if uploads_started(&project) {
         return Err(AppError::Unsupported(
             "cannot reset detection after uploads have begun".into(),
         ));
@@ -453,11 +550,11 @@ pub fn reset_detection_impl(
     }
 
     let mut reset = false;
-    let mut uploads_started = false;
+    let mut raced_uploads = false;
     store
         .update(project_id, &mut |project| {
-            if !project.receipts.is_empty() {
-                uploads_started = true;
+            if uploads_started(project) {
+                raced_uploads = true;
                 return;
             }
             if project
@@ -473,7 +570,7 @@ pub fn reset_detection_impl(
             }
         })
         .map_err(|error| AppError::Other(format!("store.update: {error}")))?;
-    if uploads_started {
+    if raced_uploads {
         return Err(AppError::Unsupported(
             "cannot reset detection after uploads have begun".into(),
         ));

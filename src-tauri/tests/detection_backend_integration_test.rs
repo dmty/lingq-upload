@@ -64,6 +64,7 @@ async fn detect_and_confirm(fixture: &BackendFixture) -> DetectionPreview {
         &fixture.id,
         preview.range.clone(),
         preview.clone(),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -99,6 +100,7 @@ async fn renamed_loose_source_rejects_stale_confirmation_without_mutation() {
         &fixture.id,
         preview.range.clone(),
         preview,
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap_err();

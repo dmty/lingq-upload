@@ -376,9 +376,15 @@ async fn assert_confirm_rejected_unchanged(
     let before = store.get(&project.id).unwrap().unwrap();
     let calls_before = store.update_calls();
 
-    let error = confirm_detected_range_impl(store, &project.id, selected_range, preview)
-        .await
-        .unwrap_err();
+    let error = confirm_detected_range_impl(
+        store,
+        &project.id,
+        selected_range,
+        preview,
+        TranscribeProviderId::Groq,
+    )
+    .await
+    .unwrap_err();
 
     assert!(
         matches!(
@@ -411,7 +417,7 @@ async fn assert_confirmed_condition(
     track_count: usize,
     expected_condition: MismatchCondition,
 ) {
-    let mut fixture = availability_project(chapter_count, track_count);
+    let mut fixture = groq_project(chapter_count, track_count);
     fixture.project.confirmed_at = Some(Utc::now());
     store.put(&fixture.project).unwrap();
     let selected_range = range(1, chapter_count - 2);
@@ -422,6 +428,7 @@ async fn assert_confirmed_condition(
         &fixture.project.id,
         selected_range.clone(),
         preview(range(0, chapter_count - 1)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -442,7 +449,7 @@ async fn assert_confirmed_condition(
 async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
     let probe = UpdateProbeStore::new(store);
 
-    let mut fixture = availability_project(6, 3);
+    let mut fixture = groq_project(6, 3);
     fixture.project.confirmed_at = Some(Utc::now());
     probe.put(&fixture.project).unwrap();
     let selected_range = range(2, 4);
@@ -456,6 +463,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         selected_range.clone(),
         transient_preview,
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -540,7 +548,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         )
     );
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     assert_confirm_rejected_unchanged(
         &probe,
         fixture.project,
@@ -555,7 +563,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
     )
     .await;
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     assert_confirm_rejected_unchanged(
         &probe,
         fixture.project,
@@ -567,7 +575,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
     )
     .await;
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     let mut invalid_preview = preview(range(1, 4));
     invalid_preview.range.start_chapter_id = ChapterId("missing-preview".into());
     assert_confirm_rejected_unchanged(
@@ -576,12 +584,12 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         range(1, 4),
         invalid_preview,
         "missing preview boundary",
-        ExpectedValidationError::DetectedRange,
-        "missing",
+        ExpectedValidationError::Unsupported,
+        "text source changed",
     )
     .await;
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     assert_confirm_rejected_unchanged(
         &probe,
         fixture.project,
@@ -599,7 +607,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         ("negative confidence", -0.01),
         ("confidence over one", 1.01),
     ] {
-        let fixture = availability_project(6, 3);
+        let fixture = groq_project(6, 3);
         let mut invalid_preview = preview(range(1, 4));
         invalid_preview.confidence = confidence;
         assert_confirm_rejected_unchanged(
@@ -626,7 +634,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
             None,
         ),
     ] {
-        let fixture = availability_project(6, 3);
+        let fixture = groq_project(6, 3);
         let mut invalid_preview = preview(range(1, 4));
         invalid_preview.align_source = align_source;
         invalid_preview.provider_id = provider_id;
@@ -646,7 +654,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         ("overlong head preview", true),
         ("overlong tail preview", false),
     ] {
-        let fixture = availability_project(6, 3);
+        let fixture = groq_project(6, 3);
         let mut invalid_preview = preview(range(1, 4));
         if head_overlong {
             invalid_preview.transcript_head_preview = Some("界".repeat(241));
@@ -665,7 +673,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         .await;
     }
 
-    let fixture = availability_project(5, 3);
+    let fixture = groq_project(5, 3);
     assert_confirm_rejected_unchanged(
         &probe,
         fixture.project,
@@ -677,7 +685,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
     )
     .await;
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     let failing = UpdateProbeStore::failing(store);
     failing.put(&fixture.project).unwrap();
     let before = failing.get(&fixture.project.id).unwrap().unwrap();
@@ -686,6 +694,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap_err();
@@ -696,7 +705,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
     assert_eq!(failing.update_calls(), 1);
     assert_eq!(failing.get(&fixture.project.id).unwrap().unwrap(), before);
 
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     let interleaving = UpdateProbeStore::changing_selection(store);
     interleaving.put(&fixture.project).unwrap();
     let mut expected_after_interleave = fixture.project.clone();
@@ -708,6 +717,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await;
     assert!(
@@ -733,6 +743,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -760,6 +771,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -819,6 +831,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -844,6 +857,7 @@ async fn run_detection_confirmation_reset_contract(store: &dyn ProjectStore) {
         &fixture.project.id,
         range(1, 4),
         preview(range(1, 4)),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -878,7 +892,7 @@ async fn json_store_passes_detection_confirmation_reset_contract() {
 async fn collapsed_range_confirm_packs_all_eligible_chapters() {
     let store = InMemoryProjectStore::new();
     let probe = UpdateProbeStore::new(&store);
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     probe.put(&fixture.project).unwrap();
     let selected = range(2, 2);
 
@@ -887,6 +901,7 @@ async fn collapsed_range_confirm_packs_all_eligible_chapters() {
         &fixture.project.id,
         selected.clone(),
         preview(selected.clone()),
+        TranscribeProviderId::Groq,
     )
     .await
     .unwrap();
@@ -908,7 +923,7 @@ async fn collapsed_range_confirm_packs_all_eligible_chapters() {
 async fn atom_start_confirm_packs_chapters_between_audio_parts() {
     let store = InMemoryProjectStore::new();
     let probe = UpdateProbeStore::new(&store);
-    let fixture = availability_project(6, 3);
+    let fixture = groq_project(6, 3);
     probe.put(&fixture.project).unwrap();
     let selected = range(0, 5);
     let mut preview = preview(selected.clone());
@@ -927,9 +942,15 @@ async fn atom_start_confirm_packs_chapters_between_audio_parts() {
         },
     ];
 
-    confirm_detected_range_impl(&probe, &fixture.project.id, selected, preview)
-        .await
-        .unwrap();
+    confirm_detected_range_impl(
+        &probe,
+        &fixture.project.id,
+        selected,
+        preview,
+        TranscribeProviderId::Groq,
+    )
+    .await
+    .unwrap();
 
     let mapping = probe
         .get(&fixture.project.id)
@@ -1377,9 +1398,15 @@ async fn run_auto_consideration(case: AutoCase) -> AutoCounters {
 
     match case.action {
         Some(LocalAction::Refine) => {
-            confirm_detected_range_impl(&store, &project_id, range(2, 3), preview(range(1, 4)))
-                .await
-                .unwrap_or_else(|error| panic!("{}: refine confirm failed: {error}", case.name));
+            confirm_detected_range_impl(
+                &store,
+                &project_id,
+                range(2, 3),
+                preview(range(1, 4)),
+                TranscribeProviderId::Groq,
+            )
+            .await
+            .unwrap_or_else(|error| panic!("{}: refine confirm failed: {error}", case.name));
         }
         Some(LocalAction::Reset) => {
             reset_detection_impl(&store, &project_id)
