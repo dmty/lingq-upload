@@ -65,9 +65,7 @@
   >
     <div
       data-tauri-drag-region="deep"
-      class="flex h-[52px] flex-none items-end border-b px-[8px] pb-[6px] transition-colors duration-120 {scrolled
-        ? 'border-sidebar-border'
-        : 'border-transparent'}"
+      class="flex h-[52px] flex-none items-end px-[8px] pb-[6px]"
     >
       <span class="pl-[64px] text-xs font-semibold text-fg-muted">
         LingQ Importer
@@ -99,7 +97,9 @@
   </div>
 
   <main
-    class="px-8 pt-[36px] pb-8"
+    class="border-t px-8 pt-[36px] pb-8 transition-colors duration-120 {scrolled
+      ? 'border-sidebar-border'
+      : 'border-transparent'}"
     onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
   >
     {@render children?.()}

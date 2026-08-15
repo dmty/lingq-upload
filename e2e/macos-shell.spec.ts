@@ -362,18 +362,28 @@ test.describe("sheets", () => {
     expect(probe.cardBg).not.toBe("rgba(0, 0, 0, 0)");
   });
 
-  test("reduced motion removes the sheet transform", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
+  test("the sheet animates normally, but reduced motion suppresses it", async ({
+    page,
+  }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
-    const duration = await page.evaluate(() => {
-      const el = document.createElement("dialog");
-      document.body.append(el);
-      el.showModal();
-      const value = getComputedStyle(el).animationDuration;
-      el.close();
-      return value;
-    });
-    expect(["0s", "0ms"]).toContain(duration);
+    const measure = () =>
+      page.evaluate(() => {
+        const el = document.createElement("dialog");
+        document.body.append(el);
+        el.showModal();
+        const value = getComputedStyle(el).animationDuration;
+        el.close();
+        el.remove();
+        return value;
+      });
+
+    // 0s/0ms is also the initial value, so on its own the reduced-motion
+    // assertion below can't tell "suppressed" from "never animated" —
+    // this confirms the animation is really there when motion is allowed.
+    expect(await measure()).toBe("0.28s");
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(["0s", "0ms"]).toContain(await measure());
   });
 });

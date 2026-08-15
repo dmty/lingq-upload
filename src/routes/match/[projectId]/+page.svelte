@@ -977,7 +977,16 @@
               queueMicrotask(() =>
                 document
                   .querySelector('[data-testid="mismatch-response-split_proportional"]')
-                  ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                  ?.scrollIntoView({
+                    // An explicit JS `behavior` overrides CSS scroll-behavior,
+                    // so prefers-reduced-motion has to be checked here too.
+                    behavior: window.matchMedia(
+                      "(prefers-reduced-motion: reduce)",
+                    ).matches
+                      ? "auto"
+                      : "smooth",
+                    block: "center",
+                  }),
               );
             }}
           />

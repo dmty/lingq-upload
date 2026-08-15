@@ -50,6 +50,7 @@
   --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 0 rgb(0 0 0 / 0.02);
+  --shadow-sheet: 0 12px 32px rgb(0 0 0 / 0.28);
 }
 
 /* Utilities read var(--color-*), so overriding the vars is the whole
@@ -79,6 +80,7 @@
     --color-error: #ff6961;
     --color-error-soft: #3a1c1a;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 0 rgb(0 0 0 / 0.3);
+    --shadow-sheet: 0 12px 32px rgb(0 0 0 / 0.55);
   }
 }
 
@@ -327,7 +329,17 @@
    not just out-specificity a component rule. macOS sheets slide down from the
    titlebar and stay attached to the top edge rather than floating mid-window;
    only the bottom corners are rounded because the top edge is flush with the
-   window edge. */
+   window edge.
+
+   The radius is set here AND on .sheet-card, which looks redundant but isn't
+   about the dialog being transparent — a transparent parent still clips a
+   child to its rounded padding box regardless. The real reason is `overflow`:
+   the HTML spec gives dialog:modal `overflow: auto`, which establishes a
+   clip, and with border: 0 and padding: 0 the padding box equals the border
+   box, so this radius already rounds .sheet-card's fill through that clip.
+   This declaration is load-bearing (it also shapes the box-shadow outline);
+   .sheet-card's matching radius is belt-and-braces in case a UA clips
+   differently. */
 dialog {
   top: 0;
   margin-block: 0;
@@ -338,7 +350,7 @@ dialog {
   border-end-start-radius: var(--radius-lg);
   border-end-end-radius: var(--radius-lg);
   background: transparent;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+  box-shadow: var(--shadow-sheet);
 }
 
 dialog[open] {
@@ -371,8 +383,14 @@ dialog::backdrop {
      "no motion". A blanket `transform: none` would go further and strip
      several layout-positioning translates (centring dots, an input's inline
      button) that are static, not animated — those aren't motion and reduced
-     motion has no business touching them. */
-  *,
+     motion has no business touching them.
+
+     .animate-spin/.animate-pulse are excluded: they're small-area loading
+     indicators, the canonical WCAG 2.3.3 exception, and freezing them removes
+     the app's only in-flight-work feedback. Keep the :not() rather than
+     dropping it — it's the only thing stopping this rule from re-freezing
+     every spinner in the app. */
+  *:not(.animate-spin, .animate-pulse),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
