@@ -109,6 +109,11 @@ pub fn title_match(
     if is_generic_title(&first_norm) || is_generic_title(&last_norm) {
         return None;
     }
+    // A single track carries one title for both boundaries; a one-chapter range
+    // built from it would be a guess, not a match.
+    if first_norm == last_norm {
+        return None;
+    }
 
     let (start_idx, start_score) = best_unique_match(&first_norm, chapters, config)?;
     let (end_idx, end_score) = best_unique_match(&last_norm, chapters, config)?;
@@ -127,17 +132,46 @@ pub fn title_match(
 }
 
 fn is_generic_title(normalized: &str) -> bool {
-    const KEYWORDS: &[&str] = &["chapter", "track", "part"];
+    const KEYWORDS: &[&str] = &[
+        "chapter",
+        "track",
+        "part",
+        "глава",
+        "часть",
+        "трек",
+        "kapitel",
+        "teil",
+        "spur",
+        "capítulo",
+        "capitulo",
+        "parte",
+        "pista",
+        "chapitre",
+        "partie",
+        "piste",
+        "トラック",
+        "パート",
+    ];
     let tokens: Vec<&str> = normalized.split_whitespace().collect();
     match tokens.as_slice() {
         [kw, num] if KEYWORDS.contains(kw) && is_digit_token(num) => true,
-        [combined] => KEYWORDS.iter().any(|kw| {
-            combined
-                .strip_prefix(kw)
-                .is_some_and(|rest| !rest.is_empty() && is_digit_token(rest))
-        }),
+        [combined] => {
+            is_numbered_counter(combined)
+                || KEYWORDS.iter().any(|kw| {
+                    combined
+                        .strip_prefix(kw)
+                        .is_some_and(|rest| !rest.is_empty() && is_digit_token(rest))
+                })
+        }
         _ => false,
     }
+}
+
+/// CJK counter form: 第1章 / 1章 / 第2話.
+fn is_numbered_counter(token: &str) -> bool {
+    let rest = token.strip_prefix('第').unwrap_or(token);
+    let digits = rest.trim_end_matches(['章', '話', '巻', '部']);
+    digits.len() < rest.len() && is_digit_token(digits)
 }
 
 fn is_digit_token(s: &str) -> bool {
@@ -269,11 +303,12 @@ fn rank_boundary<'a>(
             } else {
                 take_tail_probe(&body, len)
             };
+            let score = transcript_lcs_score(transcript_norm, &probe);
             ChapterCandidate {
                 chapter_id: ch.id.clone(),
                 order: ch.order,
                 title: ch.title.clone(),
-                score: transcript_lcs_score(transcript_norm, &probe),
+                score,
             }
         })
         .collect();
@@ -301,12 +336,13 @@ fn rank_boundary<'a>(
         && best >= config.transcript_confidence
         && best - runner_up >= config.runner_up_gap
     {
-        let best_c = scored[0].clone();
-        return BoundaryResult::Confident {
-            chapter_id: best_c.chapter_id.clone(),
-            score: best_c.score,
-            top: scored,
-        };
+        if let Some(best_c) = scored.first().cloned() {
+            return BoundaryResult::Confident {
+                chapter_id: best_c.chapter_id,
+                score: best_c.score,
+                top: scored,
+            };
+        }
     }
     BoundaryResult::LowConfidence { top: scored }
 }
@@ -329,9 +365,12 @@ fn title_page_body(best: &Chapter, transcript_len: usize, chapters: &[&Chapter])
         })
 }
 
+/// Both sides of a comparison need this much text before a ratio means anything.
+const MIN_MATCH_SCALARS: usize = 20;
+
 fn prepare_transcript(transcript: &str) -> Result<String, BoundaryResult> {
     let norm = normalize_for_alignment(transcript);
-    if norm.is_empty() || norm.chars().count() < 20 {
+    if norm.chars().count() < MIN_MATCH_SCALARS {
         return Err(BoundaryResult::ContentPoor);
     }
     Ok(norm)
@@ -388,25 +427,28 @@ fn rank_in_bodies(
     scored.truncate(3);
     let best = scored.first().map(|c| c.score).unwrap_or(0.0);
     let runner_up = scored.get(1).map(|c| c.score).unwrap_or(0.0);
-    let best_chapter = scored.first().and_then(|best_c| {
-        chapters
-            .iter()
-            .find(|ch| ch.id == best_c.chapter_id)
-    });
+    let best_chapter = scored
+        .first()
+        .and_then(|best_c| chapters.iter().find(|ch| ch.id == best_c.chapter_id));
     let ambiguous = best_chapter.is_some_and(|best_ch| {
         duplicate_title(best_ch, &chapters.iter().collect::<Vec<_>>())
-            || title_page_body(best_ch, transcript_len, &chapters.iter().collect::<Vec<_>>())
+            || title_page_body(
+                best_ch,
+                transcript_len,
+                &chapters.iter().collect::<Vec<_>>(),
+            )
     });
     if !ambiguous
         && best >= config.transcript_confidence
         && best - runner_up >= config.runner_up_gap
     {
-        let best_c = scored[0].clone();
-        return BoundaryResult::Confident {
-            chapter_id: best_c.chapter_id.clone(),
-            score: best_c.score,
-            top: scored,
-        };
+        if let Some(best_c) = scored.first().cloned() {
+            return BoundaryResult::Confident {
+                chapter_id: best_c.chapter_id,
+                score: best_c.score,
+                top: scored,
+            };
+        }
     }
     BoundaryResult::LowConfidence { top: scored }
 }
