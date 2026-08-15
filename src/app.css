@@ -310,6 +310,69 @@
     outline: 2px solid var(--color-fg);
     outline-offset: 2px;
   }
+
+  /* Surface fill shared by every sheet's card; layered like .field/.push-button
+     because nothing here competes with a Tailwind utility on the same element. */
+  .sheet-card {
+    background: var(--color-surface);
+    border-end-start-radius: var(--radius-lg);
+    border-end-end-radius: var(--radius-lg);
+  }
+}
+
+/* Unlayered: the UA stylesheet centres <dialog> and this has to win outright,
+   not just out-specificity a component rule. macOS sheets slide down from the
+   titlebar and stay attached to the top edge rather than floating mid-window;
+   only the bottom corners are rounded because the top edge is flush with the
+   window edge. */
+dialog {
+  top: 0;
+  margin-block: 0;
+  margin-inline: auto;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-end-start-radius: var(--radius-lg);
+  border-end-end-radius: var(--radius-lg);
+  background: transparent;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+}
+
+dialog[open] {
+  animation: sheet-in 280ms var(--ease-snappy);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* !important + the type+attribute selector's specificity keeps this ahead
+     of the blanket guard below, so the sheet gets no transform at all rather
+     than a near-zero one. */
+  dialog[open] {
+    animation: none !important;
+  }
+
+  /* Accessibility floor: reduced motion suppresses transforms and shrinks
+     durations everywhere, not just the sheet. 0.01ms rather than 0s so any
+     transitionend/animationend listener still fires. The only static transform
+     in the app is ChapterInspector's active:scale-95 press effect — decorative,
+     not layout-critical — so neutralising transform outright is safe. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
 }
 
 /* Unlayered, not @layer components: Tailwind's utilities layer comes after

@@ -21,6 +21,7 @@
   let pending = $state<Awaited<ReturnType<typeof check>>>(null);
   let installing = $state(false);
   let error = $state<string | null>(null);
+  let scrolled = $state(false);
 
   $effect(() => {
     if (!import.meta.env.PROD) return;
@@ -64,7 +65,9 @@
   >
     <div
       data-tauri-drag-region="deep"
-      class="flex h-[52px] flex-none items-end px-[8px] pb-[6px]"
+      class="flex h-[52px] flex-none items-end border-b px-[8px] pb-[6px] transition-colors duration-120 {scrolled
+        ? 'border-sidebar-border'
+        : 'border-transparent'}"
     >
       <span class="pl-[64px] text-xs font-semibold text-fg-muted">
         LingQ Importer
@@ -95,7 +98,10 @@
     </nav>
   </div>
 
-  <main class="px-8 pt-[36px] pb-8">
+  <main
+    class="px-8 pt-[36px] pb-8"
+    onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
+  >
     {@render children?.()}
   </main>
 </div>
@@ -110,7 +116,7 @@
     later();
   }}
 >
-  <div class="modal-card">
+  <div class="modal-card sheet-card">
     <h2 id="update-title" class="text-lg font-semibold text-fg">
       Update available
     </h2>
@@ -134,31 +140,22 @@
 </dialog>
 
 <style>
+  /* px, not rem: html sets font-size to 13px, so rem values here would
+     render smaller than intended — see src/app.css. */
   dialog {
-    width: min(24rem, calc(100vw - 2rem));
-    max-width: none;
-    padding: 0;
-    border: 0;
-    border-radius: 0.5rem;
-    background: transparent;
-    box-shadow: var(--shadow-card);
-  }
-
-  dialog::backdrop {
-    background: rgb(0 0 0 / 0.55);
+    width: min(384px, calc(100vw - 32px));
   }
 
   .modal-card {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1.5rem;
-    background: var(--color-surface);
+    gap: 16px;
+    padding: 24px;
   }
 
   .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 0.5rem;
+    gap: 8px;
   }
 </style>

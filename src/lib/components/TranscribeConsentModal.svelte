@@ -90,7 +90,7 @@
   }}
   onclose={() => returnFocusTo?.focus()}
 >
-  <div class="modal-card">
+  <div class="modal-card sheet-card">
     <h2
       id="transcribe-consent-title"
       class="title text-lg font-semibold text-fg"
@@ -153,26 +153,17 @@
 </dialog>
 
 <style>
+  /* px, not rem: html sets font-size to 13px, so rem values here would
+     render smaller than intended — see src/app.css. */
   dialog {
-    width: min(36rem, calc(100vw - 2rem));
-    max-width: none;
-    padding: 0;
-    border: 0;
-    border-radius: 0.5rem;
-    background: transparent;
-    box-shadow: var(--shadow-card);
-  }
-
-  dialog::backdrop {
-    background: rgb(0 0 0 / 0.55);
+    width: min(576px, calc(100vw - 32px));
   }
 
   .modal-card {
     display: grid;
     grid-template-columns: 1fr auto auto;
-    gap: 1rem 0.5rem;
-    padding: 1.5rem;
-    background: var(--color-surface);
+    gap: 16px 8px;
+    padding: 24px;
   }
 
   .title,

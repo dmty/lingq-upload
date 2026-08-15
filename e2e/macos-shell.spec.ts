@@ -336,3 +336,44 @@ test.describe("button primitive", () => {
     await expect(filled).toHaveCount(0);
   });
 });
+
+test.describe("sheets", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("a modal is attached to the top edge, not centred", async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const probe = await page.evaluate(() => {
+      const el = document.createElement("dialog");
+      el.innerHTML = '<div class="sheet-card">probe</div>';
+      document.body.append(el);
+      el.showModal();
+      const card = el.querySelector(".sheet-card")!;
+      return {
+        box: el.getBoundingClientRect(),
+        cardBg: getComputedStyle(card).backgroundColor,
+      };
+    });
+    expect(probe.box.y).toBeLessThan(24);
+    // Position alone would pass even if .sheet-card did nothing — the dialog
+    // rule sets top:0 on its own. Assert the card fill actually applied too.
+    expect(probe.cardBg).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("reduced motion removes the sheet transform", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const duration = await page.evaluate(() => {
+      const el = document.createElement("dialog");
+      document.body.append(el);
+      el.showModal();
+      const value = getComputedStyle(el).animationDuration;
+      el.close();
+      return value;
+    });
+    expect(["0s", "0ms"]).toContain(duration);
+  });
+});
