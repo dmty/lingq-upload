@@ -198,7 +198,7 @@
 {:else}
   <button
     type="button"
-    class="grid grid-cols-[64px_1fr] gap-4 items-center text-left w-full min-h-[88px] py-3 transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:bg-transparent"
+    class="hover-through grid grid-cols-[64px_1fr] gap-4 items-center text-left w-full min-h-[88px] py-3 transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:bg-transparent"
     aria-label={`Open "${entry.title}" — ${statusHumanLabel}`}
     disabled={rowDisabled}
     title={rowDisabled ? "No LingQ collection id" : undefined}
@@ -226,7 +226,7 @@
     <div class="flex items-center gap-2 text-xs">
       <button
         type="button"
-        class="rounded-sm px-2 py-1 font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+        class="hover-through rounded-sm px-2 py-1 font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         disabled={rowDisabled}
         onclick={handlePrimary}
       >

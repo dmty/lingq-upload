@@ -413,15 +413,20 @@ dialog::backdrop {
   color: var(--color-accent-fg);
 }
 
+/* 87%, not 80%: the lowest mix that still clears 4.5:1 against the accent
+   fill in both colour schemes (measured ~4.55:1 light, ~4.75:1 dark). */
 [aria-selected="true"] :where(.text-fg-muted, .text-fg-subtle) {
-  color: color-mix(in srgb, var(--color-accent-fg) 80%, transparent);
+  color: color-mix(in srgb, var(--color-accent-fg) 87%, transparent);
 }
 
-/* A child's own hover utility (e.g. LibraryRow's button/link) can paint over
-   the selected row's fill; keep the fill showing through on hover so the
-   remapped foreground above stays legible instead of going invisible on the
-   child's hover background. */
-[aria-selected="true"] :where(button, a):hover {
+/* Scoped to .hover-through (LibraryRow's row button and primary action link)
+   rather than every button/a: those bring no background of their own, so
+   their hover utility paints directly over the selected row's fill and
+   strands the remapped white text. A control with its own background (e.g.
+   MappingGrid's Confirm, `bg-surface`) is untouched by the remap above and
+   must keep its own hover — zeroing it out would expose the accent fill
+   behind an unmapped foreground instead. */
+[aria-selected="true"] .hover-through:hover {
   background-color: transparent;
 }
 

@@ -326,6 +326,50 @@ test.describe("AppKit list and status treatment", () => {
     });
     expect(worst).toBeGreaterThan(4.5);
   });
+
+  test("hovering the selected row's own controls keeps the title legible", async ({
+    page,
+  }) => {
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/library");
+      await page.waitForLoadState("networkidle");
+      await page.keyboard.press("ArrowDown");
+      const row = page.locator('[aria-selected="true"]').first();
+      await expect(row).toBeVisible();
+      // .hover-through: this is the row's own button, whose hover would
+      // otherwise paint over the accent fill and strand the white title.
+      await row.getByRole("button", { name: /^Open/ }).hover();
+      await page.waitForTimeout(250); // let transition-colors settle
+      const ratio = await row.evaluate((el) => {
+        const composite = (c: string) => {
+          const cvs = document.createElement("canvas");
+          cvs.width = cvs.height = 1;
+          const ctx = cvs.getContext("2d")!;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, 1, 1);
+          ctx.fillStyle = c;
+          ctx.fillRect(0, 0, 1, 1);
+          return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+        };
+        const lum = (c: string) => {
+          const [r, g, b] = composite(c);
+          const f = (v: number) => {
+            const s = v / 255;
+            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+          };
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+        const fill = lum(getComputedStyle(el).backgroundColor);
+        const title = el.querySelector('[data-testid="library-title"]')!;
+        const [a, b] = [lum(getComputedStyle(title).color), fill].sort(
+          (p, q) => q - p,
+        );
+        return (a + 0.05) / (b + 0.05);
+      });
+      expect(ratio, `title contrast on hover in ${colorScheme} mode`).toBeGreaterThan(4.5);
+    }
+  });
 });
 
 function matchSelectionFixtureScript(key: string): string {
@@ -333,6 +377,42 @@ function matchSelectionFixtureScript(key: string): string {
     { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
   ];
   const mappingState = { pairs: [], parking_lot: [], op_id: 0 };
+  return `;(() => {
+    const key = ${JSON.stringify(key)};
+    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
+    window.__mappingState__.seed(key, ${JSON.stringify(mappingState)});
+  })();`;
+}
+
+// A low-confidence, untouched pair so the grid renders its Confirm button —
+// the control G1 is about (its own bg-surface, untouched by the colour remap).
+function matchConfirmFixtureScript(key: string): string {
+  const chapters = [
+    { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
+  ];
+  const mappingState = {
+    pairs: [
+      {
+        chapter_id: "idx:0",
+        track_id: "t0",
+        confidence: 0.5,
+        original_confidence: 0.5,
+        touched: false,
+      },
+    ],
+    buckets: [
+      {
+        trackId: "t0",
+        atomTitle: "Track One",
+        atomDurationSec: 120,
+        charsPerSec: 10,
+        audioPath: null,
+        window: [0, 120],
+      },
+    ],
+    parking_lot: [],
+    op_id: 0,
+  };
   return `;(() => {
     const key = ${JSON.stringify(key)};
     window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
@@ -356,7 +436,7 @@ test.describe("mapping grid selection", () => {
     await row.click();
     await expect(row).toHaveAttribute("aria-selected", "true");
     await page.waitForTimeout(250); // let the row's transition-colors settle
-    const ratio = await row.evaluate((el) => {
+    const contrastRatios = await row.evaluate((el) => {
       // Read colours back through a canvas: getComputedStyle can serialize
       // color-mix()/AccentColor output as oklab() with the mix's own alpha,
       // which a regex-based channel read would misparse. Compositing onto a
@@ -379,14 +459,71 @@ test.describe("mapping grid selection", () => {
         };
         return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
       };
-      const fill = lum(getComputedStyle(el).backgroundColor);
+      const contrast = (colorA: string, colorB: string) => {
+        const [a, b] = [lum(colorA), lum(colorB)].sort((p, q) => q - p);
+        return (a + 0.05) / (b + 0.05);
+      };
+      const fillColor = getComputedStyle(el).backgroundColor;
       const title = el.querySelector("span.flex-1.truncate")!;
-      const [a, b] = [lum(getComputedStyle(title).color), fill].sort(
-        (p, q) => q - p,
-      );
-      return (a + 0.05) / (b + 0.05);
+      const chapterNumber = el.querySelector(
+        '[data-testid="chapter-number"]',
+      )!;
+      return {
+        title: contrast(getComputedStyle(title).color, fillColor),
+        // The muted chapter-number remap (.text-fg-muted) is a separate,
+        // lower-contrast mix — this is the regression probe for it.
+        chapterNumber: contrast(
+          getComputedStyle(chapterNumber).color,
+          fillColor,
+        ),
+      };
     });
-    expect(ratio).toBeGreaterThan(4.5);
+    expect(contrastRatios.title).toBeGreaterThan(4.5);
+    expect(contrastRatios.chapterNumber).toBeGreaterThan(4.5);
+  });
+
+  test("Confirm keeps its own background on hover inside a selected row", async ({
+    page,
+  }) => {
+    const key = "match-confirm-hover-fixture";
+    await page.addInitScript(matchConfirmFixtureScript(key));
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto(`/match/${key}`);
+      await page.waitForLoadState("networkidle");
+      const row = page.getByTestId("mapping-chapter-row").first();
+      await row.click();
+      await expect(row).toHaveAttribute("aria-selected", "true");
+      const confirm = page.getByTestId("confirm-pair");
+      await confirm.hover();
+      await page.waitForTimeout(250); // let transition-colors settle
+      const ratio = await confirm.evaluate((el) => {
+        const composite = (c: string) => {
+          const cvs = document.createElement("canvas");
+          cvs.width = cvs.height = 1;
+          const ctx = cvs.getContext("2d")!;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, 1, 1);
+          ctx.fillStyle = c;
+          ctx.fillRect(0, 0, 1, 1);
+          return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+        };
+        const lum = (c: string) => {
+          const [r, g, b] = composite(c);
+          const f = (v: number) => {
+            const s = v / 255;
+            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+          };
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+        const cs = getComputedStyle(el);
+        const [a, b] = [lum(cs.color), lum(cs.backgroundColor)].sort(
+          (p, q) => q - p,
+        );
+        return (a + 0.05) / (b + 0.05);
+      });
+      expect(ratio, `Confirm hover contrast in ${colorScheme} mode`).toBeGreaterThan(4.5);
+    }
   });
 });
 
