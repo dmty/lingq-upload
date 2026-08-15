@@ -118,7 +118,7 @@
           data-testid="inspector-play"
           onclick={toggle}
           aria-label={playing ? "Pause" : "Play"}
-          class="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-accent-fg transition hover:bg-accent-hover active:scale-95"
+          class="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-accent-fg transition hover:bg-accent-hover active:scale-95 focus-visible:outline-2 focus-visible:outline-fg focus-visible:outline-offset-2"
         >
           {#if playing}
             <svg

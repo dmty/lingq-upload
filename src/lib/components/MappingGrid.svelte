@@ -445,6 +445,6 @@
 
 <style>
   li.selected {
-    background-color: var(--color-accent-soft);
+    background-color: var(--color-accent);
   }
 </style>

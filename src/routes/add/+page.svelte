@@ -481,7 +481,7 @@
         <input
           type="text"
           bind:value={title}
-          class="field"
+          class="field field-lg"
           disabled={busy}
         />
       </label>
@@ -492,7 +492,7 @@
         <select
           bind:value={lang}
           disabled={busy || visibleLanguages.length === 0}
-          class="field"
+          class="field field-lg"
         >
           <option value="" disabled>
             {languagesError ? "Could not load languages" : "Select language…"}

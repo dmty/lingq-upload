@@ -325,8 +325,10 @@
   }
 }
 
-/* Unlayered: the UA stylesheet centres <dialog> and this has to win outright,
-   not just out-specificity a component rule. macOS sheets slide down from the
+/* Unlayered for consistency with the other element-level chrome below (not
+   because it needs to beat the UA stylesheet — author-origin rules always
+   win over UA-origin ones regardless of layer, so a layered rule would
+   center-override <dialog> just as well). macOS sheets slide down from the
    titlebar and stay attached to the top edge rather than floating mid-window;
    only the bottom corners are rounded because the top edge is flush with the
    window edge.
@@ -406,12 +408,21 @@ dialog::backdrop {
    carrying their own explicit colour utility that need remapping onto the
    fill's own foreground; :where() keeps specificity low among these unlayered
    rules so a future rule with a real selector can still override them. */
-[aria-selected="true"] :where(.text-fg, .text-accent):not(.cover-placeholder) {
+[aria-selected="true"]
+  :where(.text-fg, .text-accent):not(.cover-placeholder, .btn) {
   color: var(--color-accent-fg);
 }
 
 [aria-selected="true"] :where(.text-fg-muted, .text-fg-subtle) {
   color: color-mix(in srgb, var(--color-accent-fg) 80%, transparent);
+}
+
+/* A child's own hover utility (e.g. LibraryRow's button/link) can paint over
+   the selected row's fill; keep the fill showing through on hover so the
+   remapped foreground above stays legible instead of going invisible on the
+   child's hover background. */
+[aria-selected="true"] :where(button, a):hover {
+  background-color: transparent;
 }
 
 /* A status dot's own colour can coincidentally match the system accent

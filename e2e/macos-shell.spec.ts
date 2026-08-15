@@ -88,6 +88,26 @@ test.describe("source list sidebar", () => {
     expect(before).not.toBeNull();
     expect(after!.y).toBe(before!.y);
   });
+
+  test("the scroll hairline only appears once content has scrolled", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+    const main = page.locator("main");
+    expect(await main.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(
+      "rgba(0, 0, 0, 0)",
+    );
+    await main.evaluate((el) => {
+      el.style.height = "200px";
+      el.scrollTop = 400;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    await page.waitForTimeout(150); // let the 120ms border-color transition settle
+    expect(
+      await main.evaluate((el) => getComputedStyle(el).borderTopColor),
+    ).not.toBe("rgba(0, 0, 0, 0)");
+  });
 });
 
 test.describe("overlay titlebar", () => {
@@ -308,6 +328,68 @@ test.describe("AppKit list and status treatment", () => {
   });
 });
 
+function matchSelectionFixtureScript(key: string): string {
+  const chapters = [
+    { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
+  ];
+  const mappingState = { pairs: [], parking_lot: [], op_id: 0 };
+  return `;(() => {
+    const key = ${JSON.stringify(key)};
+    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
+    window.__mappingState__.seed(key, ${JSON.stringify(mappingState)});
+  })();`;
+}
+
+test.describe("mapping grid selection", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("the selected chapter row's title stays legible on the fill", async ({
+    page,
+  }) => {
+    const key = "match-selection-fixture";
+    await page.addInitScript(matchSelectionFixtureScript(key));
+    await page.goto(`/match/${key}`);
+    await page.waitForLoadState("networkidle");
+    const row = page.getByTestId("mapping-chapter-row").first();
+    await row.click();
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await page.waitForTimeout(250); // let the row's transition-colors settle
+    const ratio = await row.evaluate((el) => {
+      // Read colours back through a canvas: getComputedStyle can serialize
+      // color-mix()/AccentColor output as oklab() with the mix's own alpha,
+      // which a regex-based channel read would misparse. Compositing onto a
+      // white 1x1 canvas resolves any function/alpha to the true rendered rgb.
+      const composite = (c: string) => {
+        const cvs = document.createElement("canvas");
+        cvs.width = cvs.height = 1;
+        const ctx = cvs.getContext("2d")!;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, 1, 1);
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+        return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+      };
+      const lum = (c: string) => {
+        const [r, g, b] = composite(c);
+        const f = (v: number) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const fill = lum(getComputedStyle(el).backgroundColor);
+      const title = el.querySelector("span.flex-1.truncate")!;
+      const [a, b] = [lum(getComputedStyle(title).color), fill].sort(
+        (p, q) => q - p,
+      );
+      return (a + 0.05) / (b + 0.05);
+    });
+    expect(ratio).toBeGreaterThan(4.5);
+  });
+});
+
 test.describe("button primitive", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
@@ -385,5 +467,29 @@ test.describe("sheets", () => {
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     expect(["0s", "0ms"]).toContain(await measure());
+  });
+
+  test("reduced motion collapses transitions but exempts loading spinners", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const durations = await page.evaluate(() => {
+      const spin = document.createElement("div");
+      spin.className = "animate-spin";
+      document.body.append(spin);
+      const plain = document.createElement("div");
+      document.body.append(plain);
+      const out = {
+        spin: getComputedStyle(spin).animationDuration,
+        plain: getComputedStyle(plain).animationDuration,
+      };
+      spin.remove();
+      plain.remove();
+      return out;
+    });
+    expect(durations.plain).toBe("1e-05s"); // 0.01ms, as Chromium serializes it
+    expect(durations.spin).not.toBe("1e-05s");
   });
 });
