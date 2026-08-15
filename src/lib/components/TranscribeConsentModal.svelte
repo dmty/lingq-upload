@@ -163,7 +163,6 @@
     display: grid;
     grid-template-columns: 1fr auto auto;
     gap: 16px 8px;
-    padding: 24px;
   }
 
   .title,

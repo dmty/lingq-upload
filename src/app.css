@@ -311,9 +311,12 @@
     outline-offset: 2px;
   }
 
-  /* Surface fill shared by every sheet's card; layered like .field/.push-button
-     because nothing here competes with a Tailwind utility on the same element. */
+  /* Surface fill and padding shared by every sheet's card; layered like
+     .field/.push-button because nothing here competes with a Tailwind
+     utility on the same element. Internal layout (grid vs flex, gaps) stays
+     in each component since it differs per sheet. */
   .sheet-card {
+    padding: 24px;
     background: var(--color-surface);
     border-end-start-radius: var(--radius-lg);
     border-end-end-radius: var(--radius-lg);
