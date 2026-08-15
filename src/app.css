@@ -22,7 +22,7 @@
   --color-border: #d5d5da;
   --color-border-strong: #b4b4b9;
   --color-fg: #1d1d1f;
-  --color-fg-muted: #6e6e73;
+  --color-fg-muted: #65656a;
   --color-fg-subtle: #98989d;
 
   /* Literal accent fallback; the @supports block below swaps in the user's
@@ -32,8 +32,9 @@
   --color-accent-soft: #e4edfa;
   --color-accent-fg: #ffffff;
   --color-accent-ring: #0a66d073;
+  --color-on-fill: #ffffff;
 
-  --color-success: #1d7f34;
+  --color-success: #1a7530;
   --color-success-soft: #e6f4e9;
   --color-warning: #a35a00;
   --color-warning-soft: #fdf1e0;
@@ -59,13 +60,14 @@
     --color-border: #3a3a3c;
     --color-border-strong: #545456;
     --color-fg: #f5f5f7;
-    --color-fg-muted: #98989d;
+    --color-fg-muted: #a1a1a6;
     --color-fg-subtle: #6e6e73;
     --color-accent: #4d9bf0;
     --color-accent-hover: #6bacf3;
     --color-accent-soft: #1c3350;
-    --color-accent-fg: #ffffff;
+    --color-accent-fg: #1e1e1e;
     --color-accent-ring: #4d9bf073;
+    --color-on-fill: #1e1e1e;
     --color-success: #32d74b;
     --color-success-soft: #143021;
     --color-warning: #ff9f0a;

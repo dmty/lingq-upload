@@ -15,22 +15,22 @@ test.describe("macOS shell tokens", () => {
     expect(size).toBe("13px");
   });
 
-  test("the accent is no longer the hardcoded indigo", async ({ page }) => {
-    const accent = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-accent")
-        .trim(),
-    );
-    expect(accent).not.toBe("#4f46e5");
-    expect(accent).not.toBe("");
-  });
-
-  test("accent fills declare their own foreground token", async ({ page }) => {
-    const fg = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-accent-fg")
-        .trim(),
-    );
-    expect(fg).not.toBe("");
+  test("accent fills resolve to a real colour, not a literal token", async ({
+    page,
+  }) => {
+    const probe = await page.evaluate(() => {
+      const el = document.createElement("button");
+      el.className = "bg-accent text-accent-fg";
+      document.body.append(el);
+      const cs = getComputedStyle(el);
+      const out = { bg: cs.backgroundColor, fg: cs.color };
+      el.remove();
+      return out;
+    });
+    expect(probe.bg).toMatch(/^rgba?\(/);
+    expect(probe.bg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(probe.bg).not.toBe("rgb(79, 70, 229)"); // the old hardcoded indigo
+    expect(probe.fg).toMatch(/^rgba?\(/);
+    expect(probe.fg).not.toBe(probe.bg);
   });
 });
