@@ -43,7 +43,7 @@
           href={result.lesson_url}
           target="_blank"
           rel="noopener noreferrer"
-          class="h-9"
+          size="lg"
         >
           Open in LingQ
           <svg

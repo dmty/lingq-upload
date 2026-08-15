@@ -194,17 +194,18 @@
   }
 
   /* :global — cancel/accept now land on the element Button.svelte renders,
-     which doesn't carry this file's scope hash. */
-  :global(.cancel) {
+     which doesn't carry this file's scope hash. Scoped to .modal-card so the
+     rule stays local instead of matching any .cancel/.accept in the app. */
+  .modal-card :global(.cancel) {
     grid-column: 2;
   }
 
-  :global(.accept) {
+  .modal-card :global(.accept) {
     grid-column: 3;
   }
 
-  :global(.cancel),
-  :global(.accept) {
+  .modal-card :global(.cancel),
+  .modal-card :global(.accept) {
     grid-row: 4;
   }
 </style>

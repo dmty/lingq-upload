@@ -643,6 +643,7 @@
             <div class="px-3 pt-3">
               <Button
                 data-testid="detection-use-whole-book"
+                size="lg"
                 class="w-full"
                 onclick={onUseWholeBook}
               >

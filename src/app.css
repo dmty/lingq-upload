@@ -303,6 +303,13 @@
     box-shadow: none;
     opacity: 0.5;
   }
+
+  /* outline, not box-shadow: .push-button:active clears box-shadow on press,
+     which would swallow a ring built that way. */
+  .btn:focus-visible {
+    outline: 2px solid var(--color-fg);
+    outline-offset: 2px;
+  }
 }
 
 /* Unlayered, not @layer components: Tailwind's utilities layer comes after
