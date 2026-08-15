@@ -12,7 +12,6 @@
   } = $props();
 
   type Spec = {
-    icon?: string;
     label: string;
     classes: string;
     tooltip: string;
@@ -21,33 +20,29 @@
 
   const specs: Record<Exclude<LibraryStatus, "idle">, Spec> = {
     done: {
-      icon: "✓",
       label: statusLabel("done"),
-      classes: "bg-success-soft text-success",
+      classes: "bg-success",
       tooltip: "Upload complete",
     },
     running: {
       label: statusLabel("running"),
-      classes: "bg-accent-soft text-accent",
+      classes: "bg-accent",
       tooltip: "Upload in progress",
       spinIcon: true,
     },
     paused: {
-      icon: "⏸",
       label: statusLabel("paused"),
-      classes: "bg-surface-sunken text-fg-muted",
+      classes: "bg-fg-subtle",
       tooltip: "Upload paused — resume to continue",
     },
     needs_match: {
-      icon: "⚠",
       label: statusLabel("needs_match"),
-      classes: "bg-warning-soft text-warning",
+      classes: "bg-warning",
       tooltip: "Mapping not confirmed — review and confirm before uploading",
     },
     failed: {
-      icon: "✕",
       label: statusLabel("failed"),
-      classes: "bg-error-soft text-error",
+      classes: "bg-error",
       tooltip: "Upload failed",
     },
   };
@@ -64,13 +59,16 @@
 
 {#if spec}
   <span
-    class="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] font-medium {spec.classes}"
+    class="inline-flex items-center gap-[6px] text-xs font-medium text-fg-muted"
     title={tooltip}
   >
     {#if spec.spinIcon}
       <Spinner size="sm" aria-hidden="true" />
     {:else}
-      <span>{spec.icon}</span>
+      <span
+        class="status-dot h-[8px] w-[8px] flex-none rounded-full {spec.classes}"
+        aria-hidden="true"
+      ></span>
     {/if}
     {spec.label}
   </span>

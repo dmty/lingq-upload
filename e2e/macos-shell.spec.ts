@@ -158,3 +158,61 @@ test.describe("form controls", () => {
     expect(shadow).toContain("3.5px");
   });
 });
+
+function statusEntriesScript(): string {
+  const entry = {
+    id: { content_hash: "book-1", audible_asin: null, isbn13: null, calibre_uuid: null },
+    title: "War and Peace",
+    authors: ["Tolstoy"],
+    language: "en",
+    completed_lesson_count: 0,
+    receipt_count: 0,
+    mtime: null,
+    status: "needs_match",
+    cover_path: null,
+    last_activity_at: null,
+    lingq_collection_id: null,
+  };
+  return `window.__libraryEntries__ = ${JSON.stringify([entry])};`;
+}
+
+test.describe("AppKit list and status treatment", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+    await page.addInitScript(statusEntriesScript());
+  });
+
+  test("the selected row is accent-filled, not tinted", async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    // Selection is keyboard-driven; no row is aria-selected until focused.
+    await page.keyboard.press("ArrowDown");
+    const row = page.locator('[aria-selected="true"]').first();
+    await expect(row).toBeVisible();
+    const [bg, accent] = await row.evaluate((el) => [
+      getComputedStyle(el).backgroundColor,
+      getComputedStyle(el).getPropertyValue("--color-accent").trim(),
+    ]);
+    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    // accent-soft was a tint; the fill must now be the accent itself
+    const soft = await row.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue("--color-accent-soft").trim(),
+    );
+    expect(accent).not.toBe("");
+    expect(soft).not.toBe(bg);
+  });
+
+  test("status reads as a dot plus a plain label, not a pill", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const badge = page.getByTitle(/Mapping not confirmed/).first();
+    await expect(badge).toBeVisible();
+    await expect(badge).toContainText(/\S/);
+    const bg = await badge.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(bg).toBe("rgba(0, 0, 0, 0)");
+  });
+});
