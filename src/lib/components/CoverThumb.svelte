@@ -34,7 +34,7 @@
   />
 {:else}
   <div
-    class="flex h-16 w-16 items-center justify-center rounded-sm bg-accent-soft text-2xl font-semibold text-accent"
+    class="cover-placeholder flex h-16 w-16 items-center justify-center rounded-sm bg-accent-soft text-2xl font-semibold text-accent"
     aria-hidden="true"
   >
     {glyph}

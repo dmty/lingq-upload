@@ -215,4 +215,40 @@ test.describe("AppKit list and status treatment", () => {
     );
     expect(bg).toBe("rgba(0, 0, 0, 0)");
   });
+
+  test("every label on the selected row stays legible on the fill", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    await page.keyboard.press("ArrowDown");
+    const worst = await page.evaluate(() => {
+      const row = document.querySelector('[aria-selected="true"]')!;
+      const lum = (c: string) => {
+        const m = c.match(/[\d.]+/g)!.map(Number);
+        // color-mix() computes here, and Chromium serializes that as the
+        // modern color(srgb r g b / a) function (0-1 per channel) rather
+        // than legacy rgb()/rgba() (0-255) — scale must match the format.
+        const scale = c.startsWith("color(") ? 1 : 255;
+        const f = (v: number) => {
+          const s = v / scale;
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]);
+      };
+      const fill = lum(getComputedStyle(row).backgroundColor);
+      let min = Infinity;
+      row.querySelectorAll("*").forEach((el) => {
+        if (el.children.length > 0) return;
+        if (!(el.textContent || "").trim()) return;
+        if (el.closest(".cover-placeholder")) return; // has its own background
+        const [a, b] = [lum(getComputedStyle(el).color), fill].sort(
+          (p, q) => q - p,
+        );
+        min = Math.min(min, (a + 0.05) / (b + 0.05));
+      });
+      return min;
+    });
+    expect(worst).toBeGreaterThan(4.5);
+  });
 });

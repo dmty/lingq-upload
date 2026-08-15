@@ -278,23 +278,26 @@
     height: 28px;
     padding-inline: 8px;
   }
+}
 
-  /* An accent-filled row (LibraryList's aria-selected) still has descendants
-     carrying their own explicit colour utility — those win over the row's
-     inherited colour and need remapping onto the fill's own foreground.
-     :where() keeps this at zero specificity so a deliberate override still wins. */
-  [aria-selected="true"] :where(.text-fg, .text-accent) {
-    color: var(--color-accent-fg);
-  }
+/* Unlayered, not @layer components: Tailwind's utilities layer comes after
+   components, so a layered rule here can never beat .text-fg/.text-accent/etc
+   regardless of selector specificity — only an unlayered rule outranks every
+   layer. An accent-filled row (LibraryList's aria-selected) has descendants
+   carrying their own explicit colour utility that need remapping onto the
+   fill's own foreground; :where() keeps specificity low among these unlayered
+   rules so a future rule with a real selector can still override them. */
+[aria-selected="true"] :where(.text-fg, .text-accent):not(.cover-placeholder) {
+  color: var(--color-accent-fg);
+}
 
-  [aria-selected="true"] :where(.text-fg-muted, .text-fg-subtle) {
-    color: color-mix(in srgb, var(--color-accent-fg) 80%, transparent);
-  }
+[aria-selected="true"] :where(.text-fg-muted, .text-fg-subtle) {
+  color: color-mix(in srgb, var(--color-accent-fg) 80%, transparent);
+}
 
-  /* A status dot's own colour can coincidentally match the system accent
-     filling a selected row (this is why `running` never shows one — it uses
-     the spinner instead); the ring keeps every dot legible regardless. */
-  [aria-selected="true"] .status-dot {
-    box-shadow: 0 0 0 1px var(--color-accent-fg);
-  }
+/* A status dot's own colour can coincidentally match the system accent
+   filling a selected row (this is why `running` never shows one — it uses
+   the spinner instead); the ring keeps every dot legible regardless. */
+[aria-selected="true"] .status-dot {
+  box-shadow: 0 0 0 1px var(--color-accent-fg);
 }
