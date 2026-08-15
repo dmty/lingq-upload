@@ -1,6 +1,7 @@
 import type {
   AppError,
   AudioError,
+  DetectedRangeError,
   IngestError,
   LingqError,
   MappingError,
@@ -9,6 +10,14 @@ import type {
   TranscribeError,
   TranscribeErrorKind,
 } from "$lib/ipc/bindings";
+
+const GENERIC_MESSAGE = "Something went wrong. Try again.";
+
+// Rejections cross the IPC boundary untyped — a bad argument or an unknown
+// command arrives as a plain string, not an AppError.
+function isAppError(value: unknown): value is AppError {
+  return typeof value === "object" && value !== null && "kind" in value;
+}
 
 export function secretMessage(e: SecretError): string {
   switch (e.kind) {
@@ -101,10 +110,30 @@ export function transcribeMessage(e: TranscribeError): string {
       return "The transcription provider failed. Try again or switch providers.";
     case "audio":
       return "Couldn't prepare this audio for transcription. Re-add it or check the file.";
+    default:
+      return "Transcription failed. Try again or switch providers.";
   }
 }
 
-export function appErrorMessage(e: AppError): string {
+export function detectedRangeMessage(e: DetectedRangeError): string {
+  switch (e.kind) {
+    case "MissingBoundary":
+    case "DuplicateBoundary":
+      return e.message;
+    case "EndBeforeStart":
+      return "The detected end chapter comes before the start chapter.";
+    case "EmptyRange":
+      return "The detected chapter range is empty.";
+    default:
+      return "The detected chapter range is not usable. Re-run detection or choose a manual response.";
+  }
+}
+
+export function appErrorMessage(e: unknown): string {
+  if (!isAppError(e)) {
+    const text = typeof e === "string" ? e.trim() : "";
+    return text || GENERIC_MESSAGE;
+  }
   switch (e.kind) {
     case "Io":
       return `I/O error: ${e.message}`;
