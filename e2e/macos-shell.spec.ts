@@ -116,4 +116,15 @@ test.describe("overlay titlebar", () => {
     expect(box).not.toBeNull();
     expect(box!.y).toBeGreaterThanOrEqual(44);
   });
+
+  test("the document is transparent so vibrancy can show through", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const bg = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor,
+    );
+    expect(bg).toBe("rgba(0, 0, 0, 0)");
+  });
 });

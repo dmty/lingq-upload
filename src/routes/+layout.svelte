@@ -60,10 +60,10 @@
 
 <div class="app-shell">
   <div
-    class="flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
+    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
   >
     <div
-      data-tauri-drag-region
+      data-tauri-drag-region="deep"
       class="flex h-[52px] flex-none items-end px-[8px] pb-[6px]"
     >
       <span class="pl-[64px] text-xs font-semibold text-fg-muted">
@@ -95,7 +95,7 @@
     </nav>
   </div>
 
-  <main class="px-8 pb-8">
+  <main class="px-8 pt-[36px] pb-8">
     {@render children?.()}
   </main>
 </div>
