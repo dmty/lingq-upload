@@ -417,7 +417,7 @@
               bind:value={lang}
               onchange={onLanguageChange}
               disabled={busy || visibleLanguages.length === 0}
-              class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken disabled:text-fg-subtle"
+              class="field field-lg mt-1.5"
             >
               <option value="" disabled>
                 {languagesError
@@ -439,7 +439,7 @@
                 <input
                   type="checkbox"
                   bind:checked={showAllLanguages}
-                  class="h-3.5 w-3.5 accent-accent"
+                  class="h-3.5 w-3.5"
                 />
                 Show all LingQ languages
               </label>
@@ -451,7 +451,7 @@
             <select
               bind:value={collectionIdRaw}
               disabled={busy || loadingCollections || collections.length === 0}
-              class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken disabled:text-fg-subtle"
+              class="field field-lg mt-1.5"
             >
               <option value="" disabled>
                 {#if !lang}
@@ -495,7 +495,7 @@
             oninput={() => (titleEdited = true)}
             disabled={busy}
             placeholder="Auto-fills from audio filename"
-            class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)] disabled:bg-surface-sunken"
+            class="field field-lg mt-1.5 placeholder:text-fg-subtle"
           />
           {#if !titleEdited && audioPath}
             <span class="mt-1 block text-xs text-fg-subtle">

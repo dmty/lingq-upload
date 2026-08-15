@@ -357,7 +357,7 @@
           bind:value={key}
           disabled={busy}
           placeholder="Paste your LingQ API key"
-          class="h-10 w-full rounded-sm border border-border bg-surface px-3 pr-16 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
+          class="field field-lg pr-16 placeholder:text-fg-subtle"
         />
         <button
           type="button"
@@ -459,7 +459,7 @@
                   aria-label={provider.label}
                   checked={transcriptionPreferences.provider_id === provider.id}
                   onchange={() => setTranscriptionProvider(provider.id)}
-                  class="mt-1 h-4 w-4 accent-accent"
+                  class="mt-1 h-4 w-4"
                 />
                 <label
                   for={`transcription-provider-${provider.id}`}
@@ -515,7 +515,7 @@
                   bind:value={transcriptionKeys[provider.id]}
                   disabled={transcriptionKeyBusy !== null}
                   placeholder={`Paste your ${provider.label} API key`}
-                  class="mt-1.5 h-10 w-full rounded-sm border border-border bg-surface px-3 text-base text-fg outline-none transition-[box-shadow,border-color] duration-180 ease-snappy placeholder:text-fg-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
+                  class="field field-lg mt-1.5 placeholder:text-fg-subtle"
                 />
               </label>
 
@@ -559,7 +559,7 @@
           checked={transcriptionPreferences.auto_detect_start}
           disabled={transcriptionBusy}
           onchange={(event) => setAutoDetect(event.currentTarget.checked)}
-          class="mt-0.5 h-4 w-4 accent-accent"
+          class="mt-0.5 h-4 w-4"
         />
         <span>
           <span class="font-medium text-fg"
@@ -709,7 +709,7 @@
               value="file"
               checked={devBackend.current === "file"}
               onchange={() => setDevBackend("file")}
-              class="mt-0.5 h-4 w-4 accent-accent"
+              class="mt-0.5 h-4 w-4"
             />
             <span class="text-sm">
               <span class="font-medium text-fg">File shim</span>
@@ -726,7 +726,7 @@
               value="keychain"
               checked={devBackend.current === "keychain"}
               onchange={() => setDevBackend("keychain")}
-              class="mt-0.5 h-4 w-4 accent-accent"
+              class="mt-0.5 h-4 w-4"
             />
             <span class="text-sm">
               <span class="font-medium text-fg">OS keychain</span>

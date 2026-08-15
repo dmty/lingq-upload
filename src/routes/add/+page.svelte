@@ -481,7 +481,7 @@
         <input
           type="text"
           bind:value={title}
-          class="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm"
+          class="field"
           disabled={busy}
         />
       </label>
@@ -492,7 +492,7 @@
         <select
           bind:value={lang}
           disabled={busy || visibleLanguages.length === 0}
-          class="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm text-fg outline-none disabled:bg-surface-sunken disabled:text-fg-subtle"
+          class="field"
         >
           <option value="" disabled>
             {languagesError ? "Could not load languages" : "Select language…"}
@@ -519,7 +519,7 @@
             <input
               type="checkbox"
               bind:checked={showAllLanguages}
-              class="h-3.5 w-3.5 accent-accent"
+              class="h-3.5 w-3.5"
             />
             Show all LingQ languages
           </label>

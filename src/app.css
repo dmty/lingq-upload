@@ -152,6 +152,7 @@
   textarea {
     font: inherit;
     color: inherit;
+    accent-color: var(--color-accent);
   }
 
   a {
@@ -243,4 +244,38 @@
 
 .source-row[aria-current="page"] svg {
   opacity: 1;
+}
+
+@layer components {
+  /* px, not rem: html sets font-size to --text-base (13px), so 1.375rem/1.75rem
+     would render at 17.9px/22.75px instead of the intended control heights. */
+  .field {
+    width: 100%;
+    height: 24px;
+    padding-inline: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-fg);
+    font-size: var(--text-base);
+    outline: none;
+    transition:
+      box-shadow 120ms var(--ease-snappy),
+      border-color 120ms var(--ease-snappy);
+  }
+
+  .field:focus-visible {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3.5px var(--color-accent-ring);
+  }
+
+  .field:disabled {
+    background: var(--color-surface-sunken);
+    color: var(--color-fg-subtle);
+  }
+
+  .field-lg {
+    height: 28px;
+    padding-inline: 8px;
+  }
 }

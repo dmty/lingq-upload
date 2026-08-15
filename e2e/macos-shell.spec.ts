@@ -128,3 +128,31 @@ test.describe("overlay titlebar", () => {
     expect(bg).toBe("rgba(0, 0, 0, 0)");
   });
 });
+
+test.describe("form controls", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("every text input carries the shared field chrome", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+    const inputs = page.locator('input[type="text"], input[type="password"], select');
+    const count = await inputs.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i += 1) {
+      await expect(inputs.nth(i)).toHaveClass(/\bfield(-lg)?\b/);
+    }
+  });
+
+  test("focusing a field paints an accent ring", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+    const field = page.locator("input.field, input.field-lg").first();
+    await field.focus();
+    const shadow = await field.evaluate(
+      (el) => getComputedStyle(el).boxShadow,
+    );
+    expect(shadow).not.toBe("none");
+  });
+});

@@ -267,11 +267,11 @@
         placeholder="Search titles or authors…"
         bind:value={search}
         bind:this={searchEl}
-        class="flex-1 rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-fg-muted"
+        class="field flex-1 placeholder:text-fg-muted"
       />
       <select
         bind:value={languageFilter}
-        class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-fg"
+        class="field"
       >
         <option value="">All languages</option>
         {#each languages as lang (lang)}
