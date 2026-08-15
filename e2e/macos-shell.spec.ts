@@ -150,9 +150,11 @@ test.describe("form controls", () => {
     await page.waitForLoadState("networkidle");
     const field = page.locator("input.field, input.field-lg").first();
     await field.focus();
+    await page.waitForTimeout(150); // let the 120ms box-shadow transition settle
     const shadow = await field.evaluate(
       (el) => getComputedStyle(el).boxShadow,
     );
     expect(shadow).not.toBe("none");
+    expect(shadow).toContain("3.5px");
   });
 });

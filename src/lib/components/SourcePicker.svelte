@@ -10,7 +10,7 @@
   <div class="flex gap-2">
     {#each ["manual", "calibre", "libation"] as id (id)}
       <label
-        class="flex-1 cursor-pointer rounded-sm border border-border bg-surface px-3 py-2 text-sm transition-colors duration-120 hover:bg-surface-sunken {value ===
+        class="flex-1 cursor-pointer rounded-sm border border-border bg-surface px-3 py-2 text-sm transition-colors duration-120 hover:bg-surface-sunken has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-fg has-[:focus-visible]:outline-offset-1 {value ===
         id
           ? 'border-accent ring-1 ring-accent'
           : ''}"

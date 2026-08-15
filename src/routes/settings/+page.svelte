@@ -357,7 +357,7 @@
           bind:value={key}
           disabled={busy}
           placeholder="Paste your LingQ API key"
-          class="field field-lg pr-16 placeholder:text-fg-subtle"
+          class="field field-lg pr-[64px] placeholder:text-fg-subtle"
         />
         <button
           type="button"

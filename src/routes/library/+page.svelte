@@ -271,7 +271,7 @@
       />
       <select
         bind:value={languageFilter}
-        class="field"
+        class="field w-auto"
       >
         <option value="">All languages</option>
         {#each languages as lang (lang)}
