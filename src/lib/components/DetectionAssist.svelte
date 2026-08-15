@@ -655,7 +655,7 @@
               <button
                 type="button"
                 data-testid="detection-use-whole-book"
-                class="w-full rounded-sm bg-accent px-3 py-2 text-sm font-medium text-canvas hover:bg-accent-hover"
+                class="w-full rounded-sm bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover"
                 onclick={onUseWholeBook}
               >
                 Split all {partCount} audio parts across the book
@@ -818,7 +818,7 @@
         <button
           bind:this={trigger}
           type="button"
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-canvas hover:bg-accent-hover"
+          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover"
           onclick={requestDetection}
         >
           Detect audio's text range

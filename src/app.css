@@ -1,68 +1,111 @@
 @import "tailwindcss";
 
 @theme {
+  /* system-ui resolves to SF Pro in WKWebView, including optical sizing —
+     no webfont needed for the UI face. */
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI",
     sans-serif;
   --font-serif: "Literata Variable", Georgia, "Times New Roman", serif;
 
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-md: 16px;
-  --text-lg: 20px;
-  --text-xl: 28px;
+  /* macOS control sizes: 11 small, 13 regular, 15/17 headings, 22 title. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
 
-  --color-canvas: #fcfcfa;
+  --color-canvas: #f2f2f7;
   --color-surface: #ffffff;
-  --color-surface-sunken: #f4f3ef;
-  --color-border: #e5e3dc;
-  --color-border-strong: #cdcabf;
-  --color-fg: #1c1b1a;
-  --color-fg-muted: #6b6760;
-  --color-fg-subtle: #94908a;
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-soft: #eef2ff;
-  --color-success: #15803d;
-  --color-success-soft: #ecfdf5;
-  --color-warning: #b45309;
-  --color-warning-soft: #fffbeb;
-  --color-error: #b91c1c;
-  --color-error-soft: #fef2f2;
+  --color-surface-sunken: #e8e8ed;
+  --color-border: #d5d5da;
+  --color-border-strong: #b4b4b9;
+  --color-fg: #1d1d1f;
+  --color-fg-muted: #6e6e73;
+  --color-fg-subtle: #98989d;
+
+  /* Literal accent fallback; the @supports block below swaps in the user's
+     system accent where AccentColor resolves. */
+  --color-accent: #0a66d0;
+  --color-accent-hover: #0854ad;
+  --color-accent-soft: #e4edfa;
+  --color-accent-fg: #ffffff;
+  --color-accent-ring: #0a66d073;
+
+  --color-success: #1d7f34;
+  --color-success-soft: #e6f4e9;
+  --color-warning: #a35a00;
+  --color-warning-soft: #fdf1e0;
+  --color-error: #c9231a;
+  --color-error-soft: #fdeceb;
 
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-lg: 12px;
 
   --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 0 rgb(0 0 0 / 0.02);
 }
 
-/* Dark palette: warm near-blacks mirroring the warm light neutrals; accent
-   and status colors lift ~2 steps for contrast on dark surfaces. Utilities
-   read var(--color-*), so overriding the vars is the whole implementation. */
+/* Utilities read var(--color-*), so overriding the vars is the whole
+   dark-mode implementation. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-canvas: #161513;
-    --color-surface: #1e1d1a;
-    --color-surface-sunken: #262420;
-    --color-border: #34322b;
-    --color-border-strong: #4c4940;
-    --color-fg: #e9e7e2;
-    --color-fg-muted: #a29d94;
-    --color-fg-subtle: #737067;
-    --color-accent: #818cf8;
-    --color-accent-hover: #99a2fa;
-    --color-accent-soft: #272a4a;
-    --color-success: #4ade80;
-    --color-success-soft: #12291a;
-    --color-warning: #fbbf24;
-    --color-warning-soft: #2d2410;
-    --color-error: #f87171;
-    --color-error-soft: #301b19;
+    --color-canvas: #1e1e1e;
+    --color-surface: #2a2a2c;
+    --color-surface-sunken: #323234;
+    --color-border: #3a3a3c;
+    --color-border-strong: #545456;
+    --color-fg: #f5f5f7;
+    --color-fg-muted: #98989d;
+    --color-fg-subtle: #6e6e73;
+    --color-accent: #4d9bf0;
+    --color-accent-hover: #6bacf3;
+    --color-accent-soft: #1c3350;
+    --color-accent-fg: #ffffff;
+    --color-accent-ring: #4d9bf073;
+    --color-success: #32d74b;
+    --color-success-soft: #143021;
+    --color-warning: #ff9f0a;
+    --color-warning-soft: #33260a;
+    --color-error: #ff6961;
+    --color-error-soft: #3a1c1a;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 0 rgb(0 0 0 / 0.3);
+  }
+}
+
+/* A custom property that parses but fails at computed-value time becomes
+   guaranteed-invalid rather than falling back to the previous declaration,
+   so the system colours are gated on real feature queries. */
+@supports (color: AccentColor) {
+  :root {
+    --color-accent: AccentColor;
+    --color-accent-fg: AccentColorText;
+  }
+}
+
+@supports (color: AccentColor) and (color: color-mix(in srgb, red, white)) {
+  :root {
+    --color-accent-soft: color-mix(
+      in srgb,
+      AccentColor 14%,
+      var(--color-surface)
+    );
+    --color-accent-hover: color-mix(in srgb, AccentColor 88%, black);
+    --color-accent-ring: color-mix(in srgb, AccentColor 45%, transparent);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-accent-soft: color-mix(
+        in srgb,
+        AccentColor 26%,
+        var(--color-surface)
+      );
+      --color-accent-hover: color-mix(in srgb, AccentColor 82%, white);
+    }
   }
 }
 
@@ -82,8 +125,11 @@
   h2,
   h3 {
     line-height: 1.25;
-    letter-spacing: -0.01em;
     margin: 0;
+  }
+
+  h1 {
+    letter-spacing: -0.01em;
   }
 
   button {

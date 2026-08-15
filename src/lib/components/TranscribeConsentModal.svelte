@@ -147,7 +147,7 @@
 
     <button
       type="button"
-      class="accept rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-canvas hover:bg-accent-hover disabled:bg-fg-subtle"
+      class="accept rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:bg-fg-subtle"
       disabled={busy}
       onclick={accept}
     >

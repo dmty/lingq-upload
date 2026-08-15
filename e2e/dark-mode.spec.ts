@@ -14,11 +14,9 @@ test.describe("dark color scheme", () => {
     const canvas = await page.evaluate(
       () => getComputedStyle(document.body).backgroundColor,
     );
-    expect(canvas).toBe("rgb(22, 21, 19)"); // --color-canvas dark
-    const fg = await page.evaluate(
-      () => getComputedStyle(document.body).color,
-    );
-    expect(fg).toBe("rgb(233, 231, 226)"); // --color-fg dark
+    expect(canvas).toBe("rgb(30, 30, 30)"); // --color-canvas dark #1e1e1e
+    const fg = await page.evaluate(() => getComputedStyle(document.body).color);
+    expect(fg).toBe("rgb(245, 245, 247)"); // --color-fg dark #f5f5f7
   });
 });
 
@@ -33,6 +31,6 @@ test.describe("light color scheme stays default", () => {
     const backgroundColor = await page.evaluate(
       () => getComputedStyle(document.body).backgroundColor,
     );
-    expect(backgroundColor).toBe("rgb(252, 252, 250)"); // #fcfcfa
+    expect(backgroundColor).toBe("rgb(242, 242, 247)"); // #f2f2f7
   });
 });

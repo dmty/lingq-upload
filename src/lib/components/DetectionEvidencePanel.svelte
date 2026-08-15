@@ -137,7 +137,7 @@
         <div class="mt-3 flex gap-2">
           <button
             type="button"
-            class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-canvas hover:bg-accent-hover disabled:opacity-50"
+            class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
             disabled={resetting}
             onclick={confirmReset}
           >

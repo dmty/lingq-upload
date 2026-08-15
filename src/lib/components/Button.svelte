@@ -18,10 +18,10 @@
   } = $props();
 
   const variants = {
-    primary: "bg-accent text-canvas hover:bg-accent-hover disabled:bg-fg-subtle",
+    primary: "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-fg-subtle",
     secondary:
       "border border-border bg-surface text-fg hover:bg-surface-sunken disabled:opacity-50",
-    danger: "bg-error text-canvas hover:bg-error/90 disabled:bg-fg-subtle",
+    danger: "bg-error text-white hover:bg-error/90 disabled:bg-fg-subtle",
   };
   const sizes = {
     sm: "px-3 py-1 text-xs",
