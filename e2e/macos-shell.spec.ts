@@ -159,6 +159,61 @@ test.describe("form controls", () => {
   });
 });
 
+// Minimal single-project fixture: just enough for the evidence panel's
+// "Reset detected range" secondary button to render without a click, so the
+// push-button assertion targets a real DOM node rather than a synthetic one.
+function pushButtonFixtureScript(key: string): string {
+  const chapters = [
+    { id: "spine:start", order: 0, title: "Start", body: "", kind: "body" },
+    { id: "spine:end", order: 1, title: "End", body: "", kind: "body" },
+  ];
+  const detection = {
+    provider_id: "groq",
+    align_source: "transcript",
+    range: { start_chapter_id: "spine:start", end_chapter_id: "spine:end" },
+    confidence: 0.9,
+    transcript_head_preview: null,
+    transcript_tail_preview: null,
+    detected_at: "2026-08-16T00:00:00Z",
+  };
+  const mapping = {
+    pairs: [
+      {
+        chapter_id: "spine:start",
+        track_id: "t0",
+        confidence: 1,
+        original_confidence: 1,
+        touched: false,
+      },
+      {
+        chapter_id: "spine:end",
+        track_id: "t1",
+        confidence: 1,
+        original_confidence: 1,
+        touched: false,
+      },
+    ],
+    parking_lot: [],
+    op_id: 0,
+  };
+  return `;(() => {
+    const key = ${JSON.stringify(key)};
+    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
+    window.__matcherDecisionByProject__ = {
+      [key]: {
+        condition: "many_to_few",
+        response: "split_proportional",
+        chapter_count: ${chapters.length},
+        track_count: 2,
+        user_overrode: false,
+        decided_at: ${JSON.stringify(detection.detected_at)},
+        detection: ${JSON.stringify(detection)},
+      },
+    };
+    window.__mappingState__.seed(key, ${JSON.stringify(mapping)});
+  })();`;
+}
+
 function statusEntriesScript(): string {
   const entry = {
     id: { content_hash: "book-1", audible_asin: null, isbn13: null, calibre_uuid: null },
@@ -250,5 +305,34 @@ test.describe("AppKit list and status treatment", () => {
       return min;
     });
     expect(worst).toBeGreaterThan(4.5);
+  });
+});
+
+test.describe("button primitive", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("secondary buttons sit on the surface with a hairline shadow", async ({
+    page,
+  }) => {
+    const key = "push-button-fixture";
+    await page.addInitScript(pushButtonFixtureScript(key));
+    await page.goto(`/match/${key}`);
+    const button = page.getByRole("button", { name: "Reset detected range" });
+    await expect(button).toBeVisible();
+    const shadow = await button.evaluate(
+      (el) => getComputedStyle(el).boxShadow,
+    );
+    expect(shadow).not.toBe("none");
+  });
+
+  test("no component hand-rolls an accent fill any more", async ({ page }) => {
+    // /settings renders real Button primaries (Save, Save key) — a genuine
+    // check that they all carry the `.btn` marker, not a vacuous one.
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+    const filled = page.locator("button.bg-accent:not(.btn)");
+    await expect(filled).toHaveCount(0);
   });
 });

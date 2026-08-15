@@ -24,6 +24,7 @@
   } from "$lib/errors";
   import DetectionRangePreview from "$lib/components/DetectionRangePreview.svelte";
   import TranscribeConsentModal from "$lib/components/TranscribeConsentModal.svelte";
+  import Button from "$lib/components/Button.svelte";
 
   let {
     projectId,
@@ -47,7 +48,7 @@
   } = $props();
 
   let modalOpen = $state(false);
-  let trigger = $state<HTMLButtonElement | null>(null);
+  let trigger = $state<HTMLElement | null>(null);
   let running = $state(false);
   let terminal = $state(false);
   let pct = $state(0);
@@ -88,10 +89,6 @@
     destroyed = true;
     invalidateRun();
   });
-
-  const buttonClass =
-    "rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken";
-  const linkClass = `${buttonClass} inline-flex no-underline hover:no-underline`;
 
   function assertNever(value: never): never {
     throw new Error(`Unhandled IPC variant: ${JSON.stringify(value)}`);
@@ -528,24 +525,20 @@
           <div class="mt-2 flex flex-wrap gap-2">
             {#each error.actions as action (action)}
               {#if action === "settings" || action === "switch_provider"}
-                <a class={linkClass} href="/settings">
+                <Button variant="secondary" href="/settings">
                   {action === "settings"
                     ? "Open transcription settings"
                     : "Switch transcription provider"}
-                </a>
+                </Button>
               {:else if action === "retry"}
-                <button
-                  type="button"
-                  class={buttonClass}
-                  onclick={() => void startDetection()}
-                >
+                <Button variant="secondary" onclick={() => void startDetection()}>
                   Try detection again
-                </button>
+                </Button>
               {/if}
             {/each}
-            <button type="button" class={buttonClass} onclick={clearOutcome}>
+            <Button variant="secondary" onclick={clearOutcome}>
               Refine
-            </button>
+            </Button>
           </div>
         {/if}
       </div>
@@ -626,16 +619,12 @@
               choose a manual response below.
             </p>
             <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class={buttonClass}
-                onclick={() => void startDetection()}
-              >
+              <Button variant="secondary" onclick={() => void startDetection()}>
                 Try detection again
-              </button>
-              <button type="button" class={buttonClass} onclick={clearOutcome}>
+              </Button>
+              <Button variant="secondary" onclick={clearOutcome}>
                 Refine
-              </button>
+              </Button>
             </div>
           </div>
         {:else}
@@ -652,14 +641,13 @@
 
           {#if onUseWholeBook && partCount > 1}
             <div class="px-3 pt-3">
-              <button
-                type="button"
+              <Button
                 data-testid="detection-use-whole-book"
-                class="w-full rounded-sm bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover"
+                class="w-full"
                 onclick={onUseWholeBook}
               >
                 Split all {partCount} audio parts across the book
-              </button>
+              </Button>
               <p class="mt-1 text-xs text-fg-muted">
                 Uses each M4B chapter’s duration. Skips this start/end guess.
               </p>
@@ -790,50 +778,34 @@
         </p>
         <div class="mt-3 flex flex-wrap gap-2">
           {#if outcome.retryable}
-            <button
-              type="button"
-              class={buttonClass}
-              onclick={() => void startDetection()}
-            >
+            <Button variant="secondary" onclick={() => void startDetection()}>
               Try detection again
-            </button>
+            </Button>
           {/if}
-          <button type="button" class={buttonClass} onclick={clearOutcome}>
+          <Button variant="secondary" onclick={clearOutcome}>
             Refine
-          </button>
+          </Button>
         </div>
       </div>
     {/if}
 
     <div class="mt-3">
       {#if running}
-        <button
-          type="button"
-          class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken"
-          onclick={cancelDetection}
-        >
+        <Button variant="secondary" onclick={cancelDetection}>
           Cancel detection
-        </button>
+        </Button>
       {:else if !preview && !contentResult && !error && availability.key_present}
-        <button
-          bind:this={trigger}
-          type="button"
-          class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover"
-          onclick={requestDetection}
-        >
+        <Button onclick={requestDetection}>
           Detect audio's text range
-        </button>
+        </Button>
       {:else if !preview && !contentResult && !error}
         <p class="text-xs text-fg-muted">
           Add an API key for {availability.active_provider.label} to use this optional
           assist.
         </p>
-        <a
-          class="mt-2 inline-flex rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg no-underline hover:bg-surface-sunken hover:no-underline"
-          href="/settings"
-        >
+        <Button variant="secondary" class="mt-2" href="/settings">
           Open transcription settings
-        </a>
+        </Button>
       {/if}
     </div>
   </section>

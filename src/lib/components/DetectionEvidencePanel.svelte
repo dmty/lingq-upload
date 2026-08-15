@@ -6,6 +6,7 @@
     DetectionEvidence,
     TranscribeProviderId,
   } from "$lib/ipc/bindings";
+  import Button from "$lib/components/Button.svelte";
 
   let {
     evidence,
@@ -28,7 +29,7 @@
 
   let confirming = $state(false);
   let error = $state<string | null>(null);
-  let trigger = $state<HTMLButtonElement | null>(null);
+  let trigger = $state<HTMLElement | null>(null);
 
   // A boundary the current chapter set can no longer resolve is named by its
   // stable ID rather than guessed at — the page blocks Continue on the same
@@ -135,36 +136,25 @@
           change.
         </p>
         <div class="mt-3 flex gap-2">
-          <button
-            type="button"
-            class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
-            disabled={resetting}
-            onclick={confirmReset}
-          >
+          <Button disabled={resetting} onclick={confirmReset}>
             {resetting ? "Resetting…" : "Confirm reset"}
-          </button>
-          <button
-            type="button"
-            class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
-            disabled={resetting}
-            onclick={restoreFocus}
-          >
+          </Button>
+          <Button variant="secondary" disabled={resetting} onclick={restoreFocus}>
             Keep detected range
-          </button>
+          </Button>
         </div>
       </div>
     {:else}
-      <button
-        bind:this={trigger}
-        type="button"
-        class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken"
+      <Button
+        variant="secondary"
+        bind:ref={trigger}
         onclick={() => {
           error = null;
           confirming = true;
         }}
       >
         Reset detected range
-      </button>
+      </Button>
     {/if}
   </div>
 </section>

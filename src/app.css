@@ -278,6 +278,31 @@
     height: 28px;
     padding-inline: 8px;
   }
+
+  /* Real NSButtons have a vertical gradient and a darker bottom edge; the
+     hairline border plus 0.5px shadow is the minimal subset that reads as
+     "sitting on the surface" instead of "drawn on it". Stays layered like
+     .field above it: nothing in the secondary variant's class string is a
+     background/border/shadow utility, so there is no utility to lose to. */
+  .push-button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: 0 0.5px 1px rgb(0 0 0 / 0.08);
+  }
+
+  .push-button:hover:not(:disabled) {
+    background: var(--color-surface-sunken);
+  }
+
+  .push-button:active:not(:disabled) {
+    background: var(--color-surface-sunken);
+    box-shadow: none;
+  }
+
+  .push-button:disabled {
+    box-shadow: none;
+    opacity: 0.5;
+  }
 }
 
 /* Unlayered, not @layer components: Tailwind's utilities layer comes after

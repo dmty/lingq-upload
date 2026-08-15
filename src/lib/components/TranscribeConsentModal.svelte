@@ -2,6 +2,7 @@
   import { tick } from "svelte";
 
   import type { ProviderInfo } from "$lib/ipc/bindings";
+  import Button from "$lib/components/Button.svelte";
 
   let {
     provider,
@@ -18,7 +19,7 @@
   } = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
-  let cancelButton = $state<HTMLButtonElement | null>(null);
+  let cancelButton = $state<HTMLElement | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
 
@@ -97,15 +98,15 @@
       Allow {provider.label} transcription?
     </h2>
 
-    <button
-      bind:this={cancelButton}
-      type="button"
-      class="cancel rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
+    <Button
+      variant="secondary"
+      class="cancel"
+      bind:ref={cancelButton}
       disabled={busy}
       onclick={cancel}
     >
       Cancel
-    </button>
+    </Button>
 
     <div
       id="transcribe-consent-description"
@@ -145,14 +146,9 @@
       </p>
     {/if}
 
-    <button
-      type="button"
-      class="accept rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:bg-fg-subtle"
-      disabled={busy}
-      onclick={accept}
-    >
+    <Button class="accept" disabled={busy} onclick={accept}>
       {busy ? "Saving…" : "Accept and continue"}
-    </button>
+    </Button>
   </div>
 </dialog>
 
@@ -197,16 +193,18 @@
     grid-row: 3;
   }
 
-  .cancel {
+  /* :global — cancel/accept now land on the element Button.svelte renders,
+     which doesn't carry this file's scope hash. */
+  :global(.cancel) {
     grid-column: 2;
   }
 
-  .accept {
+  :global(.accept) {
     grid-column: 3;
   }
 
-  .cancel,
-  .accept {
+  :global(.cancel),
+  :global(.accept) {
     grid-row: 4;
   }
 </style>

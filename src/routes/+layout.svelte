@@ -123,14 +123,9 @@
       </p>
     {/if}
     <div class="actions">
-      <button
-        type="button"
-        class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
-        disabled={installing}
-        onclick={later}
-      >
+      <Button variant="secondary" disabled={installing} onclick={later}>
         Later
-      </button>
+      </Button>
       <Button disabled={installing} onclick={install}>
         {installing ? "Installing…" : "Install and restart"}
       </Button>

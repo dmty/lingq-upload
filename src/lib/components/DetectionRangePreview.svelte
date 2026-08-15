@@ -4,6 +4,7 @@
     DetectedRange,
     DetectionPreview,
   } from "$lib/ipc/bindings";
+  import Button from "$lib/components/Button.svelte";
 
   let {
     preview,
@@ -88,21 +89,14 @@
   </div>
 
   <div class="mt-3 flex gap-2">
-    <button
-      type="button"
-      class="rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+    <Button
       disabled={busy || blockedReason !== null}
       onclick={() => onConfirm(preview.range, preview)}
     >
       {busy ? "Confirming…" : "Confirm detected range"}
-    </button>
-    <button
-      type="button"
-      class="rounded-sm border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-sunken disabled:opacity-50"
-      disabled={busy}
-      onclick={onRefine}
-    >
+    </Button>
+    <Button variant="secondary" disabled={busy} onclick={onRefine}>
       Refine
-    </button>
+    </Button>
   </div>
 </div>
