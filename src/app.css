@@ -197,12 +197,12 @@
   background: var(--color-canvas);
 }
 
-.app-sidebar {
+.app-shell > div {
   background: var(--color-sidebar);
 }
 
 @supports (-webkit-backdrop-filter: blur(0px)) {
-  .app-sidebar {
+  .app-shell > div {
     background: color-mix(in srgb, var(--color-sidebar) 55%, transparent);
   }
 }

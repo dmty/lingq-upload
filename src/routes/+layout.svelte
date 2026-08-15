@@ -60,7 +60,7 @@
 
 <div class="app-shell">
   <div
-    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
+    class="flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
   >
     <div
       data-tauri-drag-region
