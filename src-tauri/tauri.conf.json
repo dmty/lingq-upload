@@ -12,11 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "lingq-upload",
-        "width": 880,
+        "title": "LingQ Importer",
+        "width": 1080,
         "height": 820,
-        "minWidth": 720,
-        "minHeight": 720
+        "minWidth": 900,
+        "minHeight": 640
       }
     ],
     "security": {

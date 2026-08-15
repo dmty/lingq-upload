@@ -10,6 +10,13 @@
 
   const isActive = (path: string) => page.url.pathname.startsWith(path);
 
+  const sections = [
+    { href: "/library", label: "Library", icon: "M3 4h10v8H3z M3 7h10 M3 10h10" },
+    { href: "/add", label: "Add", icon: "M8 3v10 M3 8h10" },
+    { href: "/upload", label: "Quick upload", icon: "M8 12V4 M5 7l3-3 3 3 M3 13h10" },
+    { href: "/settings", label: "Settings", icon: "M8 6a2 2 0 100 4 2 2 0 000-4 M8 2v1.5 M8 12.5V14 M2 8h1.5 M12.5 8H14" },
+  ];
+
   let dialog = $state<HTMLDialogElement | null>(null);
   let pending = $state<Awaited<ReturnType<typeof check>>>(null);
   let installing = $state(false);
@@ -51,55 +58,42 @@
   }
 </script>
 
-<header class="sticky top-0 z-10 flex h-13 items-center gap-4 bg-canvas px-8">
-  <span class="text-sm font-medium text-fg-muted">LingQ Importer</span>
-  <nav class="flex items-center gap-1">
-    <a
-      href="/library"
-      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
-        '/library',
-      )
-        ? 'bg-accent-soft text-fg'
-        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
-    >
-      Library
-    </a>
-    <a
-      href="/add"
-      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
-        '/add',
-      )
-        ? 'bg-accent-soft text-fg'
-        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
-    >
-      Add
-    </a>
-    <a
-      href="/upload"
-      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
-        '/upload',
-      )
-        ? 'bg-accent-soft text-fg'
-        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
-    >
-      Quick upload
-    </a>
-    <a
-      href="/settings"
-      class="rounded-sm px-4 py-1.5 text-sm font-medium transition-colors duration-120 {isActive(
-        '/settings',
-      )
-        ? 'bg-accent-soft text-fg'
-        : 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
-    >
-      Settings
-    </a>
-  </nav>
-</header>
+<div class="app-shell">
+  <aside
+    class="flex flex-col gap-1 border-r border-sidebar-border bg-sidebar px-2 pt-3"
+  >
+    <span class="px-2 pb-2 text-xs font-semibold text-fg-muted">
+      LingQ Importer
+    </span>
+    <nav aria-label="Sections" class="flex flex-col gap-0.5">
+      {#each sections as section (section.href)}
+        <a
+          href={section.href}
+          class="source-row"
+          aria-current={isActive(section.href) ? "page" : undefined}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d={section.icon} />
+          </svg>
+          {section.label}
+        </a>
+      {/each}
+    </nav>
+  </aside>
 
-<main class="px-8 pb-8">
-  {@render children?.()}
-</main>
+  <main class="px-8 pb-8">
+    {@render children?.()}
+  </main>
+</div>
 
 <dialog
   bind:this={dialog}

@@ -34,3 +34,42 @@ test.describe("macOS shell tokens", () => {
     expect(probe.fg).not.toBe(probe.bg);
   });
 });
+
+test.describe("source list sidebar", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  });
+
+  test("all four sections live in a labelled sidebar nav", async ({ page }) => {
+    await page.goto("/library");
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    await expect(nav).toBeVisible();
+    for (const name of ["Library", "Add", "Quick upload", "Settings"]) {
+      await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+    }
+  });
+
+  test("the sidebar sits beside the content, not above it", async ({ page }) => {
+    await page.goto("/library");
+    const nav = await page
+      .getByRole("navigation", { name: "Sections" })
+      .boundingBox();
+    const main = await page.locator("main").boundingBox();
+    expect(nav).not.toBeNull();
+    expect(main).not.toBeNull();
+    expect(main!.x).toBeGreaterThanOrEqual(nav!.x + nav!.width);
+  });
+
+  test("the current section is marked for assistive tech", async ({ page }) => {
+    await page.goto("/settings");
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(nav.getByRole("link", { name: "Library", exact: true })).not.toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+});
