@@ -72,4 +72,18 @@ test.describe("source list sidebar", () => {
       "page",
     );
   });
+
+  test("content scrolls while the sidebar stays put", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    const before = await nav.boundingBox();
+    await page.locator("main").evaluate((el) => {
+      el.style.height = "200px";
+      el.scrollTop = 400;
+    });
+    const after = await nav.boundingBox();
+    expect(before).not.toBeNull();
+    expect(after!.y).toBe(before!.y);
+  });
 });

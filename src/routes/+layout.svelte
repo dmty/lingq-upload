@@ -59,13 +59,13 @@
 </script>
 
 <div class="app-shell">
-  <aside
-    class="flex flex-col gap-1 border-r border-sidebar-border bg-sidebar px-2 pt-3"
+  <div
+    class="flex flex-col gap-[4px] border-r border-sidebar-border bg-sidebar px-[8px] pt-[12px]"
   >
     <span class="px-2 pb-2 text-xs font-semibold text-fg-muted">
       LingQ Importer
     </span>
-    <nav aria-label="Sections" class="flex flex-col gap-0.5">
+    <nav aria-label="Sections" class="flex flex-col gap-[2px]">
       {#each sections as section (section.href)}
         <a
           href={section.href}
@@ -88,7 +88,7 @@
         </a>
       {/each}
     </nav>
-  </aside>
+  </div>
 
   <main class="px-8 pb-8">
     {@render children?.()}

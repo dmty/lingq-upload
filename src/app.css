@@ -181,9 +181,13 @@
   margin-inline: auto;
 }
 
+/* `main` owns the scroll: as a scroll container its automatic minimum size is
+   0, which caps the implicit grid row at 100vh. Remove overflow here and the
+   row grows past the viewport, and the shell's `overflow: hidden` silently
+   makes the bottom of every long page unreachable. */
 .app-shell {
   display: grid;
-  grid-template-columns: 13.75rem 1fr;
+  grid-template-columns: 220px 1fr;
   height: 100vh;
   overflow: hidden;
 }
@@ -192,13 +196,12 @@
   overflow-y: auto;
 }
 
-/* macOS source-list row: 28px tall, 6px radius, inset from the sidebar edge. */
 .source-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  height: 1.75rem;
-  padding-inline: 0.5rem;
+  gap: 8px;
+  height: 28px;
+  padding-inline: 8px;
   border-radius: var(--radius-sm);
   color: var(--color-fg);
   font-size: var(--text-base);
@@ -210,6 +213,11 @@
 .source-row:hover {
   background: color-mix(in srgb, var(--color-fg) 6%, transparent);
   text-decoration: none;
+}
+
+.source-row:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 1px;
 }
 
 .source-row[aria-current="page"] {
