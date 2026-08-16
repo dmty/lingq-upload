@@ -131,6 +131,22 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* AppKit labels aren't selectable; only real content is. Chrome that
+       drag-selects on a stray swipe is the loudest "this is a web page"
+       tell in the app, so the opt-in list below is the whole allowance. */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea,
+  pre,
+  code,
+  [contenteditable],
+  [role="alert"],
+  .selectable {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   h1,
@@ -193,10 +209,22 @@
    row grows past the viewport, and the shell's `overflow: hidden` silently
    makes the bottom of every long page unreachable. */
 .app-shell {
+  position: relative;
   display: grid;
   grid-template-columns: 220px 1fr;
   height: 100vh;
   overflow: hidden;
+}
+
+/* Height matches main's 1px border + 31px padding-top exactly; any taller
+   and it would swallow clicks on the first heading. */
+.titlebar-drag {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 220px;
+  inset-inline-end: 0;
+  height: 32px;
+  z-index: 1;
 }
 
 .app-shell > main {
@@ -257,6 +285,10 @@
      h-6/h-7 on the 16px scale), literal so they can't drift if --text-base
      changes. */
   .field {
+    /* WebKit's `searchfield`/`menulist` appearances impose their own metrics
+       and ignore parts of the box below, so every field starts from none. */
+    appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     height: 24px;
     padding-inline: 6px;
@@ -284,6 +316,60 @@
   .field-lg {
     height: 28px;
     padding-inline: 8px;
+  }
+
+  /* NSPopUpButton: the chevron sits in an accent-filled badge pinned to the
+     trailing edge. It has to be a sibling element — WebKit renders neither
+     ::after nor a themeable background layer inside a <select>. */
+  /* inline-flex, not inline-block: an inline-block wrapper is taller than the
+     select by the line box's descender, which throws the badge's centring off
+     by a few px. */
+  .select-wrap {
+    position: relative;
+    display: inline-flex;
+    width: 100%;
+  }
+
+  /* A popup button is a push button that happens to open a menu, so it takes
+     the same raised edge rather than the sunken look of a text field. */
+  .select-wrap > .field {
+    padding-inline-end: 26px;
+    text-overflow: ellipsis;
+    box-shadow: 0 0.5px 1px rgb(0 0 0 / 0.08);
+  }
+
+  /* The raised edge above shares .field:focus-visible's specificity and comes
+     later, so the ring has to be restated or focus goes unpainted. */
+  .select-wrap > .field:focus-visible {
+    box-shadow: 0 0 0 3.5px var(--color-accent-ring);
+  }
+
+  .select-badge {
+    position: absolute;
+    inset-inline-end: 3px;
+    top: 50%;
+    translate: 0 -50%;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: calc(100% - 6px);
+    border-radius: 4px;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    pointer-events: none;
+    transition: background-color 120ms var(--ease-snappy);
+  }
+
+  /* AppKit desaturates the badge with the window, matching the vibrancy
+     already wired to followsWindowActiveState. */
+  :root[data-window-inactive] .select-badge {
+    background: var(--color-surface-sunken);
+    color: var(--color-fg-muted);
+  }
+
+  .select-wrap > .field:disabled + .select-badge {
+    background: var(--color-surface-sunken);
+    color: var(--color-fg-subtle);
   }
 
   /* Real NSButtons have a vertical gradient and a darker bottom edge; the

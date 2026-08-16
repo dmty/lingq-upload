@@ -26,6 +26,7 @@
   import BookPicker from "$lib/components/BookPicker.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import Select from "$lib/components/Select.svelte";
   import StepIndicator from "$lib/components/StepIndicator.svelte";
 
   type Source = "manual" | "calibre" | "libation";
@@ -489,10 +490,9 @@
         <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
           Language
         </span>
-        <select
+        <Select
           bind:value={lang}
           disabled={busy || visibleLanguages.length === 0}
-          class="field field-lg"
         >
           <option value="" disabled>
             {languagesError ? "Could not load languages" : "Select language…"}
@@ -500,7 +500,7 @@
           {#each visibleLanguages as l (l.code)}
             <option value={l.code}>{formatLanguageOption(l)}</option>
           {/each}
-        </select>
+        </Select>
         {#if languagesError}
           <span class="block text-xs text-error">
             {languagesError}

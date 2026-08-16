@@ -26,7 +26,7 @@
 <div
   {...rest}
   role={variant === "error" ? "alert" : "status"}
-  class="rounded-sm border-l-[3px] p-3 text-sm {styles[variant]} {text} {cls}"
+  class="selectable rounded-sm border-l-[3px] p-3 text-sm {styles[variant]} {text} {cls}"
 >
   {@render children()}
 </div>

@@ -14,6 +14,7 @@
   } from "$lib/ipc/bindings";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import Select from "$lib/components/Select.svelte";
 
   onMount(() => {
     library.load();
@@ -102,6 +103,13 @@
   function clearSearch() {
     search = "";
     languageFilter = "";
+  }
+
+  // The field's own ⊗ clears just the query — the language filter is a
+  // separate control and AppKit never resets it from here.
+  function clearSearchText() {
+    search = "";
+    searchEl?.focus();
   }
 
   // A focusIndex that survives re-filtering targets the wrong row.
@@ -262,22 +270,53 @@
     </div>
   {:else}
     <div class="mb-3 flex gap-2">
-      <input
-        type="search"
-        placeholder="Search titles or authors…"
-        bind:value={search}
-        bind:this={searchEl}
-        class="field flex-1 placeholder:text-fg-muted"
-      />
-      <select
-        bind:value={languageFilter}
-        class="field w-auto"
-      >
+      <div class="relative flex-1">
+        <svg
+          class="pointer-events-none absolute top-1/2 left-[8px] -translate-y-1/2 text-fg-subtle"
+          width="13"
+          height="13"
+          viewBox="0 0 13 13"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="5.4" cy="5.4" r="3.9" />
+          <path d="M8.4 8.4 11.6 11.6" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Search titles or authors…"
+          bind:value={search}
+          bind:this={searchEl}
+          class="field field-lg pr-[26px] pl-[26px] placeholder:text-fg-muted"
+        />
+        {#if search}
+          <button
+            type="button"
+            aria-label="Clear search"
+            class="absolute top-1/2 right-[2px] -translate-y-1/2 p-[5px] text-fg-subtle hover:text-fg-muted"
+            onclick={clearSearchText}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <circle cx="7" cy="7" r="5.8" fill="currentColor" />
+              <path
+                d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
+                class="stroke-surface"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        {/if}
+      </div>
+      <Select bind:value={languageFilter} class="w-auto flex-none">
         <option value="">All languages</option>
         {#each languages as lang (lang)}
           <option value={lang}>{languageLabel(lang)}</option>
         {/each}
-      </select>
+      </Select>
     </div>
 
     {#if filtered.length === 0}

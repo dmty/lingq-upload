@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
+  import Select from "$lib/components/Select.svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import {
     commands,
@@ -413,11 +414,11 @@
         <div class="mt-4 grid grid-cols-2 gap-4">
           <label class="block">
             <span class="text-sm text-fg-muted">Language</span>
-            <select
+            <Select
               bind:value={lang}
               onchange={onLanguageChange}
               disabled={busy || visibleLanguages.length === 0}
-              class="field field-lg mt-1.5"
+              class="mt-1.5"
             >
               <option value="" disabled>
                 {languagesError
@@ -427,7 +428,7 @@
               {#each visibleLanguages as l (l.code)}
                 <option value={l.code}>{formatLanguageOption(l)}</option>
               {/each}
-            </select>
+            </Select>
             {#if languagesError}
               <span class="mt-1 block text-xs text-error">
                 {languagesError}
@@ -448,10 +449,10 @@
 
           <label class="block">
             <span class="text-sm text-fg-muted">Collection</span>
-            <select
+            <Select
               bind:value={collectionIdRaw}
               disabled={busy || loadingCollections || collections.length === 0}
-              class="field field-lg mt-1.5"
+              class="mt-1.5"
             >
               <option value="" disabled>
                 {#if !lang}
@@ -469,7 +470,7 @@
               {#each collections as c (c.id)}
                 <option value={String(c.id)}>{c.title}</option>
               {/each}
-            </select>
+            </Select>
             {#if collectionsError}
               <span class="mt-1 block text-xs text-error">
                 {collectionsError}

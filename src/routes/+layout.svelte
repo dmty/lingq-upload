@@ -14,7 +14,14 @@
     { href: "/library", label: "Library", icon: "M3 4h10v8H3z M3 7h10 M3 10h10" },
     { href: "/add", label: "Add", icon: "M8 3v10 M3 8h10" },
     { href: "/upload", label: "Quick upload", icon: "M8 12V4 M5 7l3-3 3 3 M3 13h10" },
-    { href: "/settings", label: "Settings", icon: "M8 6a2 2 0 100 4 2 2 0 000-4 M8 2v1.5 M8 12.5V14 M2 8h1.5 M12.5 8H14" },
+    {
+      href: "/settings",
+      label: "Settings",
+      icon:
+        "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
+        " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
+        " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99",
+    },
   ];
 
   let dialog = $state<HTMLDialogElement | null>(null);
@@ -36,6 +43,29 @@
 
   $effect(() => {
     if (pending && dialog && !dialog.open) dialog.showModal();
+  });
+
+  // AppKit dims accent-filled controls while the window is in the background.
+  // Outside Tauri (browser, e2e) the window is always treated as active.
+  $effect(() => {
+    const root = document.documentElement;
+    let stop: (() => void) | undefined;
+    const apply = (focused: boolean) =>
+      root.toggleAttribute("data-window-inactive", !focused);
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        apply(await win.isFocused());
+        stop = await win.onFocusChanged(({ payload }) => apply(payload));
+      } catch {
+        apply(true);
+      }
+    })();
+    return () => {
+      stop?.();
+      apply(true);
+    };
   });
 
   function later() {
@@ -104,6 +134,12 @@
   >
     {@render children?.()}
   </main>
+
+  <!-- Last in the shell so the sidebar strip stays the first drag region:
+       it spans only main's 32px top padding, which no content occupies until
+       the page scrolls — and scrolled-under content is inert in a titlebar
+       on macOS anyway. -->
+  <div data-tauri-drag-region="deep" class="titlebar-drag"></div>
 </div>
 
 <dialog

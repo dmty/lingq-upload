@@ -158,11 +158,83 @@ test.describe("overlay titlebar", () => {
     );
     expect(bg).toBe("rgba(0, 0, 0, 0)");
   });
+
+  // The sidebar strip alone left the band above the content pane undraggable,
+  // which is the half of the titlebar the pointer actually lands on.
+  test("the content pane's top band is draggable too", async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const strips = page.locator("[data-tauri-drag-region]");
+    await expect(strips).toHaveCount(2);
+    const main = await page.locator("main").boundingBox();
+    const strip = await page.locator(".titlebar-drag").boundingBox();
+    expect(strip).not.toBeNull();
+    expect(strip!.y).toBe(0);
+    expect(strip!.x).toBe(main!.x);
+    expect(strip!.width).toBe(main!.width);
+  });
+
+  // Any taller and it covers the first heading; any shorter and there is a
+  // dead strip of titlebar. Both edges are checked against main's own inset.
+  test("the content drag strip stops exactly where content begins", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const inset = await page.locator("main").evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop);
+    });
+    const strip = await page.locator(".titlebar-drag").boundingBox();
+    expect(strip!.height).toBe(inset);
+    const heading = await page
+      .getByRole("heading", { name: "Library" })
+      .boundingBox();
+    expect(heading!.y).toBeGreaterThanOrEqual(strip!.height);
+  });
+});
+
+test.describe("text selection", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+    // Without entries the library renders its empty state, which has no
+    // search field for the probe below to read.
+    await page.addInitScript(statusEntriesScript());
+  });
+
+  test("chrome is unselectable but fields and alerts are not", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const probe = await page.evaluate(() => {
+      const read = (el: Element) => getComputedStyle(el).userSelect;
+      const alert = document.createElement("div");
+      alert.setAttribute("role", "alert");
+      document.body.append(alert);
+      const out = {
+        body: read(document.body),
+        heading: read(document.querySelector("h1")!),
+        nav: read(document.querySelector('a[href="/library"]')!),
+        input: read(document.querySelector('input[type="search"]')!),
+        alert: read(alert),
+      };
+      alert.remove();
+      return out;
+    });
+    expect(probe.body).toBe("none");
+    expect(probe.heading).toBe("none");
+    expect(probe.nav).toBe("none");
+    expect(probe.input).toBe("text");
+    expect(probe.alert).toBe("text");
+  });
 });
 
 test.describe("form controls", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+    // The search field and popup button only exist on a non-empty library.
+    await page.addInitScript(statusEntriesScript());
   });
 
   test("every text input carries the shared field chrome", async ({ page }) => {
@@ -188,7 +260,108 @@ test.describe("form controls", () => {
     expect(shadow).not.toBe("none");
     expect(shadow).toContain("3.5px");
   });
+
+  test("the search field is a 28px control with room for its glass", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const input = page.locator('input[type="search"]');
+    const box = await input.boundingBox();
+    expect(box!.height).toBe(28);
+    const glass = await page
+      .locator('input[type="search"] ~ svg, svg + input[type="search"]')
+      .count();
+    expect(glass).toBeGreaterThan(0);
+    // The icon is absolutely positioned, so only the padding keeps the
+    // caret and placeholder clear of it.
+    const padLeft = await input.evaluate((el) =>
+      parseFloat(getComputedStyle(el).paddingLeft),
+    );
+    expect(padLeft).toBeGreaterThanOrEqual(24);
+  });
+
+  // `appearance: none` is what makes the height above stick, and it also
+  // strips WebKit's built-in ⊗ — so the field has to bring its own.
+  test("the search field clears itself without touching the filter", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const clear = page.getByRole("button", { name: "Clear search" });
+    await expect(clear).toBeHidden();
+
+    const input = page.locator('input[type="search"]');
+    await input.fill("tolstoy");
+    await page.locator("select.field").first().selectOption("en");
+    await expect(clear).toBeVisible();
+
+    await clear.click();
+    await expect(input).toHaveValue("");
+    await expect(page.locator("select.field").first()).toHaveValue("en");
+    await expect(input).toBeFocused();
+  });
+
+  test("a popup button wears an accent badge that dims with the window", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const badge = page.locator(".select-badge").first();
+    await expect(badge).toBeVisible();
+
+    const active = await badge.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    const accent = await badge.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue("--color-accent").trim(),
+    );
+    expect(active).not.toBe("rgba(0, 0, 0, 0)");
+    expect(accent).not.toBe("");
+
+    // The badge must sit inside the control, not beside it.
+    const select = await page.locator("select.field").first().boundingBox();
+    const box = await badge.boundingBox();
+    expect(box!.x).toBeGreaterThan(select!.x);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(select!.x + select!.width);
+
+    await page.evaluate(() =>
+      document.documentElement.setAttribute("data-window-inactive", ""),
+    );
+    await page.waitForTimeout(150); // let the 120ms background transition settle
+    const inactive = await badge.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(inactive).not.toBe(active);
+  });
+
+  test("the popup button leaves room for its badge", async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const padEnd = await page
+      .locator("select.field")
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).paddingRight));
+    expect(padEnd).toBeGreaterThanOrEqual(24);
+  });
+
+  // The popup button's raised edge is also a box-shadow, so it can silently
+  // swallow the focus ring they share the property with.
+  test("focusing a popup button still paints the accent ring", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const select = page.locator("select.field").first();
+    await select.focus();
+    await page.waitForTimeout(150); // let the 120ms box-shadow transition settle
+    const shadow = await select.evaluate(
+      (el) => getComputedStyle(el).boxShadow,
+    );
+    expect(shadow).toContain("3.5px");
+  });
 });
+
 
 // Minimal single-project fixture: just enough for the evidence panel's
 // "Reset detected range" secondary button to render without a click, so the
