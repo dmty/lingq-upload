@@ -97,7 +97,7 @@
   </div>
 
   <main
-    class="border-t px-8 pt-[36px] pb-8 transition-colors duration-120 {scrolled
+    class="border-t px-8 pt-[31px] pb-8 transition-colors duration-120 {scrolled
       ? 'border-sidebar-border'
       : 'border-transparent'}"
     onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}

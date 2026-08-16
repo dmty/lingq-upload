@@ -118,9 +118,13 @@
 }
 
 @layer base {
-  html,
-  body {
+  html {
+    /* Stays at the browser default (16px) so 1rem resolves to 16px for
+       Tailwind's spacing scale; only body gets the 13px text size. */
     background: transparent;
+  }
+
+  body {
     color: var(--color-fg);
     font-family: var(--font-sans);
     font-size: var(--text-base);
