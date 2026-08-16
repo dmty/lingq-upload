@@ -8,6 +8,11 @@ import { defineConfig, devices } from "@playwright/test";
 // throw on mount. Specs install an init script (`e2e/setup/tauri-stub.ts`)
 // via `test.beforeEach` to stub the IPC for the empty-state path. Extend the
 // stub's handler map as the test surface grows.
+// A dev server already listening on the default port is reused as-is, which
+// silently tests whatever checkout started it. Set E2E_PORT to claim a port of
+// this checkout's own when another one is running.
+const port = Number(process.env.E2E_PORT ?? 1420);
+
 export default defineConfig({
     testDir: "e2e",
     fullyParallel: false,
@@ -16,14 +21,14 @@ export default defineConfig({
     timeout: 30_000,
     reporter: process.env.CI ? "github" : "list",
     use: {
-        baseURL: "http://localhost:1420",
+        baseURL: `http://localhost:${port}`,
         headless: true,
         trace: "retain-on-failure",
         ...devices["Desktop Chrome"],
     },
     webServer: {
-        command: "bun run dev",
-        url: "http://localhost:1420",
+        command: `bun run dev --port ${port} --strictPort`,
+        url: `http://localhost:${port}`,
         timeout: 60_000,
         reuseExistingServer: !process.env.CI,
     },
