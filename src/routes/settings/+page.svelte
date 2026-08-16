@@ -458,7 +458,7 @@
                   aria-label={provider.label}
                   checked={transcriptionPreferences.provider_id === provider.id}
                   onchange={() => setTranscriptionProvider(provider.id)}
-                  class="mt-1 h-3.5 w-3.5"
+                  class="mt-0.5 h-3.5 w-3.5"
                 />
                 <span>
                   <span class="block text-sm font-semibold text-fg">

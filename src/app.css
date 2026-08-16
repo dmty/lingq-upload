@@ -253,8 +253,9 @@
 }
 
 @layer components {
-  /* px, not rem: html sets font-size to --text-base (13px), so 1.375rem/1.75rem
-     would render at 17.9px/22.75px instead of the intended control heights. */
+  /* px, not rem: exact macOS control heights (24px/28px — coincidentally
+     h-6/h-7 on the 16px scale), literal so they can't drift if --text-base
+     changes. */
   .field {
     width: 100%;
     height: 24px;

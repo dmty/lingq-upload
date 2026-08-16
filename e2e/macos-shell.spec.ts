@@ -15,6 +15,17 @@ test.describe("macOS shell tokens", () => {
     expect(size).toBe("13px");
   });
 
+  // html must stay at the browser default so 1rem is 16px for Tailwind's
+  // spacing scale — regressing this shrinks every rem-based utility ~19%.
+  test("html stays at the 16px default so 1rem drives the utility scale", async ({
+    page,
+  }) => {
+    const size = await page.evaluate(
+      () => getComputedStyle(document.documentElement).fontSize,
+    );
+    expect(size).toBe("16px");
+  });
+
   test("accent fills resolve to a real colour, not a literal token", async ({
     page,
   }) => {

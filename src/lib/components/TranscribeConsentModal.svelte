@@ -153,8 +153,8 @@
 </dialog>
 
 <style>
-  /* px, not rem: html sets font-size to 13px, so rem values here would
-     render smaller than intended — see src/app.css. */
+  /* px, not rem: exact pixel sizing, literal so it can't drift with the
+     type scale — see src/app.css. */
   dialog {
     width: min(576px, calc(100vw - 32px));
   }
