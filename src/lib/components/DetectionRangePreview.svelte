@@ -36,7 +36,7 @@
   class="mt-3 rounded-md border border-success/40 bg-success-soft/30 p-3"
 >
   {#if (preview.atom_starts ?? []).length > 0}
-    <p class="font-serif text-[10px] tracking-[0.18em] text-success uppercase">
+    <p class="text-[10px] tracking-[0.18em] text-success uppercase">
       Heard each audio part
     </p>
     <ol class="mt-2 space-y-1" data-testid="detection-atom-starts">
@@ -54,7 +54,7 @@
       · text between these openings is packed onto that part
     </p>
   {:else}
-    <p class="font-serif text-[10px] tracking-[0.18em] text-success uppercase">
+    <p class="text-[10px] tracking-[0.18em] text-success uppercase">
       Proposed EPUB span
     </p>
     <p class="mt-1 text-sm font-medium text-fg">

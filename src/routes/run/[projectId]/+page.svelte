@@ -277,7 +277,7 @@
     <div>
       <StepIndicator current={3} />
       <a href="/library" class="text-xs text-fg-muted hover:text-fg">← Library</a>
-      <h1 class="font-serif text-lg font-semibold text-fg">
+      <h1 class="text-lg font-semibold text-fg">
         {project?.settings.collection_title ?? "Run"}
       </h1>
       <p class="mt-1 text-xs text-fg-muted tabular">

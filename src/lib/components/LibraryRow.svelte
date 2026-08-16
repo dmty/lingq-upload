@@ -208,7 +208,7 @@
 
     <div class="min-w-0">
       <div
-        class="truncate font-serif text-sm font-medium text-fg"
+        class="truncate text-sm font-medium text-fg"
         data-testid="library-title"
         title={entry.title}
       >

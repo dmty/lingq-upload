@@ -106,7 +106,7 @@
           {bucketLabel}
         </div>
       {/if}
-      <h2 class="text-md font-serif font-semibold leading-snug text-fg">{title}</h2>
+      <h2 class="text-md font-semibold leading-snug text-fg">{title}</h2>
     </header>
 
     {#if audio}
@@ -197,7 +197,7 @@
 
     <div
       data-testid="inspector-text"
-      class="inspector-text min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-5 py-4 text-[14px] leading-[1.95] text-fg [text-wrap:pretty] font-serif"
+      class="inspector-text selectable min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-5 py-4 text-[14px] leading-[1.95] text-fg [text-wrap:pretty] font-serif"
     >
       {#if body === null}
         <span class="text-fg-subtle italic">Loading…</span>

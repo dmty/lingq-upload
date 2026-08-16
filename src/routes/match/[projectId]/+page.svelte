@@ -762,7 +762,7 @@
             </p>
             <h1
               data-testid="match-title"
-              class="truncate font-serif text-lg font-semibold text-fg"
+              class="truncate text-lg font-semibold text-fg"
             >
               {bookTitle}
             </h1>
