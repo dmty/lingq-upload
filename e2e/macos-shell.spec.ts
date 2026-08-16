@@ -44,6 +44,42 @@ test.describe("macOS shell tokens", () => {
     expect(probe.fg).toMatch(/^rgba?\(/);
     expect(probe.fg).not.toBe(probe.bg);
   });
+
+  // The app pushes the real NSColor accent onto :root at runtime, because CSS
+  // AccentColor resolves to a fixed blue in WebKit. That only works if every
+  // derived token is a mix of var(--color-accent) rather than of a literal —
+  // this is the regression probe for the whole mechanism.
+  test("a runtime accent override repaints the derived accent tokens", async ({
+    page,
+  }) => {
+    const read = () =>
+      page.evaluate(() => {
+        const el = document.createElement("button");
+        el.className = "bg-accent";
+        document.body.append(el);
+        const root = getComputedStyle(document.documentElement);
+        const out = {
+          fill: getComputedStyle(el).backgroundColor,
+          soft: root.getPropertyValue("--color-accent-soft").trim(),
+          hover: root.getPropertyValue("--color-accent-hover").trim(),
+          ring: root.getPropertyValue("--color-accent-ring").trim(),
+        };
+        el.remove();
+        return out;
+      });
+
+    const before = await read();
+    await page.evaluate(() =>
+      // macOS red accent, as NSColor reports it.
+      document.documentElement.style.setProperty("--color-accent", "#ff5257"),
+    );
+    const after = await read();
+
+    expect(after.fill).toBe("rgb(255, 82, 87)");
+    expect(after.soft).not.toBe(before.soft);
+    expect(after.hover).not.toBe(before.hover);
+    expect(after.ring).not.toBe(before.ring);
+  });
 });
 
 test.describe("source list sidebar", () => {

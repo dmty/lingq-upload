@@ -84,35 +84,36 @@
   }
 }
 
-/* A custom property that parses but fails at computed-value time becomes
-   guaranteed-invalid rather than falling back to the previous declaration,
-   so the system colours are gated on real feature queries. */
-@supports (color: AccentColor) {
-  :root {
-    --color-accent: AccentColor;
-    --color-accent-fg: AccentColorText;
-  }
-}
-
-@supports (color: AccentColor) and (color: color-mix(in srgb, red, white)) {
+/* CSS `AccentColor` is deliberately unused. WebKit parses it but resolves it
+   to a fixed rgb(0, 122, 255) no matter what the user's accent is, and
+   `AccentColorText` to black rather than the white AppKit draws — so it would
+   pin the app to blue and strand the label on top. The real colour comes from
+   NSColor at runtime (see commands/appearance.rs), pushed onto :root as an
+   inline --color-accent, which outranks the literal above. Everything else is
+   derived from that var so it follows whichever value is in play. */
+@supports (color: color-mix(in srgb, red, white)) {
   :root {
     --color-accent-soft: color-mix(
       in srgb,
-      AccentColor 14%,
+      var(--color-accent) 14%,
       var(--color-surface)
     );
-    --color-accent-hover: color-mix(in srgb, AccentColor 88%, black);
-    --color-accent-ring: color-mix(in srgb, AccentColor 45%, transparent);
+    --color-accent-hover: color-mix(in srgb, var(--color-accent) 88%, black);
+    --color-accent-ring: color-mix(
+      in srgb,
+      var(--color-accent) 45%,
+      transparent
+    );
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
       --color-accent-soft: color-mix(
         in srgb,
-        AccentColor 26%,
+        var(--color-accent) 26%,
         var(--color-surface)
       );
-      --color-accent-hover: color-mix(in srgb, AccentColor 82%, white);
+      --color-accent-hover: color-mix(in srgb, var(--color-accent) 82%, white);
     }
   }
 }

@@ -5,6 +5,7 @@
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import Button from "$lib/components/Button.svelte";
+  import { commands } from "$lib/ipc/bindings";
 
   let { children } = $props();
 
@@ -45,6 +46,18 @@
     if (pending && dialog && !dialog.open) dialog.showModal();
   });
 
+  // The user's accent lives in NSColor, not in CSS — see app.css for why
+  // `AccentColor` can't be used. Refreshed on every focus gain because that is
+  // when a change made in System Settings becomes visible to us; AppKit has no
+  // web-facing notification for it.
+  async function pullSystemAccent() {
+    const result = await commands.cmdSystemAccent();
+    if (result.status !== "ok" || !result.data) return;
+    const root = document.documentElement;
+    root.style.setProperty("--color-accent", result.data.accent);
+    root.style.setProperty("--color-accent-fg", result.data.accent_fg);
+  }
+
   // AppKit dims accent-filled controls while the window is in the background.
   // Outside Tauri (browser, e2e) the window is always treated as active.
   $effect(() => {
@@ -57,7 +70,11 @@
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const win = getCurrentWindow();
         apply(await win.isFocused());
-        stop = await win.onFocusChanged(({ payload }) => apply(payload));
+        await pullSystemAccent();
+        stop = await win.onFocusChanged(({ payload }) => {
+          apply(payload);
+          if (payload) void pullSystemAccent();
+        });
       } catch {
         apply(true);
       }

@@ -22,6 +22,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             commands::ping::ping,
+            commands::appearance::cmd_system_accent,
             commands::demo::start_demo_job,
             commands::secrets::cmd_save_lingq_key,
             commands::secrets::cmd_load_lingq_key,

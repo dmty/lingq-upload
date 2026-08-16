@@ -15,6 +15,14 @@ async ping() : Promise<Result<string, AppError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async cmdSystemAccent() : Promise<Result<SystemAccent | null, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_system_accent") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async startDemoJob() : Promise<Result<string, AppError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("start_demo_job") };
@@ -809,6 +817,18 @@ export type ReceiptSnapshot = { chapter_index: number; lesson_id: number | null;
 export type SecretError = { kind: "LockedKeychain" } | { kind: "UserDenied" } | { kind: "MissingEntry" } | { kind: "Backend"; message: string }
 export type SeriesRef = { name: string; index: number | null }
 export type Stage = { kind: "transcoding" } | { kind: "uploading" } | { kind: "parsing" } | { kind: "detecting_start" }
+/**
+ * sRGB hex strings (`#rrggbb`) ready to drop into CSS custom properties.
+ */
+export type SystemAccent = { 
+/**
+ * Tint for controls and filled buttons (`NSColor.controlAccentColor`).
+ */
+accent: string; 
+/**
+ * Text drawn on top of `accent` (`NSColor.alternateSelectedControlTextColor`).
+ */
+accent_fg: string }
 export type TextError = { kind: "Io"; message: string }
 export type TextSource = { kind: "epub"; value: string } | { kind: "loose_files"; value: { paths: string[] } } | { kind: "missing" }
 export type TranscribeConsent = { provider_id: TranscribeProviderId; accepted_at: string }
