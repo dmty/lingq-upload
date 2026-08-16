@@ -675,12 +675,15 @@
                   First EPUB chapter that is actual story.
                 </p>
                 {#each headOptions as option (option.id)}
-                  <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                  <label
+                    class="mt-1 flex min-h-[24px] items-center gap-2 text-sm text-fg"
+                  >
                     <input
                       type="radio"
                       name="detection-head"
                       value={option.id}
                       bind:group={selectedHead}
+                      class="h-3.5 w-3.5"
                     />
                     <span>{option.label}</span>
                   </label>
@@ -694,12 +697,15 @@
                   Last EPUB chapter this audiobook covers. Must be after start.
                 </p>
                 {#each tailOptions as option (option.id)}
-                  <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                  <label
+                    class="mt-1 flex min-h-[24px] items-center gap-2 text-sm text-fg"
+                  >
                     <input
                       type="radio"
                       name="detection-tail"
                       value={option.id}
                       bind:group={selectedTail}
+                      class="h-3.5 w-3.5"
                     />
                     <span>{option.label}</span>
                   </label>
@@ -721,12 +727,15 @@
                 First EPUB chapter that is actual story.
               </p>
               {#each headOptions as option (option.id)}
-                <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                <label
+                  class="mt-1 flex min-h-[24px] items-center gap-2 text-sm text-fg"
+                >
                   <input
                     type="radio"
                     name="detection-head"
                     value={option.id}
                     bind:group={selectedHead}
+                    class="h-3.5 w-3.5"
                   />
                   <span>{option.label}</span>
                 </label>
@@ -740,12 +749,15 @@
                 Last EPUB chapter this audiobook covers. Must be after start.
               </p>
               {#each tailOptions as option (option.id)}
-                <label class="mt-1 flex items-center gap-2 text-sm text-fg">
+                <label
+                  class="mt-1 flex min-h-[24px] items-center gap-2 text-sm text-fg"
+                >
                   <input
                     type="radio"
                     name="detection-tail"
                     value={option.id}
                     bind:group={selectedTail}
+                    class="h-3.5 w-3.5"
                   />
                   <span>{option.label}</span>
                 </label>

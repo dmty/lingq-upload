@@ -434,7 +434,7 @@
               </span>
             {:else if languages.length > 0}
               <label
-                class="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted"
+                class="mt-1.5 flex min-h-[24px] cursor-pointer items-center gap-1.5 text-xs text-fg-muted"
               >
                 <input
                   type="checkbox"

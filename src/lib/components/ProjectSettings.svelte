@@ -76,6 +76,7 @@
         value={p.value}
         checked={absorbPolicy === p.value}
         onchange={() => onSelect(p.value)}
+        class="h-3.5 w-3.5"
       />
       <span class="label">{p.label}</span>
       <span class="hint">{p.hint}</span>
@@ -101,6 +102,7 @@
     grid-template-columns: auto 6rem 1fr;
     align-items: baseline;
     gap: 0.5rem;
+    min-height: 24px;
     cursor: pointer;
   }
   .absorb-policy:disabled label {

@@ -778,12 +778,15 @@
               {chapters} → {tracks}
             </p>
             <div class="mt-1 flex flex-col gap-1">
-              <label class="flex items-center gap-1.5 text-xs text-fg-muted">
+              <label
+                class="flex min-h-[24px] items-center gap-1.5 text-xs text-fg-muted"
+              >
                 <input
                   type="checkbox"
                   bind:checked={coverUse}
                   disabled={coverPath === null || coverBusy}
                   onchange={onToggleCoverUse}
+                  class="h-3.5 w-3.5"
                 />
                 Use this cover for LingQ course
               </label>

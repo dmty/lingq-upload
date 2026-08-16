@@ -450,29 +450,25 @@
               : 'border-border'}"
           >
             <div class="flex items-start justify-between gap-4">
-              <div class="flex items-start gap-3">
+              <label class="flex min-h-[24px] items-start gap-3 cursor-pointer">
                 <input
-                  id={`transcription-provider-${provider.id}`}
                   type="radio"
                   name="transcription-provider"
                   value={provider.id}
                   aria-label={provider.label}
                   checked={transcriptionPreferences.provider_id === provider.id}
                   onchange={() => setTranscriptionProvider(provider.id)}
-                  class="mt-1 h-4 w-4"
+                  class="mt-1 h-3.5 w-3.5"
                 />
-                <label
-                  for={`transcription-provider-${provider.id}`}
-                  class="cursor-pointer"
-                >
+                <span>
                   <span class="block text-sm font-semibold text-fg">
                     {provider.label}
                   </span>
                   <code class="tabular text-xs text-fg-muted">
                     {provider.model}
                   </code>
-                </label>
-              </div>
+                </span>
+              </label>
               <span
                 class={provider.key_present
                   ? "text-xs font-medium text-success"
@@ -553,13 +549,13 @@
         {/each}
       </fieldset>
 
-      <label class="mt-5 flex items-start gap-3 text-sm">
+      <label class="mt-5 flex min-h-[24px] items-start gap-3 text-sm">
         <input
           type="checkbox"
           checked={transcriptionPreferences.auto_detect_start}
           disabled={transcriptionBusy}
           onchange={(event) => setAutoDetect(event.currentTarget.checked)}
-          class="mt-0.5 h-4 w-4"
+          class="mt-0.5 h-3.5 w-3.5"
         />
         <span>
           <span class="font-medium text-fg"
@@ -702,14 +698,14 @@
           class="mt-4 space-y-2"
           disabled={devBackendBusy || devBackend.env_override}
         >
-          <label class="flex items-start gap-3">
+          <label class="flex min-h-[24px] items-start gap-3">
             <input
               type="radio"
               name="dev-backend"
               value="file"
               checked={devBackend.current === "file"}
               onchange={() => setDevBackend("file")}
-              class="mt-0.5 h-4 w-4"
+              class="mt-0.5 h-3.5 w-3.5"
             />
             <span class="text-sm">
               <span class="font-medium text-fg">File shim</span>
@@ -719,14 +715,14 @@
             </span>
           </label>
 
-          <label class="flex items-start gap-3">
+          <label class="flex min-h-[24px] items-start gap-3">
             <input
               type="radio"
               name="dev-backend"
               value="keychain"
               checked={devBackend.current === "keychain"}
               onchange={() => setDevBackend("keychain")}
-              class="mt-0.5 h-4 w-4"
+              class="mt-0.5 h-3.5 w-3.5"
             />
             <span class="text-sm">
               <span class="font-medium text-fg">OS keychain</span>
