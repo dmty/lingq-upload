@@ -20,6 +20,12 @@ import type {
 } from "../../src/lib/ipc/bindings";
 
 type Fixture = Record<string, unknown>;
+// Shapes that recur across the fixtures below, named once so each
+// declaration reads as what it is rather than its structure.
+type CallLog = Fixture[];
+type JobIdArgs = { jobId?: string }[];
+type Gate = Promise<void>;
+type Release = () => void;
 
 declare global {
   interface Window {
@@ -56,12 +62,12 @@ declare global {
     // Library / course fixtures.
     __libraryEntries__?: LibraryEntry[];
     __libraryError__?: AppError | Error;
-    __libraryGate__?: Promise<void>;
-    __releaseLibrary__?: () => void;
+    __libraryGate__?: Gate;
+    __releaseLibrary__?: Release;
     __courseView__?: CourseView;
     __courseError__?: AppError | Error;
-    __courseGate__?: Promise<void>;
-    __releaseCourse__?: () => void;
+    __courseGate__?: Gate;
+    __releaseCourse__?: Release;
     __collections__?: Collection[];
     __languages__?: Language[];
     __openedUrl__?: string;
@@ -80,14 +86,14 @@ declare global {
     __matcherInspectionByProject__?: Record<string, MismatchInspection | null>;
     __matcherSeedByProject__?: Record<string, Fixture>;
     __failNextMappingOp__?: boolean;
-    __confirmMappingCalls__?: Fixture[];
+    __confirmMappingCalls__?: CallLog;
 
     // Upload fixtures.
     __uploadOneShotResult__?: { lesson_id: number; collection_id: number };
     __uploadOneShotError__?: AppError | Error;
-    __uploadOneShotGate__?: Promise<void>;
-    __releaseUpload__?: () => void;
-    __cancelJobCalls__?: { jobId?: string }[];
+    __uploadOneShotGate__?: Gate;
+    __releaseUpload__?: Release;
+    __cancelJobCalls__?: JobIdArgs;
 
     // Transcription / detection fixtures.
     __transcriptionPreferences__?: AppTranscriptionPreferences;
@@ -95,24 +101,24 @@ declare global {
     __transcriptionConsents__?: Record<string, boolean>;
     __failNextTranscriptionPreferences__?: boolean;
     __failNextTranscribeConsent__?: boolean;
-    __transcribeConsentCalls__?: Fixture[];
-    __transcribeConsentGate__?: Promise<void>;
-    __releaseTranscribeConsent__?: () => void;
+    __transcribeConsentCalls__?: CallLog;
+    __transcribeConsentGate__?: Gate;
+    __releaseTranscribeConsent__?: Release;
     __detectionAvailability__?: DetectionAvailability;
     __detectionAvailabilityByProject__?: Record<string, DetectionAvailability>;
     __detectionResult__?: DetectStartResult;
     __detectionCommandError__?: AppError | Error;
-    __detectionGate__?: Promise<void>;
-    __releaseDetection__?: () => void;
+    __detectionGate__?: Gate;
+    __releaseDetection__?: Release;
     __detectionStartCalls__?: number;
-    __detectionStartArgs__?: { jobId?: string }[];
+    __detectionStartArgs__?: JobIdArgs;
     __detectionListenerCountAtStart__?: number;
-    __confirmDetectedRangeCalls__?: Fixture[];
+    __confirmDetectedRangeCalls__?: CallLog;
     __confirmDetectedRangeError__?: AppError | Error;
-    __confirmDetectedRangeGate__?: Promise<void>;
-    __resetDetectionCalls__?: Fixture[];
+    __confirmDetectedRangeGate__?: Gate;
+    __resetDetectionCalls__?: CallLog;
     __resetDetectionError__?: AppError | Error;
-    __resetDetectionGate__?: Promise<void>;
+    __resetDetectionGate__?: Gate;
     __dialogPickPath__?: string | null;
   }
 }

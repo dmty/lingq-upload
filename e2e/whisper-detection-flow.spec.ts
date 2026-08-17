@@ -3,7 +3,6 @@ import { expect, test, type Page } from "@playwright/test";
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
 import type {
   AppError,
-  AtomStart,
   DetectStartResult,
   DetectedRange,
   DetectionPreview,
@@ -455,13 +454,12 @@ test.describe("detected text range flow", () => {
 
   test("detected atom starts list each audio part", async ({ page }) => {
     const jobId = await startDetection(page);
-    const atomStarts: AtomStart[] = [
-      { track_index: 0, chapter_id: START_ID },
-      { track_index: 1, chapter_id: END_ID },
-    ];
     await emitDetected(page, jobId, {
       ...transcriptPreview,
-      atom_starts: atomStarts,
+      atom_starts: [
+        { track_index: 0, chapter_id: START_ID },
+        { track_index: 1, chapter_id: END_ID },
+      ],
     });
 
     const starts = page.getByTestId("detection-atom-starts");
