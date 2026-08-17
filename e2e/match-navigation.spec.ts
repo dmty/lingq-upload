@@ -72,9 +72,7 @@ function multiProjectScript(): string {
 async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
   return page.evaluate(
     (command) =>
-      ((window as any).__invokeLog__ as string[]).filter(
-        (entry) => entry === command,
-      ).length,
+      window.__invokeLog__.filter((entry) => entry === command).length,
     cmd,
   );
 }
@@ -122,8 +120,8 @@ test.describe("match navigation", () => {
     await page.goto(`/match/${PROJECT_B}`);
     await expect(page.getByText("Book B — Silent Witch")).toBeVisible();
     await page.evaluate(() => {
-      (window as any).__transcribeConsentGate__ = new Promise((resolve) => {
-        (window as any).__releaseTranscribeConsent__ = resolve;
+      window.__transcribeConsentGate__ = new Promise((resolve) => {
+        window.__releaseTranscribeConsent__ = resolve;
       });
     });
 
@@ -149,8 +147,8 @@ test.describe("match navigation", () => {
     );
 
     await page.evaluate(async () => {
-      (window as any).__releaseTranscribeConsent__();
-      await (window as any).__transcribeConsentGate__;
+      window.__releaseTranscribeConsent__?.();
+      await window.__transcribeConsentGate__;
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );

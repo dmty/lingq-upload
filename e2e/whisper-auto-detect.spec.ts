@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import type { AppError, DetectStartResult } from "../src/lib/ipc/bindings";
 
 const AUTO_KEY = "auto-eligible";
 const EVIDENCE_KEY = "auto-existing-evidence";
@@ -59,7 +60,7 @@ const detectedPreview = {
   atom_starts: [],
 };
 
-const lowConfidence = {
+const lowConfidence: DetectStartResult = {
   kind: "low_confidence",
   transcript_head_preview: "possible arrival",
   transcript_tail_preview: "possible return",
@@ -228,7 +229,11 @@ async function emit(page: Page, payload: object): Promise<void> {
 /** Auto mode starts on mount, so gates and results must be seeded pre-goto. */
 async function seedRun(
   page: Page,
-  seed: { hold?: boolean; result?: object; error?: object },
+  seed: {
+    hold?: boolean;
+    result?: DetectStartResult;
+    error?: AppError | Error;
+  },
 ): Promise<void> {
   await page.addInitScript((next: typeof seed) => {
     if (next.hold) {
@@ -248,7 +253,11 @@ async function autoStarted(page: Page): Promise<string> {
     page.getByRole("heading", { name: "Resolve mismatch" }),
   ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => detectionCalls(page)).toBe(1);
-  return page.evaluate(() => window.__detectionStartArgs__[0].jobId);
+  const jobId = await page.evaluate(
+    () => window.__detectionStartArgs__?.[0]?.jobId,
+  );
+  if (!jobId) throw new Error("no detection start recorded");
+  return jobId;
 }
 
 /** Invoke log filtered to the ordered detection→mapping commands. */
@@ -402,7 +411,10 @@ test.describe("gated automatic range detection", () => {
     page,
   }) => {
     await seedRun(page, {
-      error: { kind: "Transcribe", message: { kind: "rate_limit" } },
+      error: {
+        kind: "Transcribe",
+        message: { kind: "rate_limit", message: "rate limited" },
+      },
     });
     await page.goto(`/match/${AUTO_KEY}`);
     await autoStarted(page);

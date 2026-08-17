@@ -35,7 +35,10 @@ const seedScript = () => `
 })();
 `;
 
-const fetchCount = (page: import("@playwright/test").Page, workerIndex: number) =>
+const fetchCount = (
+  page: import("@playwright/test").Page,
+  workerIndex: number,
+) =>
   page.evaluate(
     (ns) => Number(sessionStorage.getItem("__courseFetchCount__:" + ns) || "0"),
     String(workerIndex),
@@ -57,22 +60,30 @@ test.describe("course stats caching", () => {
     await page.addInitScript(seedScript());
   });
 
-  test("a revisit inside the TTL does not refetch", async ({ page }, testInfo) => {
+  test("a revisit inside the TTL does not refetch", async ({
+    page,
+  }, testInfo) => {
     await page.goto(`/course/${ROUTE_KEY}`);
     await expect(page.getByTestId("stat-lessons")).toContainText("1");
     expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
 
     // Proves the label ticks on a live, still-mounted screen — not just that
     // it's computed fresh on remount.
-    await expect(page.getByTestId("course-freshness")).toContainText("just now");
+    await expect(page.getByTestId("course-freshness")).toContainText(
+      "just now",
+    );
     await page.clock.fastForward("05:00");
-    await expect(page.getByTestId("course-freshness")).toContainText("5 minutes ago");
+    await expect(page.getByTestId("course-freshness")).toContainText(
+      "5 minutes ago",
+    );
 
     await leaveAndReturn(page);
     await expect(page.getByTestId("stat-lessons")).toContainText("1");
 
     expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
-    await expect(page.getByTestId("course-freshness")).toContainText("5 minutes ago");
+    await expect(page.getByTestId("course-freshness")).toContainText(
+      "5 minutes ago",
+    );
   });
 
   test("a revisit past the TTL revalidates in the background", async ({
@@ -91,14 +102,18 @@ test.describe("course stats caching", () => {
       .toBe(2);
   });
 
-  test("Refresh forces a fetch on a fresh entry", async ({ page }, testInfo) => {
+  test("Refresh forces a fetch on a fresh entry", async ({
+    page,
+  }, testInfo) => {
     await page.goto(`/course/${ROUTE_KEY}`);
     await expect(page.getByTestId("stat-lessons")).toContainText("1");
     expect(await fetchCount(page, testInfo.workerIndex)).toBe(1);
 
     await page.getByTestId("course-refresh").click();
 
-    await expect.poll(async () => await fetchCount(page, testInfo.workerIndex)).toBe(2);
+    await expect
+      .poll(async () => await fetchCount(page, testInfo.workerIndex))
+      .toBe(2);
   });
 
   test("Refresh shows the revalidating indicator while the fetch is held", async ({
@@ -120,7 +135,7 @@ test.describe("course stats caching", () => {
     try {
       await expect(page.getByTestId("course-revalidating")).toBeVisible();
     } finally {
-      await page.evaluate(() => window.__releaseCourse__());
+      await page.evaluate(() => window.__releaseCourse__?.());
     }
 
     await expect(page.getByTestId("course-revalidating")).toBeHidden();

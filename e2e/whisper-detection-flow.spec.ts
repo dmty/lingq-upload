@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import type {
+  AppError,
+  AtomStart,
+  DetectStartResult,
+  DetectedRange,
+  DetectionPreview,
+} from "../src/lib/ipc/bindings";
 
 const PROJECT_KEY = "detection-flow-fixture";
 const OTHER_PROJECT_KEY = "detection-flow-other";
@@ -42,7 +49,7 @@ const candidateChapters = [
   { id: "idx:5", order: 5, title: "Epilogue", body: "", kind: "body" },
 ];
 
-const lowConfidence = {
+const lowConfidence: DetectStartResult = {
   kind: "low_confidence",
   transcript_head_preview: "a crossing begins",
   transcript_tail_preview: "the descent ends",
@@ -66,7 +73,7 @@ const inspection = {
   bucket_preview: null,
 };
 
-const titlePreview = {
+const titlePreview: DetectionPreview = {
   provider_id: null,
   align_source: "title",
   range: { start_chapter_id: START_ID, end_chapter_id: END_ID },
@@ -77,13 +84,16 @@ const titlePreview = {
   atom_starts: [],
 };
 
-const transcriptPreview = {
+const TRANSCRIPT_HEAD_PREVIEW = "始まり 🐉 café — arrival";
+const TRANSCRIPT_TAIL_PREVIEW = "帰還 🌊 fin — return";
+
+const transcriptPreview: DetectionPreview = {
   provider_id: "groq",
   align_source: "transcript",
   range: { start_chapter_id: START_ID, end_chapter_id: END_ID },
   confidence: 0.8123,
-  transcript_head_preview: "始まり 🐉 café — arrival",
-  transcript_tail_preview: "帰還 🌊 fin — return",
+  transcript_head_preview: TRANSCRIPT_HEAD_PREVIEW,
+  transcript_tail_preview: TRANSCRIPT_TAIL_PREVIEW,
   detected_at: "2026-08-12T00:01:00Z",
   atom_starts: [],
 };
@@ -129,6 +139,19 @@ async function holdDetection(page: Page): Promise<void> {
   });
 }
 
+function startArgsLength(page: Page): Promise<number> {
+  return page.evaluate(() => window.__detectionStartArgs__?.length ?? 0);
+}
+
+async function nthStartJobId(page: Page, index: number): Promise<string> {
+  const jobId = await page.evaluate(
+    (i) => window.__detectionStartArgs__?.[i]?.jobId,
+    index,
+  );
+  if (!jobId) throw new Error(`no detection start recorded at index ${index}`);
+  return jobId;
+}
+
 async function startDetection(
   page: Page,
   projectKey = PROJECT_KEY,
@@ -137,10 +160,8 @@ async function startDetection(
   await expect(page.getByText(PROJECT_TITLES[projectKey])).toBeVisible();
   await holdDetection(page);
   await page.getByRole("button", { name: "Detect audio's text range" }).click();
-  await expect
-    .poll(() => page.evaluate(() => window.__detectionStartArgs__?.length ?? 0))
-    .toBe(1);
-  return page.evaluate(() => window.__detectionStartArgs__[0].jobId);
+  await expect.poll(() => startArgsLength(page)).toBe(1);
+  return nthStartJobId(page, 0);
 }
 
 async function emit(page: Page, payload: object): Promise<void> {
@@ -150,7 +171,7 @@ async function emit(page: Page, payload: object): Promise<void> {
 async function emitDetected(
   page: Page,
   jobId: string,
-  preview: typeof titlePreview,
+  preview: DetectionPreview,
 ): Promise<void> {
   await emit(page, {
     kind: "Started",
@@ -165,11 +186,26 @@ async function emitDetected(
   });
 }
 
+type ConfirmDetectedRangeArgs = {
+  selectedRange: DetectedRange;
+  evidence: DetectionPreview;
+};
+
+async function confirmedRangeArgs(
+  page: Page,
+): Promise<ConfirmDetectedRangeArgs> {
+  const args = await page.evaluate(
+    () => window.__confirmDetectedRangeCalls__?.[0],
+  );
+  if (!args) throw new Error("cmd_confirm_detected_range was not called");
+  return args as ConfirmDetectedRangeArgs;
+}
+
 /** Return a typed detection outcome straight from the command, no events. */
 async function detectReturning(
   page: Page,
   projectKey: string,
-  outcome: { result?: object; error?: object },
+  outcome: { result?: DetectStartResult; error?: AppError | Error },
 ): Promise<void> {
   await page.goto(`/match/${projectKey}`);
   await expect(page.getByText(PROJECT_TITLES[projectKey])).toBeVisible();
@@ -279,21 +315,15 @@ test.describe("detected text range flow", () => {
     await page
       .getByRole("button", { name: "Detect audio's text range" })
       .click();
-    await expect
-      .poll(() => page.evaluate(() => window.__detectionStartArgs__.length))
-      .toBe(2);
-    jobId = await page.evaluate(() => window.__detectionStartArgs__[1].jobId);
+    await expect.poll(() => startArgsLength(page)).toBe(2);
+    jobId = await nthStartJobId(page, 1);
     await emitDetected(page, jobId, transcriptPreview);
 
     await expect(preview).toContainText("Transcription");
     await expect(preview).toContainText("81%");
     await expect(preview.locator("details")).toHaveCount(0);
-    await expect(
-      preview.getByText(transcriptPreview.transcript_head_preview),
-    ).toBeVisible();
-    await expect(
-      preview.getByText(transcriptPreview.transcript_tail_preview),
-    ).toBeVisible();
+    await expect(preview.getByText(TRANSCRIPT_HEAD_PREVIEW)).toBeVisible();
+    await expect(preview.getByText(TRANSCRIPT_TAIL_PREVIEW)).toBeVisible();
   });
 
   test("keeps content outcomes distinct from one typed operational error", async ({
@@ -332,14 +362,12 @@ test.describe("detected text range flow", () => {
     await page
       .getByRole("button", { name: "Detect audio's text range" })
       .click();
-    await expect
-      .poll(() => page.evaluate(() => window.__detectionStartArgs__.length))
-      .toBe(2);
-    jobId = await page.evaluate(() => window.__detectionStartArgs__[1].jobId);
+    await expect.poll(() => startArgsLength(page)).toBe(2);
+    jobId = await nthStartJobId(page, 1);
     await page.evaluate(() => {
       window.__detectionCommandError__ = {
         kind: "Transcribe",
-        message: { kind: "rate_limit" },
+        message: { kind: "rate_limit", message: "rate limited" },
       };
     });
     await emit(page, {
@@ -353,7 +381,7 @@ test.describe("detected text range flow", () => {
       ok: false,
       payload: { kind: "Transcribe", message: { kind: "network" } },
     });
-    await page.evaluate(() => window.__releaseDetection__());
+    await page.evaluate(() => window.__releaseDetection__?.());
     await expect(page.getByRole("alert")).toHaveCount(1);
     await expect(page.getByRole("alert")).toContainText(
       "Couldn't reach the transcription provider",
@@ -368,7 +396,7 @@ test.describe("detected text range flow", () => {
     await page.evaluate(() => {
       window.__detectionCommandError__ = {
         kind: "Transcribe",
-        message: { kind: "api_key" },
+        message: { kind: "api_key", message: "no key configured" },
       };
     });
     await page
@@ -427,12 +455,13 @@ test.describe("detected text range flow", () => {
 
   test("detected atom starts list each audio part", async ({ page }) => {
     const jobId = await startDetection(page);
+    const atomStarts: AtomStart[] = [
+      { track_index: 0, chapter_id: START_ID },
+      { track_index: 1, chapter_id: END_ID },
+    ];
     await emitDetected(page, jobId, {
       ...transcriptPreview,
-      atom_starts: [
-        { track_index: 0, chapter_id: START_ID },
-        { track_index: 1, chapter_id: END_ID },
-      ],
+      atom_starts: atomStarts,
     });
 
     const starts = page.getByTestId("detection-atom-starts");
@@ -455,9 +484,7 @@ test.describe("detected text range flow", () => {
     await expect(page).toHaveURL(new RegExp(`/match/${PROJECT_KEY}$`));
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
 
-    const args = await page.evaluate(
-      () => window.__confirmDetectedRangeCalls__[0],
-    );
+    const args = await confirmedRangeArgs(page);
     expect(args.selectedRange).toEqual({
       start_chapter_id: START_ID,
       end_chapter_id: END_ID,
@@ -514,9 +541,7 @@ test.describe("detected text range flow", () => {
 
     await page.getByRole("button", { name: "Confirm detected range" }).click();
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
-    const args = await page.evaluate(
-      () => window.__confirmDetectedRangeCalls__[0],
-    );
+    const args = await confirmedRangeArgs(page);
     expect(args.selectedRange).toEqual({
       start_chapter_id: "idx:2",
       end_chapter_id: "idx:5",
@@ -548,15 +573,15 @@ test.describe("detected text range flow", () => {
     const endRadio = candidateRadio(page, "End chapter");
     await expect(endRadio(/Epilogue/)).toHaveCount(0);
 
-    const fallback = endRadio(/Chapter 5 · The Descent.*final chapter fallback/i);
+    const fallback = endRadio(
+      /Chapter 5 · The Descent.*final chapter fallback/i,
+    );
     await expect(fallback).not.toBeChecked();
     await fallback.check();
 
     await page.getByRole("button", { name: "Confirm detected range" }).click();
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
-    const args = await page.evaluate(
-      () => window.__confirmDetectedRangeCalls__[0],
-    );
+    const args = await confirmedRangeArgs(page);
     expect(args.selectedRange).toEqual({
       start_chapter_id: "idx:2",
       end_chapter_id: "idx:4",
@@ -637,7 +662,10 @@ test.describe("detected text range flow", () => {
       page,
       "Start chapter",
     )(/Chapter 5 · The Descent/).check();
-    await candidateRadio(page, "End chapter")(/Chapter 5 · The Descent/).check();
+    await candidateRadio(
+      page,
+      "End chapter",
+    )(/Chapter 5 · The Descent/).check();
 
     const confirm = page.getByRole("button", {
       name: "Confirm detected range",
@@ -765,7 +793,10 @@ test.describe("detected text range flow", () => {
       page,
     }) => {
       await detectReturning(page, PROJECT_KEY, {
-        error: { kind: "Transcribe", message: { kind: failure.kind } },
+        error: {
+          kind: "Transcribe",
+          message: { kind: failure.kind, message: failure.copy },
+        },
       });
       const assist = page.getByTestId("detection-assist");
       await expect(page.getByRole("alert")).toContainText(failure.copy);
@@ -795,22 +826,21 @@ test.describe("detected text range flow", () => {
     page,
   }) => {
     await detectReturning(page, PROJECT_KEY, {
-      error: { kind: "Transcribe", message: { kind: "network" } },
+      error: {
+        kind: "Transcribe",
+        message: { kind: "network", message: "Check your internet connection" },
+      },
     });
     const assist = page.getByTestId("detection-assist");
     await expect(page.getByRole("alert")).toBeVisible();
-    expect(
-      await page.evaluate(() => window.__detectionStartArgs__.length),
-    ).toBe(1);
+    expect(await startArgsLength(page)).toBe(1);
 
     await page.evaluate(() => {
-      window.__detectionCommandError__ = null;
+      window.__detectionCommandError__ = undefined;
       window.__detectionResult__ = { kind: "no_transcript", reason: "empty" };
     });
     await assist.getByRole("button", { name: "Try detection again" }).click();
-    await expect
-      .poll(() => page.evaluate(() => window.__detectionStartArgs__.length))
-      .toBe(2);
+    await expect.poll(() => startArgsLength(page)).toBe(2);
     await expect(page.getByTestId("detection-content-outcome")).toContainText(
       "No speech was recognized",
     );

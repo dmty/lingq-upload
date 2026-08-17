@@ -28,7 +28,10 @@ const entryScript = () => `
 const failWith = (error: unknown) =>
   `;(() => { window.__courseError__ = ${JSON.stringify(error)}; })();`;
 
-const fetchCount = (page: import("@playwright/test").Page, workerIndex: number) =>
+const fetchCount = (
+  page: import("@playwright/test").Page,
+  workerIndex: number,
+) =>
   page.evaluate(
     (ns) => Number(sessionStorage.getItem("__courseFetchCount__:" + ns) || "0"),
     String(workerIndex),
@@ -54,20 +57,29 @@ test.describe("course screen failures", () => {
 
   test("a transport failure offers a retry", async ({ page }) => {
     await page.addInitScript(
-      failWith({ kind: "Lingq", message: { kind: "Transport", message: "dns" } }),
+      failWith({
+        kind: "Lingq",
+        message: { kind: "Transport", message: "dns" },
+      }),
     );
     await page.goto(`/course/${ROUTE_KEY}`);
 
-    await expect(page.getByTestId("course-alert")).toContainText("Couldn't reach LingQ");
+    await expect(page.getByTestId("course-alert")).toContainText(
+      "Couldn't reach LingQ",
+    );
     await expect(page.getByTestId("course-refresh")).toBeVisible();
     await expect(page.getByTestId("open-in-lingq")).toBeEnabled();
   });
 
   test("a deleted course says so and offers no retry", async ({ page }) => {
-    await page.addInitScript(failWith({ kind: "Lingq", message: { kind: "NotFound" } }));
+    await page.addInitScript(
+      failWith({ kind: "Lingq", message: { kind: "NotFound" } }),
+    );
     await page.goto(`/course/${ROUTE_KEY}`);
 
-    await expect(page.getByTestId("course-alert")).toContainText("no longer on LingQ");
+    await expect(page.getByTestId("course-alert")).toContainText(
+      "no longer on LingQ",
+    );
     await expect(page.getByTestId("course-refresh")).toHaveCount(0);
     await expect(page.getByTestId("open-in-lingq")).toBeEnabled();
   });
@@ -107,7 +119,9 @@ test.describe("course screen failures", () => {
     // Unlike the fixtures above (plain objects the stub throws, mirroring an
     // app-level AppError), this is a real Error instance — the shape the
     // generated binding rethrows instead of returning as a result.
-    await page.addInitScript(`window.__courseError__ = new Error("socket reset");`);
+    await page.addInitScript(
+      `window.__courseError__ = new Error("socket reset");`,
+    );
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toBeVisible();
@@ -199,7 +213,7 @@ test.describe("course screen failures", () => {
     await expect(page.getByTestId("course-loading")).toBeVisible();
     await expect(page.getByTestId("course-not-found")).toHaveCount(0);
 
-    await page.evaluate(() => window.__releaseLibrary__());
+    await page.evaluate(() => window.__releaseLibrary__?.());
 
     await expect(page.getByTestId("course-header")).toBeVisible();
   });

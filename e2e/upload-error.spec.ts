@@ -52,11 +52,13 @@ test.describe("one-shot upload error surface", () => {
     );
     await expect(page.getByText("Transcoding audio")).toBeVisible();
 
-    await page.evaluate(() => window.__releaseUpload__());
+    await page.evaluate(() => window.__releaseUpload__?.());
 
     // The bug: ProgressPanel stays mounted and this alert never appears.
     await expect(page.getByRole("alert")).toContainText(/LingQ/i);
-    await expect(page.getByRole("button", { name: "Upload lesson" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Upload lesson" }),
+    ).toBeVisible();
   });
 
   test("Cancel during upload invokes cmd_cancel_job", async ({ page }) => {
@@ -95,6 +97,6 @@ test.describe("one-shot upload error surface", () => {
     );
     expect(logged).toBe(true);
 
-    await page.evaluate(() => window.__releaseUpload__());
+    await page.evaluate(() => window.__releaseUpload__?.());
   });
 });

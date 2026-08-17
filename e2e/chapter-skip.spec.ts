@@ -5,25 +5,99 @@ const PROJECT_KEY = "skip-fixture";
 
 function fixtureScript(): string {
   const chapters = [
-    { id: "idx:0", order: 0, title: "Preface", body: "x".repeat(50), kind: "front_matter" },
-    { id: "idx:1", order: 1, title: "Chapter One", body: "x".repeat(100), kind: "body" },
-    { id: "idx:2", order: 2, title: "Chapter Two", body: "x".repeat(100), kind: "body" },
-    { id: "idx:3", order: 3, title: "Chapter Three", body: "x".repeat(100), kind: "body" },
-    { id: "idx:4", order: 4, title: "Epilogue", body: "x".repeat(50), kind: "back_matter" },
+    {
+      id: "idx:0",
+      order: 0,
+      title: "Preface",
+      body: "x".repeat(50),
+      kind: "front_matter",
+    },
+    {
+      id: "idx:1",
+      order: 1,
+      title: "Chapter One",
+      body: "x".repeat(100),
+      kind: "body",
+    },
+    {
+      id: "idx:2",
+      order: 2,
+      title: "Chapter Two",
+      body: "x".repeat(100),
+      kind: "body",
+    },
+    {
+      id: "idx:3",
+      order: 3,
+      title: "Chapter Three",
+      body: "x".repeat(100),
+      kind: "body",
+    },
+    {
+      id: "idx:4",
+      order: 4,
+      title: "Epilogue",
+      body: "x".repeat(50),
+      kind: "back_matter",
+    },
   ];
   const mapping = {
     pairs: [
-      { chapter_id: "idx:0", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:1", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:2", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:3", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:4", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
+      {
+        chapter_id: "idx:0",
+        track_id: "t0",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:1",
+        track_id: "t0",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:2",
+        track_id: "t1",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:3",
+        track_id: "t1",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:4",
+        track_id: "t1",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
     ],
     parking_lot: [],
     op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a0.m4b", window: null },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/x/a1.m4b", window: null },
+      {
+        trackId: "t0",
+        atomTitle: "Audio 1",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a0.m4b",
+        window: null,
+      },
+      {
+        trackId: "t1",
+        atomTitle: "Audio 2",
+        atomDurationSec: 300,
+        charsPerSec: 5,
+        audioPath: "/x/a1.m4b",
+        window: null,
+      },
     ],
   };
   const inspection = {
@@ -88,12 +162,7 @@ test.describe("bulk matter toggle", () => {
     // Wait for the stub to persist the skip.
     await page.waitForFunction(
       (key) => {
-        const s = (
-          window as unknown as {
-            __pickerState__: { skippedByProject: Record<string, string[]> };
-          }
-        ).__pickerState__;
-        const skipped = s.skippedByProject[key] || [];
+        const skipped = window.__pickerState__.skippedByProject[key] || [];
         return skipped.includes("idx:0") && skipped.includes("idx:4");
       },
       PROJECT_KEY,

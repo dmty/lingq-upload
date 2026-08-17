@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import type {
+  AppTranscriptionPreferences,
+  DetectionAvailability,
+} from "../src/lib/ipc/bindings";
 
 const TRANSCRIPT_KEY = "evidence-transcript";
 const TITLE_KEY = "evidence-title";
@@ -22,7 +26,13 @@ const chapters = [
   },
   { id: START_ID, order: 1, title: "Arrival", body: "", kind: "body" },
   { id: END_ID, order: 2, title: "Return", body: "", kind: "body" },
-  { id: "spine:notes", order: 3, title: "Notes", body: "", kind: "back_matter" },
+  {
+    id: "spine:notes",
+    order: 3,
+    title: "Notes",
+    body: "",
+    kind: "back_matter",
+  },
 ];
 
 const transcriptEvidence = {
@@ -183,7 +193,9 @@ test.describe("confirmed detection evidence and reset", () => {
     // Its own panel, not the unresolved-mismatch evidence card, and not nested
     // inside the grid.
     await expect(
-      page.locator('[data-testid="mapping-grid"] [data-testid="detection-evidence-panel"]'),
+      page.locator(
+        '[data-testid="mapping-grid"] [data-testid="detection-evidence-panel"]',
+      ),
     ).toHaveCount(0);
     await expect(
       page.getByText(/audio chapters found in the file/),
@@ -195,8 +207,9 @@ test.describe("confirmed detection evidence and reset", () => {
         );
         const grid = document.querySelector('[data-testid="mapping-grid"]');
         if (!own || !grid) return 0;
-        return own.compareDocumentPosition(grid) &
-          Node.DOCUMENT_POSITION_FOLLOWING;
+        return (
+          own.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING
+        );
       }),
     ).toBeGreaterThan(0);
   });
@@ -247,13 +260,15 @@ test.describe("confirmed detection evidence and reset", () => {
     const preserved = await page.evaluate(async (key) => {
       const invoke = window.__TAURI_INTERNALS__.invoke;
       return {
-        keyPresent: await invoke("cmd_transcribe_key_present", {
+        keyPresent: (await invoke("cmd_transcribe_key_present", {
           provider: "groq",
-        }),
-        preferences: await invoke("cmd_get_transcription_preferences"),
-        availability: await invoke("cmd_detection_availability", {
+        })) as boolean,
+        preferences: (await invoke(
+          "cmd_get_transcription_preferences",
+        )) as AppTranscriptionPreferences,
+        availability: (await invoke("cmd_detection_availability", {
           projectId: { content_hash: key },
-        }),
+        })) as DetectionAvailability,
       };
     }, TRANSCRIPT_KEY);
     expect(preserved.keyPresent).toBe(true);
@@ -268,7 +283,8 @@ test.describe("confirmed detection evidence and reset", () => {
     await page.evaluate(() => {
       window.__resetDetectionError__ = {
         kind: "Unsupported",
-        message: "confirmed detection changed; reload the project and try again",
+        message:
+          "confirmed detection changed; reload the project and try again",
       };
     });
     const trigger = page.getByRole("button", { name: "Reset detected range" });

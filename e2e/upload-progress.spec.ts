@@ -64,10 +64,12 @@ test.describe("aggregate upload progress", () => {
         stage: { kind: "transcoding" },
       }),
     );
-    await expect(page.getByText("Step 2 of 3 · Transcoding audio")).toBeVisible();
+    await expect(
+      page.getByText("Step 2 of 3 · Transcoding audio"),
+    ).toBeVisible();
     await expect(page.getByText("33%")).toBeVisible();
 
-    await page.evaluate(() => window.__releaseUpload__());
+    await page.evaluate(() => window.__releaseUpload__?.());
   });
 
   test("standalone detection reports phase progress", async ({ page }) => {
@@ -83,7 +85,9 @@ test.describe("aggregate upload progress", () => {
         stage: { kind: "detecting_start" },
       }),
     );
-    await expect(page.getByText("Step 1 of 1 · Detecting text start")).toBeVisible();
+    await expect(
+      page.getByText("Step 1 of 1 · Detecting text start"),
+    ).toBeVisible();
     await expect(page.getByText("0%")).toBeVisible();
 
     await page.evaluate(() =>

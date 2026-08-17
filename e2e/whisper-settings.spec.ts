@@ -73,7 +73,7 @@ test.describe("transcription settings", () => {
   }) => {
     await page.goto("/settings");
     const before = await page.evaluate(() =>
-      JSON.stringify((window as any).__projectByKey__),
+      JSON.stringify(window.__projectByKey__),
     );
 
     await page.getByLabel("OpenAI", { exact: true }).check();
@@ -84,9 +84,7 @@ test.describe("transcription settings", () => {
     ).toBeEnabled();
 
     expect(
-      await page.evaluate(() =>
-        JSON.stringify((window as any).__projectByKey__),
-      ),
+      await page.evaluate(() => JSON.stringify(window.__projectByKey__)),
     ).toBe(before);
 
     await page.reload();
@@ -101,7 +99,7 @@ test.describe("transcription settings", () => {
   }) => {
     await page.goto("/settings");
     await page.evaluate(() => {
-      (window as any).__failNextTranscriptionPreferences__ = true;
+      window.__failNextTranscriptionPreferences__ = true;
     });
 
     await page.getByLabel("OpenAI", { exact: true }).click();

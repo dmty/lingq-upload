@@ -49,9 +49,7 @@ function consentScenarioScript(): string {
 async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
   return page.evaluate(
     (command) =>
-      ((window as any).__invokeLog__ as string[]).filter(
-        (entry) => entry === command,
-      ).length,
+      window.__invokeLog__.filter((entry) => entry === command).length,
     cmd,
   );
 }
@@ -204,9 +202,7 @@ test.describe("detected-range transcription consent", () => {
     await page.getByRole("button", { name: "Accept and continue" }).click();
 
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    const log = await page.evaluate(
-      () => (window as any).__invokeLog__ as string[],
-    );
+    const log = await page.evaluate(() => window.__invokeLog__);
     const acceptAt = log.lastIndexOf("cmd_accept_transcribe_consent");
     const refreshAt = log.lastIndexOf("cmd_detection_availability");
     expect(acceptAt).toBeGreaterThan(-1);
@@ -221,7 +217,7 @@ test.describe("detected-range transcription consent", () => {
   }) => {
     await page.goto(`/match/${ELIGIBLE}`);
     await page.evaluate(() => {
-      (window as any).__failNextTranscribeConsent__ = true;
+      window.__failNextTranscribeConsent__ = true;
     });
     await page
       .getByRole("button", { name: "Detect audio's text range" })

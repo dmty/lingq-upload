@@ -139,12 +139,7 @@ test.describe("mapping editor", () => {
     // optimistic in-memory state).
     await page.waitForFunction(
       (key) => {
-        const s = (
-          window as unknown as {
-            __mappingState__: { byProject: Record<string, { pairs: { touched?: boolean }[] }> };
-          }
-        ).__mappingState__;
-        const m = s?.byProject?.[key];
+        const m = window.__mappingState__.byProject[key];
         return !!m && m.pairs.some((p) => p.touched === true);
       },
       PROJECT_KEY,
