@@ -1,6 +1,6 @@
 import type { MappingState } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
-import { chapters, installMapping, pair } from "./setup/mapping-fixture";
+import { installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "park-fixture";
 
@@ -44,12 +44,7 @@ const mapping: MappingState = {
 
 test.describe("parking via button", () => {
   test.beforeEach(async ({ page }) => {
-    await installMapping(page, {
-      key: PROJECT_KEY,
-      chapters: chapters(5),
-      mapping,
-      inspection: null,
-    });
+    await installMapping(page, { key: PROJECT_KEY, mapping });
   });
 
   test("Park button parks the track and the lot shows its title", async ({

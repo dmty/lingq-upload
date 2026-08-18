@@ -34,7 +34,6 @@ test.describe("mapping save failure notice", () => {
       key: PROJECT_KEY,
       chapters: chapters(3),
       mapping,
-      inspection: null,
     });
   });
 

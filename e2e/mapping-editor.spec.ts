@@ -4,7 +4,7 @@ import type {
   MismatchInspection,
 } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
-import { installMapping } from "./setup/mapping-fixture";
+import { installMapping, pair } from "./setup/mapping-fixture";
 
 // Mapping editor: score-gate + rehydrate-on-reload. No DnD simulation
 // (Playwright's drag harness is flaky and the pure-state contract is already
@@ -34,23 +34,12 @@ function mapping(opts: {
 }): MappingState {
   return {
     pairs: [
-      { chapter_id: "idx:0", track_id: "t0", confidence: 0.9, touched: false },
+      pair(0, "t0", 0.9),
       opts.displacedRed
-        ? {
-            // A displacing op bumped `confidence` to green, but the pair is
-            // untouched and its original score is red — the gate must block.
-            chapter_id: "idx:1",
-            track_id: "t1",
-            confidence: 0.95,
-            original_confidence: 0.4,
-            touched: false,
-          }
-        : {
-            chapter_id: "idx:1",
-            track_id: "t1",
-            confidence: opts.withRed ? 0.4 : 0.85,
-            touched: false,
-          },
+        ? // A displacing op bumped `confidence` to green, but the pair is
+          // untouched and its original score is red — the gate must block.
+          pair(1, "t1", 0.95, 0.4)
+        : pair(1, "t1", opts.withRed ? 0.4 : 0.85),
     ],
     parking_lot: [],
     op_id: 0,

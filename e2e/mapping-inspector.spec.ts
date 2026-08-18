@@ -1,6 +1,6 @@
 import type { MappingState, MismatchInspection } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
-import { chapters, installMapping, pair } from "./setup/mapping-fixture";
+import { installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "bucket-fixture";
 
@@ -46,12 +46,7 @@ const inspection: MismatchInspection = {
 
 test.describe("chapter inspector", () => {
   test.beforeEach(async ({ page }) => {
-    await installMapping(page, {
-      key: PROJECT_KEY,
-      chapters: chapters(5),
-      mapping,
-      inspection,
-    });
+    await installMapping(page, { key: PROJECT_KEY, mapping, inspection });
   });
 
   test("selecting a row shows the chapter text in the inspector", async ({

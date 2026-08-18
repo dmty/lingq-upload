@@ -30,12 +30,7 @@ const mapping: MappingState = {
 
 test.describe("inspector empty state", () => {
   test.beforeEach(async ({ page }) => {
-    await installMapping(page, {
-      key: PROJECT_KEY,
-      chapters,
-      mapping,
-      inspection: null,
-    });
+    await installMapping(page, { key: PROJECT_KEY, chapters, mapping });
   });
 
   test("prompt before selection, inspector after", async ({ page }) => {

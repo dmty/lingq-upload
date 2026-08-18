@@ -21,11 +21,12 @@ export const pair = (
   index: number,
   trackId: string,
   confidence: number,
+  originalConfidence = confidence,
 ): MappingPair => ({
   chapter_id: `idx:${index}`,
   track_id: trackId,
   confidence,
-  original_confidence: confidence,
+  original_confidence: originalConfidence,
   touched: false,
 });
 
