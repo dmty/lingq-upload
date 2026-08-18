@@ -134,13 +134,11 @@ pub fn anchored_ranges(n_text: usize, starts: &[Option<usize>]) -> Vec<std::ops:
     bounds[0] = Some(bounds[0].unwrap_or(0));
 
     let mut last = 0usize;
-    for bound in &mut bounds {
-        if let Some(value) = bound {
-            if *value < last {
-                *value = last;
-            }
-            last = *value;
+    for value in bounds.iter_mut().flatten() {
+        if *value < last {
+            *value = last;
         }
+        last = *value;
     }
 
     let mut index = 0;
