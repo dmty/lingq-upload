@@ -4,10 +4,9 @@
 //! detection paths run unconditionally — no ffmpeg required.
 //!
 //! The committed `clip_*.wav` fixtures are immutable inputs — pinned by
-//! sha256. Regenerate all three via `scripts/fixtures/gen_silence_corpus.sh`
-//! (clip_c ends mid-silence to exercise the EOF silence_end synthesis), then
-//! update the sha256 constants below + the matching
-//! `clip_*.golden_offsets.json`.
+//! sha256. clip_c ends mid-silence to exercise the EOF silence_end
+//! synthesis. Replacing a clip means updating its sha256 constant below and
+//! its `clip_*.golden_offsets.json` in the same commit.
 
 use std::path::PathBuf;
 
@@ -24,7 +23,6 @@ const CLIP_B_SHA256: &str = "52fb99df6b4327279f086f2ec26fb9f43639b84c483a7246d71
 const CLIP_C_SHA256: &str = "e98d7f7fb4fde62faf2cba8206180beccdcec75633d7217d7bea17d8cdbce11e";
 
 // Golden contract is detected silence EDGES per absorb policy.
-// `ffmpeg_version` in the JSON is informational only.
 #[derive(Deserialize)]
 struct GoldenOffsets {
     forward_offsets_ms: Vec<u32>,
