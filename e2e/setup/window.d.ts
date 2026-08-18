@@ -23,7 +23,6 @@ import type {
   TranscribeProviderId,
 } from "../../src/lib/ipc/bindings";
 
-type Fixture = Record<string, unknown>;
 // Shapes that recur across the fixtures below, named once so each
 // declaration reads as what it is rather than its structure.
 type Gate = Promise<void>;
@@ -95,7 +94,6 @@ declare global {
     __matcherDecisionByProject__?: Record<string, MatcherDecision | null>;
     __matcherInspection__?: MismatchInspection | null;
     __matcherInspectionByProject__?: Record<string, MismatchInspection | null>;
-    __matcherSeedByProject__?: Record<string, Fixture>;
     __failNextMappingOp__?: boolean;
     __confirmMappingCalls__?: { projectId: ProjectId }[];
 

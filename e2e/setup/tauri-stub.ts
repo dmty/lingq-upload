@@ -140,13 +140,10 @@ export function tauriStub(workerIndex: number): void {
 
   window.__invokeLog__ = [];
   window.__eventHandlers__ = window.__eventHandlers__ || {};
-  // The event seam stores each transformed callback as a numbered property
-  // on window. Window has no string index signature, so give these three
-  // sites an explicit view instead of loosening the interface.
-  const callbacks = window as unknown as Record<
-    string,
-    ((event: unknown) => void) | undefined
-  >;
+  // The real transformCallback only keeps the id it returns; it never
+  // indexes window["_"+id] itself, so this registry can be stub-local
+  // instead of a widened view over window.
+  const callbacks: Record<string, ((event: unknown) => void) | undefined> = {};
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
     unregisterListener(event, id) {
       const ids = window.__eventHandlers__[event] || [];
@@ -205,7 +202,7 @@ export function tauriStub(workerIndex: number): void {
           isbn13: null,
           calibre_uuid: null,
         },
-        sources: { text: null, audio: null },
+        sources: { text: { kind: "missing" }, audio: null },
         settings: {
           language: "en",
           collection_title: meta.title || "Stub Project",
@@ -355,12 +352,8 @@ export function tauriStub(workerIndex: number): void {
       const response = args && args.response;
       if (response === "cancel" || response === "unknown") return null;
       const chapters = window.__pickerState__.chaptersByProject[key] || [];
-      const seeded =
-        window.__matcherSeedByProject__ && window.__matcherSeedByProject__[key];
       let pairs = [];
-      if (seeded && Array.isArray(seeded.pairs)) {
-        pairs = seeded.pairs;
-      } else if (response === "single_lesson") {
+      if (response === "single_lesson") {
         const tid = "t0";
         pairs = chapters.map((c) => ({
           chapter_id: c.id,
