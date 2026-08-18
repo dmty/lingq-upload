@@ -100,7 +100,7 @@ declare global {
     // Transcription / detection fixtures.
     __transcriptionPreferences__?: AppTranscriptionPreferences;
     __transcriptionKeys__?: Record<string, boolean>;
-    __transcriptionConsents__?: Record<string, boolean>;
+    __transcriptionConsents__?: Record<string, string>;
     __failNextTranscriptionPreferences__?: boolean;
     __failNextTranscribeConsent__?: boolean;
     __transcribeConsentCalls__?: {

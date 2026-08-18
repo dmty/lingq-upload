@@ -1,6 +1,4 @@
-import { test } from "@playwright/test";
-
-import { tauriStub } from "./setup/tauri-stub";
+import { test } from "./setup/test";
 
 // Keyboard shortcuts on the Library page: `/` focuses search, ↑/↓ cycle row
 // focus, Enter activates the focused row's primary action. The current
@@ -8,10 +6,6 @@ import { tauriStub } from "./setup/tauri-stub";
 // row UI never renders — the spec stays a skipped placeholder until a seeded
 // library fixture is wired into the stub.
 test.describe("library keyboard nav", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStub, testInfo.workerIndex);
-  });
-
   test("/ focuses the search input", async () => {
     test.skip(true, "needs seeded library fixture");
   });

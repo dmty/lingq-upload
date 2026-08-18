@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-import { tauriStub } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 // AD-025: the user-experience contract is that the rendered DOM never
 // surfaces recovery-event language. The state machine + cancellation +
@@ -48,10 +48,6 @@ async function ariaAttributeText(page: Page): Promise<string> {
 }
 
 test.describe("invisible resilience (AD-025)", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStub, testInfo.workerIndex);
-  });
-
   for (const route of [
     "/",
     "/library",
