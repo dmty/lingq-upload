@@ -29,6 +29,15 @@ type Fixture = Record<string, unknown>;
 type Gate = Promise<void>;
 type Release = () => void;
 
+// cmd_detection_availability computes active_provider, consent_matches, and
+// can_start itself from live provider config and consents — a fixture only
+// supplies the base shape the command merges those over.
+export type DetectionAvailabilitySeed = Pick<
+  DetectionAvailability,
+  "eligible" | "condition" | "chapter_count" | "track_count"
+> &
+  Partial<Pick<DetectionAvailability, "key_present" | "existing_evidence">>;
+
 declare global {
   interface Window {
     // Tauri runtime the stub replaces.
@@ -109,8 +118,11 @@ declare global {
     }[];
     __transcribeConsentGate__?: Gate;
     __releaseTranscribeConsent__?: Release;
-    __detectionAvailability__?: DetectionAvailability;
-    __detectionAvailabilityByProject__?: Record<string, DetectionAvailability>;
+    __detectionAvailability__?: DetectionAvailabilitySeed;
+    __detectionAvailabilityByProject__?: Record<
+      string,
+      DetectionAvailabilitySeed
+    >;
     __detectionResult__?: DetectStartResult;
     __detectionCommandError__?: AppError | Error;
     __detectionGate__?: Gate;

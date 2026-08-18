@@ -1,11 +1,13 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import type { DetectionAvailabilitySeed } from "./setup/window";
+import type { MismatchInspection } from "../src/lib/ipc/bindings";
 
 const ELIGIBLE = "consent-eligible";
 const INELIGIBLE = "consent-ineligible";
 const MISSING_KEY = "consent-missing-key";
 
-function consentScenarioScript(): string {
-  const inspection = {
+function consentScenario(): Partial<Window> {
+  const inspection: MismatchInspection = {
     title: "The Test Book",
     chapter_count: 12,
     track_count: 3,
@@ -14,34 +16,35 @@ function consentScenarioScript(): string {
     preselect: "split_proportional",
     bucket_preview: null,
   };
-  return `;(() => {
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__transcriptionKeys__ = { groq: true, open_ai: true };
-    window.__detectionAvailabilityByProject__ = {
-      ${JSON.stringify(ELIGIBLE)}: {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: 12,
-        track_count: 3,
-        existing_evidence: null,
-      },
-      ${JSON.stringify(INELIGIBLE)}: {
-        eligible: false,
-        condition: "count_off",
-        chapter_count: 3,
-        track_count: 3,
-        existing_evidence: null,
-      },
-      ${JSON.stringify(MISSING_KEY)}: {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: 12,
-        track_count: 3,
-        key_present: false,
-        existing_evidence: null,
-      },
-    };
-  })();`;
+  const availabilities: Record<string, DetectionAvailabilitySeed> = {
+    [ELIGIBLE]: {
+      eligible: true,
+      condition: "many_to_few",
+      chapter_count: 12,
+      track_count: 3,
+      existing_evidence: null,
+    },
+    [INELIGIBLE]: {
+      eligible: false,
+      condition: "count_off",
+      chapter_count: 3,
+      track_count: 3,
+      existing_evidence: null,
+    },
+    [MISSING_KEY]: {
+      eligible: true,
+      condition: "many_to_few",
+      chapter_count: 12,
+      track_count: 3,
+      key_present: false,
+      existing_evidence: null,
+    },
+  };
+  return {
+    __matcherInspection__: inspection,
+    __transcriptionKeys__: { groq: true, open_ai: true },
+    __detectionAvailabilityByProject__: availabilities,
+  };
 }
 
 async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
@@ -54,7 +57,7 @@ async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
 
 test.describe("detected-range transcription consent", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(consentScenarioScript());
+    await seed(page, consentScenario());
   });
 
   test("eligible mismatches show a separate assist without changing manual responses", async ({

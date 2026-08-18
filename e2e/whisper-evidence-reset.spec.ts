@@ -1,9 +1,17 @@
 import { type Page } from "@playwright/test";
 
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { seedChapters, seedMapping } from "./setup/mapping-fixture";
+import type { DetectionAvailabilitySeed } from "./setup/window";
 import type {
   AppTranscriptionPreferences,
+  Chapter,
+  ChapterReceipt,
   DetectionAvailability,
+  DetectionEvidence,
+  MappingState,
+  MatcherDecision,
+  MismatchInspection,
 } from "../src/lib/ipc/bindings";
 
 const TRANSCRIPT_KEY = "evidence-transcript";
@@ -16,7 +24,7 @@ const END_ID = "spine:return";
 const MISSING_ID = "spine:removed";
 const DETECTED_AT = "2026-08-12T09:30:00Z";
 
-const chapters = [
+const chapters: Chapter[] = [
   {
     id: "spine:preface",
     order: 0,
@@ -35,18 +43,21 @@ const chapters = [
   },
 ];
 
-const transcriptEvidence = {
+const TRANSCRIPT_HEAD_PREVIEW = "始まり 🐉 café — arrival";
+const TRANSCRIPT_TAIL_PREVIEW = "帰還 🌊 fin — return";
+
+const transcriptEvidence: DetectionEvidence = {
   provider_id: "groq",
   align_source: "transcript",
   range: { start_chapter_id: START_ID, end_chapter_id: END_ID },
   confidence: 0.8123,
-  transcript_head_preview: "始まり 🐉 café — arrival",
-  transcript_tail_preview: "帰還 🌊 fin — return",
+  transcript_head_preview: TRANSCRIPT_HEAD_PREVIEW,
+  transcript_tail_preview: TRANSCRIPT_TAIL_PREVIEW,
   detected_at: DETECTED_AT,
   atom_starts: [],
 };
 
-const titleEvidence = {
+const titleEvidence: DetectionEvidence = {
   provider_id: null,
   align_source: "title",
   range: { start_chapter_id: START_ID, end_chapter_id: END_ID },
@@ -57,19 +68,19 @@ const titleEvidence = {
   atom_starts: [],
 };
 
-const staleEvidence = {
+const staleEvidence: DetectionEvidence = {
   ...transcriptEvidence,
   range: { start_chapter_id: START_ID, end_chapter_id: MISSING_ID },
 };
 
-const EVIDENCE_BY_PROJECT: Record<string, object> = {
+const EVIDENCE_BY_PROJECT: Record<string, DetectionEvidence> = {
   [TRANSCRIPT_KEY]: transcriptEvidence,
   [TITLE_KEY]: titleEvidence,
   [RECEIPTS_KEY]: transcriptEvidence,
   [STALE_KEY]: staleEvidence,
 };
 
-const mapping = {
+const mapping: MappingState = {
   pairs: [
     {
       chapter_id: START_ID,
@@ -90,7 +101,7 @@ const mapping = {
   op_id: 0,
 };
 
-const inspection = {
+const inspection: MismatchInspection = {
   title: "Evidence Fixture",
   chapter_count: chapters.length,
   track_count: 2,
@@ -100,45 +111,56 @@ const inspection = {
   bucket_preview: null,
 };
 
-function fixtureScript(): string {
-  return `;(() => {
-    const chapters = ${JSON.stringify(chapters)};
-    const evidenceByProject = ${JSON.stringify(EVIDENCE_BY_PROJECT)};
-    const mapping = ${JSON.stringify(mapping)};
-    const inspection = ${JSON.stringify(inspection)};
-    window.__matcherInspectionByProject__ = {};
-    window.__matcherDecisionByProject__ = {};
-    window.__detectionAvailabilityByProject__ = {};
-    window.__receiptsByProject__ = {
-      ${JSON.stringify(RECEIPTS_KEY)}: [
-        { chapter_index: 0, lesson_id: 51, degraded: false, uploaded_at: ${JSON.stringify(DETECTED_AT)} },
-      ],
+function fixture(): Partial<Window> {
+  const inspections: Record<string, MismatchInspection> = {};
+  const decisions: Record<string, MatcherDecision> = {};
+  const availabilities: Record<string, DetectionAvailabilitySeed> = {};
+  const consents: Record<string, string> = {};
+  for (const key of Object.keys(EVIDENCE_BY_PROJECT)) {
+    inspections[key] = inspection;
+    decisions[key] = {
+      condition: "many_to_few",
+      response: "split_proportional",
+      chapter_count: chapters.length,
+      track_count: 2,
+      user_overrode: false,
+      decided_at: DETECTED_AT,
+      detection: EVIDENCE_BY_PROJECT[key],
     };
-    window.__transcriptionConsents__ = {};
-    window.__transcriptionKeys__ = { groq: true };
-    for (const key of Object.keys(evidenceByProject)) {
-      window.__pickerState__.chaptersByProject[key] = chapters;
-      window.__matcherInspectionByProject__[key] = inspection;
-      window.__matcherDecisionByProject__[key] = {
-        condition: "many_to_few",
-        response: "split_proportional",
-        chapter_count: chapters.length,
-        track_count: 2,
-        user_overrode: false,
-        decided_at: ${JSON.stringify(DETECTED_AT)},
-        detection: evidenceByProject[key],
-      };
-      window.__mappingState__.seed(key, mapping);
-      window.__transcriptionConsents__[key] = "groq";
-      window.__detectionAvailabilityByProject__[key] = {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: chapters.length,
-        track_count: 2,
-        existing_evidence: null,
-      };
-    }
-  })();`;
+    consents[key] = "groq";
+    availabilities[key] = {
+      eligible: true,
+      condition: "many_to_few",
+      chapter_count: chapters.length,
+      track_count: 2,
+      existing_evidence: null,
+    };
+  }
+  return {
+    __matcherInspectionByProject__: inspections,
+    __matcherDecisionByProject__: decisions,
+    __detectionAvailabilityByProject__: availabilities,
+    __receiptsByProject__: {
+      [RECEIPTS_KEY]: [
+        {
+          chapter_index: 0,
+          lesson_id: 51,
+          degraded: false,
+          uploaded_at: DETECTED_AT,
+        },
+      ] satisfies ChapterReceipt[],
+    },
+    __transcriptionConsents__: consents,
+    __transcriptionKeys__: { groq: true },
+  };
+}
+
+async function seedFixture(page: Page): Promise<void> {
+  await seed(page, fixture());
+  for (const key of Object.keys(EVIDENCE_BY_PROJECT)) {
+    await seedChapters(page, key, chapters);
+    await seedMapping(page, key, mapping);
+  }
 }
 
 function panel(page: Page) {
@@ -155,7 +177,7 @@ async function resetCalls(page: Page): Promise<number> {
 
 test.describe("confirmed detection evidence and reset", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await seedFixture(page);
   });
 
   test("renders every confirmed field in its own panel above the grid", async ({
@@ -181,13 +203,9 @@ test.describe("confirmed detection evidence and reset", () => {
     const details = evidence.locator("details");
     await expect(details).toHaveCount(2);
     await expect(details.first()).not.toHaveAttribute("open", "");
-    await expect(
-      evidence.getByText(transcriptEvidence.transcript_head_preview),
-    ).not.toBeVisible();
+    await expect(evidence.getByText(TRANSCRIPT_HEAD_PREVIEW)).not.toBeVisible();
     await details.first().locator("summary").click();
-    await expect(
-      evidence.getByText(transcriptEvidence.transcript_head_preview),
-    ).toBeVisible();
+    await expect(evidence.getByText(TRANSCRIPT_HEAD_PREVIEW)).toBeVisible();
 
     // Its own panel, not the unresolved-mismatch evidence card, and not nested
     // inside the grid.

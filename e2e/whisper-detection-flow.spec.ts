@@ -1,10 +1,14 @@
 import { type Page } from "@playwright/test";
 
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { seedChapters } from "./setup/mapping-fixture";
+import type { DetectionAvailabilitySeed } from "./setup/window";
 import type {
   AppError,
+  Chapter,
   DetectStartResult,
   DetectionPreview,
+  MismatchInspection,
 } from "../src/lib/ipc/bindings";
 
 const PROJECT_KEY = "detection-flow-fixture";
@@ -19,7 +23,7 @@ const PROJECT_TITLES: Record<string, string> = {
   [CANDIDATE_PROJECT_KEY]: "Candidate Detection Fixture",
 };
 
-const chapters = [
+const chapters: Chapter[] = [
   {
     id: "spine:preface",
     order: 0,
@@ -38,7 +42,7 @@ const chapters = [
   },
 ];
 
-const candidateChapters = [
+const candidateChapters: Chapter[] = [
   { id: "idx:0", order: 0, title: "Foreword", body: "", kind: "front_matter" },
   { id: "idx:1", order: 1, title: "Chapter One", body: "", kind: "body" },
   { id: "idx:2", order: 2, title: "The Crossing", body: "", kind: "body" },
@@ -46,6 +50,12 @@ const candidateChapters = [
   { id: "idx:4", order: 4, title: "The Descent", body: "", kind: "body" },
   { id: "idx:5", order: 5, title: "Epilogue", body: "", kind: "body" },
 ];
+
+const PROJECT_KEYS = Object.keys(PROJECT_TITLES);
+
+function chaptersFor(key: string): Chapter[] {
+  return key === CANDIDATE_PROJECT_KEY ? candidateChapters : chapters;
+}
 
 const lowConfidence: DetectStartResult = {
   kind: "low_confidence",
@@ -61,15 +71,15 @@ const lowConfidence: DetectStartResult = {
   ],
 };
 
-const inspection = {
-  title: "Range Detection Fixture",
-  chapter_count: chapters.length,
-  track_count: 2,
-  condition: "many_to_few",
-  options: ["split_proportional", "single_lesson", "cancel"],
-  preselect: "split_proportional",
-  bucket_preview: null,
-};
+// title and chapter_count are always overridden per project below.
+const inspectionTemplate: Omit<MismatchInspection, "title" | "chapter_count"> =
+  {
+    track_count: 2,
+    condition: "many_to_few",
+    options: ["split_proportional", "single_lesson", "cancel"],
+    preselect: "split_proportional",
+    bucket_preview: null,
+  };
 
 const titlePreview: DetectionPreview = {
   provider_id: null,
@@ -96,37 +106,39 @@ const transcriptPreview: DetectionPreview = {
   atom_starts: [],
 };
 
-function fixtureScript(): string {
-  return `;(() => {
-    const chapters = ${JSON.stringify(chapters)};
-    const candidateChapters = ${JSON.stringify(candidateChapters)};
-    const inspection = ${JSON.stringify(inspection)};
-    const titles = ${JSON.stringify(PROJECT_TITLES)};
-    const keys = ${JSON.stringify(Object.keys(PROJECT_TITLES))};
-    const chaptersFor = (key) =>
-      key === ${JSON.stringify(CANDIDATE_PROJECT_KEY)} ? candidateChapters : chapters;
-    window.__matcherInspectionByProject__ = {};
-    window.__transcriptionConsents__ = {};
-    window.__detectionAvailabilityByProject__ = {};
-    for (const key of keys) {
-      const projectChapters = chaptersFor(key);
-      window.__pickerState__.chaptersByProject[key] = projectChapters;
-      window.__matcherInspectionByProject__[key] = {
-        ...inspection,
-        title: titles[key],
-        chapter_count: projectChapters.length,
-      };
-      window.__transcriptionConsents__[key] = "groq";
-      window.__detectionAvailabilityByProject__[key] = {
-        eligible: true,
-        condition: "many_to_few",
-        chapter_count: projectChapters.length,
-        track_count: 2,
-        existing_evidence: null,
-      };
-    }
-    window.__transcriptionKeys__ = { groq: true };
-  })();`;
+function fixture(): Partial<Window> {
+  const inspections: Record<string, MismatchInspection> = {};
+  const consents: Record<string, string> = {};
+  const availabilities: Record<string, DetectionAvailabilitySeed> = {};
+  for (const key of PROJECT_KEYS) {
+    const projectChapters = chaptersFor(key);
+    inspections[key] = {
+      ...inspectionTemplate,
+      title: PROJECT_TITLES[key],
+      chapter_count: projectChapters.length,
+    };
+    consents[key] = "groq";
+    availabilities[key] = {
+      eligible: true,
+      condition: "many_to_few",
+      chapter_count: projectChapters.length,
+      track_count: 2,
+      existing_evidence: null,
+    };
+  }
+  return {
+    __matcherInspectionByProject__: inspections,
+    __transcriptionConsents__: consents,
+    __detectionAvailabilityByProject__: availabilities,
+    __transcriptionKeys__: { groq: true },
+  };
+}
+
+async function seedFixture(page: Page): Promise<void> {
+  await seed(page, fixture());
+  for (const key of PROJECT_KEYS) {
+    await seedChapters(page, key, chaptersFor(key));
+  }
 }
 
 async function holdDetection(page: Page): Promise<void> {
@@ -214,7 +226,7 @@ function candidateRadio(page: Page, group: "Start chapter" | "End chapter") {
 
 test.describe("detected text range flow", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await seedFixture(page);
   });
 
   test("renders scoped monotonic typed progress and cancels by caller job ID", async ({
@@ -547,9 +559,9 @@ test.describe("detected text range flow", () => {
     page,
   }) => {
     await page.addInitScript(
-      `;(() => { window.__pickerState__._writeSkipped(${JSON.stringify({
-        [CANDIDATE_PROJECT_KEY]: ["idx:5"],
-      })}); })();`,
+      (skipped: Record<string, string[]>) =>
+        window.__pickerState__._writeSkipped(skipped),
+      { [CANDIDATE_PROJECT_KEY]: ["idx:5"] },
     );
     await detectReturning(page, CANDIDATE_PROJECT_KEY, {
       result: {

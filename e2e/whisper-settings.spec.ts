@@ -1,10 +1,15 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import type { Project } from "../src/lib/ipc/bindings";
+
+const project: Project = {
+  id: { content_hash: "settings-project" },
+  sources: { text: { kind: "missing" } },
+  settings: { language: "en", collection_title: "Settings Project" },
+};
 
 test.describe("transcription settings", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(`window.__projectByKey__ = {
-      "settings-project": { nested: { unchanged: true } }
-    };`);
+    await seed(page, { __projectByKey__: { "settings-project": project } });
   });
 
   test("loads app preferences and provider-supplied pricing and policy links", async ({

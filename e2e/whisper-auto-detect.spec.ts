@@ -1,7 +1,17 @@
 import { type Page } from "@playwright/test";
 
-import { expect, test } from "./setup/test";
-import type { AppError, DetectStartResult } from "../src/lib/ipc/bindings";
+import { expect, seed, test } from "./setup/test";
+import { seedChapters, seedMapping } from "./setup/mapping-fixture";
+import type { DetectionAvailabilitySeed } from "./setup/window";
+import type {
+  AppError,
+  Chapter,
+  DetectStartResult,
+  DetectionEvidence,
+  MappingState,
+  MatcherDecision,
+  MismatchInspection,
+} from "../src/lib/ipc/bindings";
 
 const AUTO_KEY = "auto-eligible";
 const EVIDENCE_KEY = "auto-existing-evidence";
@@ -9,7 +19,7 @@ const START_ID = "spine:arrival";
 const END_ID = "spine:return";
 const DETECTED_AT = "2026-08-12T09:30:00Z";
 
-const chapters = [
+const chapters: Chapter[] = [
   {
     id: "spine:preface",
     order: 0,
@@ -28,7 +38,7 @@ const chapters = [
   },
 ];
 
-const mapping = {
+const mapping: MappingState = {
   pairs: [
     {
       chapter_id: START_ID,
@@ -49,7 +59,7 @@ const mapping = {
   op_id: 0,
 };
 
-const detectedPreview = {
+const detectedPreview: DetectionEvidence = {
   provider_id: "groq",
   align_source: "transcript",
   range: { start_chapter_id: START_ID, end_chapter_id: END_ID },
@@ -71,19 +81,12 @@ const lowConfidence: DetectStartResult = {
 type Fixture = {
   key: string;
   title: string;
-  availability: {
-    eligible: boolean;
-    condition: string | null;
-    chapter_count: number;
-    track_count: number;
-    key_present?: boolean;
-    existing_evidence?: object | null;
-  };
+  availability: DetectionAvailabilitySeed;
   consent?: string;
-  evidence?: object;
+  evidence?: DetectionEvidence;
 };
 
-const ELIGIBLE = {
+const ELIGIBLE: DetectionAvailabilitySeed = {
   eligible: true,
   condition: "many_to_few",
   chapter_count: chapters.length,
@@ -173,49 +176,57 @@ const FIXTURES: Fixture[] = [
   ...BLOCKED,
 ];
 
-function fixtureScript(autoDetectStart: boolean): string {
-  return `;(() => {
-    const fixtures = ${JSON.stringify(FIXTURES)};
-    const chapters = ${JSON.stringify(chapters)};
-    const mapping = ${JSON.stringify(mapping)};
-    window.__transcriptionPreferences__ = {
-      provider_id: "groq",
-      auto_detect_start: ${JSON.stringify(autoDetectStart)},
+function fixture(autoDetectStart: boolean): Partial<Window> {
+  const consents: Record<string, string> = {};
+  const inspections: Record<string, MismatchInspection> = {};
+  const decisions: Record<string, MatcherDecision> = {};
+  const availabilities: Record<string, DetectionAvailabilitySeed> = {};
+  for (const f of FIXTURES) {
+    inspections[f.key] = {
+      title: f.title,
+      chapter_count: f.availability.chapter_count,
+      track_count: f.availability.track_count,
+      condition: f.availability.condition ?? "count_off",
+      options: ["split_proportional", "single_lesson", "cancel"],
+      preselect: "split_proportional",
+      bucket_preview: null,
     };
-    window.__transcriptionKeys__ = { groq: true, open_ai: true };
-    window.__transcriptionConsents__ = {};
-    window.__matcherInspectionByProject__ = {};
-    window.__matcherDecisionByProject__ = {};
-    window.__detectionAvailabilityByProject__ = {};
-    for (const fixture of fixtures) {
-      window.__pickerState__.chaptersByProject[fixture.key] = chapters;
-      window.__matcherInspectionByProject__[fixture.key] = {
-        title: fixture.title,
-        chapter_count: fixture.availability.chapter_count,
-        track_count: fixture.availability.track_count,
-        condition: fixture.availability.condition || "count_off",
-        options: ["split_proportional", "single_lesson", "cancel"],
-        preselect: "split_proportional",
-        bucket_preview: null,
+    availabilities[f.key] = f.availability;
+    if (f.consent) consents[f.key] = f.consent;
+    if (f.evidence) {
+      decisions[f.key] = {
+        condition: "many_to_few",
+        response: "split_proportional",
+        chapter_count: chapters.length,
+        track_count: 2,
+        user_overrode: false,
+        decided_at: DETECTED_AT,
+        detection: f.evidence,
       };
-      window.__detectionAvailabilityByProject__[fixture.key] = fixture.availability;
-      if (fixture.consent) {
-        window.__transcriptionConsents__[fixture.key] = fixture.consent;
-      }
-      if (fixture.evidence) {
-        window.__matcherDecisionByProject__[fixture.key] = {
-          condition: "many_to_few",
-          response: "split_proportional",
-          chapter_count: chapters.length,
-          track_count: 2,
-          user_overrode: false,
-          decided_at: ${JSON.stringify(DETECTED_AT)},
-          detection: fixture.evidence,
-        };
-        window.__mappingState__.seed(fixture.key, mapping);
-      }
     }
-  })();`;
+  }
+  return {
+    __transcriptionPreferences__: {
+      provider_id: "groq",
+      auto_detect_start: autoDetectStart,
+    },
+    __transcriptionKeys__: { groq: true, open_ai: true },
+    __transcriptionConsents__: consents,
+    __matcherInspectionByProject__: inspections,
+    __matcherDecisionByProject__: decisions,
+    __detectionAvailabilityByProject__: availabilities,
+  };
+}
+
+async function seedFixtures(
+  page: Page,
+  autoDetectStart: boolean,
+): Promise<void> {
+  await seed(page, fixture(autoDetectStart));
+  for (const f of FIXTURES) {
+    await seedChapters(page, f.key, chapters);
+    if (f.evidence) await seedMapping(page, f.key, mapping);
+  }
 }
 
 function detectionCalls(page: Page): Promise<number> {
@@ -229,13 +240,13 @@ async function emit(page: Page, payload: object): Promise<void> {
 /** Auto mode starts on mount, so gates and results must be seeded pre-goto. */
 async function seedRun(
   page: Page,
-  seed: {
+  opts: {
     hold?: boolean;
     result?: DetectStartResult;
     error?: AppError | Error;
   },
 ): Promise<void> {
-  await page.addInitScript((next: typeof seed) => {
+  await page.addInitScript((next: typeof opts) => {
     if (next.hold) {
       window.__detectionGate__ = new Promise((resolve) => {
         window.__releaseDetection__ = resolve;
@@ -243,7 +254,7 @@ async function seedRun(
     }
     if (next.result) window.__detectionResult__ = next.result;
     if (next.error) window.__detectionCommandError__ = next.error;
-  }, seed);
+  }, opts);
 }
 
 async function autoStarted(page: Page): Promise<string> {
@@ -279,7 +290,7 @@ async function expectNoProviderCall(page: Page): Promise<void> {
 
 test.describe("gated automatic range detection", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript(true));
+    await seedFixtures(page, true);
   });
 
   test("eligible auto mode reuses the manual reviewed path", async ({
@@ -336,7 +347,7 @@ test.describe("gated automatic range detection", () => {
   test("the app toggle off keeps an eligible project manual", async ({
     page,
   }) => {
-    await page.addInitScript(fixtureScript(false));
+    await seedFixtures(page, false);
     await page.goto(`/match/${AUTO_KEY}`);
     await expect(page.getByText("Auto Detection Fixture")).toBeVisible({
       timeout: 15_000,
@@ -347,10 +358,10 @@ test.describe("gated automatic range detection", () => {
     await expectNoProviderCall(page);
   });
 
-  for (const fixture of BLOCKED) {
-    test(`no provider upload starts for ${fixture.key}`, async ({ page }) => {
-      await page.goto(`/match/${fixture.key}`);
-      await expect(page.getByText(fixture.title)).toBeVisible({
+  for (const blocked of BLOCKED) {
+    test(`no provider upload starts for ${blocked.key}`, async ({ page }) => {
+      await page.goto(`/match/${blocked.key}`);
+      await expect(page.getByText(blocked.title)).toBeVisible({
         timeout: 15_000,
       });
       await expect(
