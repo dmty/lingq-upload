@@ -42,6 +42,10 @@ Runs on macOS, Windows, Ubuntu. Each entry does:
 
 Greps `src-tauri/src` for `unwrap()` outside `#[cfg(test)]` modules. Single bash step; fails the build on any hit.
 
+### `playwright` (macOS, needs `test`)
+
+`bun run e2e:setup` installs the Chromium browser, then `bun run e2e` runs the Playwright suite (`playwright.config.ts`, specs under `e2e/`) against `bun run dev`. Live-API specs stay skipped without `LINGQ_LIVE`/`LINGQ_STAGING_KEY`.
+
 ## Specta codegen handling
 
 `bindings.ts` is checked in but is **generated** by `cargo build` via `build.rs`. CI verifies no diff after build:
@@ -71,7 +75,6 @@ A nightly canary (re-records LingQ cassettes against the live API, diffs against
 
 - **`release.yml`** — tag-triggered, builds signed installers.
 - **`lingq-canary.yml`** — nightly schema-drift detector.
-- **Playwright E2E job** — full-stack golden-path against `bun tauri dev`.
 
 ## Why not GitHub Actions matrix include / exclude trickery
 

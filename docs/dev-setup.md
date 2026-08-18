@@ -42,15 +42,16 @@ First Tauri build is slow (~5 min on macOS, ~10 min on Linux first time) — web
 
 ## Common dev workflows
 
-| Goal | Command |
-|---|---|
-| Run the whole app | `bun tauri dev` |
-| Run frontend only (Vite, no Tauri shell) | `bun dev` |
-| Run backend tests | `cargo test --manifest-path src-tauri/Cargo.toml` |
-| Re-review snapshot tests | `cargo insta review` after `cargo test` |
-| Type check | `bun run check` |
-| Lint | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` |
-| Build release | `bun tauri build` |
+| Goal                                     | Command                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------ |
+| Run the whole app                        | `bun tauri dev`                                                    |
+| Run frontend only (Vite, no Tauri shell) | `bun dev`                                                          |
+| Run backend tests                        | `cargo test --manifest-path src-tauri/Cargo.toml`                  |
+| Re-review snapshot tests                 | `cargo insta review` after `cargo test`                            |
+| Type check                               | `bun run check`                                                    |
+| Type check e2e suite                     | `bun run check:e2e`                                                |
+| Lint                                     | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` |
+| Build release                            | `bun tauri build`                                                  |
 
 ## ffmpeg override in dev
 
@@ -88,21 +89,21 @@ Unsigned dev builds prompt for keychain access on every API-key read. Two option
 
 ## Project structure quick reference
 
-| Path | What lives here |
-|---|---|
-| `src/` | SvelteKit frontend (Svelte 5 runes, SPA mode) |
-| `src/routes/` | Pages — filesystem router |
-| `src/lib/ipc/` | Generated specta bindings + IPC helpers |
-| `src/lib/stores/` | Reactive state (rune-based `.svelte.ts` modules) |
-| `src-tauri/src/main.rs` | Tauri boot |
-| `src-tauri/src/commands/` | `#[tauri::command]` thin wrappers |
-| `src-tauri/src/core/` | Pure-Rust domain logic |
-| `src-tauri/src/codecs/` | `AudioCodec` impls — AD-014 |
-| `src-tauri/src/languages/` | `LanguageProfile` impls — AD-015 |
-| `src-tauri/src/epub/strategies/` | `HeadingStrategy` impls — AD-016 |
-| `src-tauri/src/ingest/` | `IngestSource` impls — AD-019 |
-| `src-tauri/tests/` | Integration tests + `insta` snapshots + `mockito` cassettes |
-| `docs/` | Evergreen architecture, specs, dev docs |
+| Path                             | What lives here                                             |
+| -------------------------------- | ----------------------------------------------------------- |
+| `src/`                           | SvelteKit frontend (Svelte 5 runes, SPA mode)               |
+| `src/routes/`                    | Pages — filesystem router                                   |
+| `src/lib/ipc/`                   | Generated specta bindings + IPC helpers                     |
+| `src/lib/stores/`                | Reactive state (rune-based `.svelte.ts` modules)            |
+| `src-tauri/src/main.rs`          | Tauri boot                                                  |
+| `src-tauri/src/commands/`        | `#[tauri::command]` thin wrappers                           |
+| `src-tauri/src/core/`            | Pure-Rust domain logic                                      |
+| `src-tauri/src/codecs/`          | `AudioCodec` impls — AD-014                                 |
+| `src-tauri/src/languages/`       | `LanguageProfile` impls — AD-015                            |
+| `src-tauri/src/epub/strategies/` | `HeadingStrategy` impls — AD-016                            |
+| `src-tauri/src/ingest/`          | `IngestSource` impls — AD-019                               |
+| `src-tauri/tests/`               | Integration tests + `insta` snapshots + `mockito` cassettes |
+| `docs/`                          | Evergreen architecture, specs, dev docs                     |
 
 ## Where to look next
 
