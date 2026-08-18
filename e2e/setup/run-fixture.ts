@@ -66,10 +66,8 @@ export function runFixture(opts: {
     degraded: s.degraded ?? false,
   }));
 
-  // The stub reads __planByKey__?.[key] || [], so an empty array and an
-  // absent key already resolve identically — this branch just avoids adding
-  // a no-op property to the fixture.
-  return steps.length
-    ? { __projectByKey__: { [key]: project }, __planByKey__: { [key]: steps } }
-    : { __projectByKey__: { [key]: project } };
+  return {
+    __projectByKey__: { [key]: project },
+    __planByKey__: { [key]: steps },
+  };
 }
