@@ -204,23 +204,32 @@ test.describe("overlay titlebar", () => {
     expect(strip!.width).toBe(main!.width);
   });
 
-  // Any taller and it covers the first heading; any shorter and there is a
-  // dead strip of titlebar. Both edges are checked against main's own inset.
-  test("the content drag strip stops exactly where content begins", async ({
+  // 32px is the AppKit titlebar height: shorter leaves a dead band that won't
+  // drag the window, taller starts swallowing clicks on content.
+  test("the content drag strip covers the titlebar and no content", async ({
     page,
   }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
-    const inset = await page.locator("main").evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop);
-    });
     const strip = await page.locator(".titlebar-drag").boundingBox();
-    expect(strip!.height).toBe(inset);
+    expect(strip!.height).toBe(32);
     const heading = await page
       .getByRole("heading", { name: "Library" })
       .boundingBox();
     expect(heading!.y).toBeGreaterThanOrEqual(strip!.height);
+  });
+
+  // main owns the top inset so no route can drift its own; every page has to
+  // start its heading on the same line.
+  test("every route starts its content at the same inset", async ({ page }) => {
+    const tops: number[] = [];
+    for (const route of ["/library", "/add", "/upload", "/settings"]) {
+      await page.goto(route);
+      await page.waitForLoadState("networkidle");
+      const root = await page.locator("main > *").first().boundingBox();
+      tops.push(root!.y);
+    }
+    expect(new Set(tops).size).toBe(1);
   });
 });
 
