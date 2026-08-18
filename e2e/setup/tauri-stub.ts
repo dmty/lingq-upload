@@ -30,45 +30,34 @@ export function tauriStub(workerIndex: number): void {
     "__transcriptionPreferences__:" + WORKER_NS;
   const TRANSCRIPTION_KEYS_KEY = "__transcriptionKeyPresence__:" + WORKER_NS;
   const TRANSCRIPTION_CONSENTS_KEY = "__transcriptionConsents__:" + WORKER_NS;
-  function readSkipped() {
-    try {
-      return JSON.parse(sessionStorage.getItem(SKIPPED_KEY) || "{}");
-    } catch {
-      return {};
+  // Every fixture below is a JSON blob parked under one sessionStorage key,
+  // read back with a fallback for the not-yet-seeded case. Factored once
+  // since the six slots differ only by key and fallback.
+  function sessionSlot(key: string, fallback: () => any) {
+    function read() {
+      try {
+        return JSON.parse(sessionStorage.getItem(key) ?? "null") ?? fallback();
+      } catch {
+        return fallback();
+      }
     }
-  }
-  function writeSkipped(m: Record<string, string[]>) {
-    try {
-      sessionStorage.setItem(SKIPPED_KEY, JSON.stringify(m));
-    } catch {}
-  }
-  function readMappings() {
-    try {
-      return JSON.parse(sessionStorage.getItem(MAPPING_KEY) || "{}");
-    } catch {
-      return {};
+    function write(value: any) {
+      try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+      } catch {}
     }
+    return [read, write] as const;
   }
-  function writeMappings(m: Record<string, any>) {
-    try {
-      sessionStorage.setItem(MAPPING_KEY, JSON.stringify(m));
-    } catch {}
-  }
+
+  const [readSkipped, writeSkipped] = sessionSlot(SKIPPED_KEY, () => ({}));
+  const [readMappings, writeMappings] = sessionSlot(MAPPING_KEY, () => ({}));
   // Matcher decisions are sessionStorage-backed so a confirm/reset round trip
   // survives the navigations and reloads the specs drive. Seeded from
   // window.__matcherDecisionByProject__ until the first write.
-  function readDecisions() {
-    try {
-      const raw = sessionStorage.getItem(DECISION_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return window.__matcherDecisionByProject__ || {};
-  }
-  function writeDecisions(m: Record<string, any>) {
-    try {
-      sessionStorage.setItem(DECISION_KEY, JSON.stringify(m));
-    } catch {}
-  }
+  const [readDecisions, writeDecisions] = sessionSlot(
+    DECISION_KEY,
+    () => window.__matcherDecisionByProject__ || {},
+  );
   function readReceipts(key: string) {
     return (
       (window.__receiptsByProject__ && window.__receiptsByProject__[key]) || []
@@ -78,66 +67,21 @@ export function tauriStub(workerIndex: number): void {
     provider_id: "groq",
     auto_detect_start: false,
   };
-  function readTranscriptionPreferences() {
-    try {
-      return (
-        JSON.parse(
-          sessionStorage.getItem(TRANSCRIPTION_PREFERENCES_KEY) ?? "null",
-        ) ||
+  const [readTranscriptionPreferences, writeTranscriptionPreferences] =
+    sessionSlot(
+      TRANSCRIPTION_PREFERENCES_KEY,
+      () =>
         window.__transcriptionPreferences__ ||
-        DEFAULT_TRANSCRIPTION_PREFERENCES
-      );
-    } catch {
-      return (
-        window.__transcriptionPreferences__ || DEFAULT_TRANSCRIPTION_PREFERENCES
-      );
-    }
-  }
-  function writeTranscriptionPreferences(preferences: unknown) {
-    try {
-      sessionStorage.setItem(
-        TRANSCRIPTION_PREFERENCES_KEY,
-        JSON.stringify(preferences),
-      );
-    } catch {}
-  }
-  function readTranscriptionKeys() {
-    try {
-      return (
-        JSON.parse(sessionStorage.getItem(TRANSCRIPTION_KEYS_KEY) ?? "null") ||
-        window.__transcriptionKeys__ ||
-        {}
-      );
-    } catch {
-      return window.__transcriptionKeys__ || {};
-    }
-  }
-  function writeTranscriptionKeys(keys: Record<string, boolean>) {
-    try {
-      sessionStorage.setItem(TRANSCRIPTION_KEYS_KEY, JSON.stringify(keys));
-    } catch {}
-  }
-  function readTranscriptionConsents() {
-    try {
-      return (
-        JSON.parse(
-          sessionStorage.getItem(TRANSCRIPTION_CONSENTS_KEY) ?? "null",
-        ) ||
-        window.__transcriptionConsents__ ||
-        {}
-      );
-    } catch {
-      return window.__transcriptionConsents__ || {};
-    }
-  }
-  function writeTranscriptionConsents(consents: Record<string, string>) {
-    try {
-      sessionStorage.setItem(
-        TRANSCRIPTION_CONSENTS_KEY,
-        JSON.stringify(consents),
-      );
-    } catch {}
-  }
+        DEFAULT_TRANSCRIPTION_PREFERENCES,
+    );
+  const [readTranscriptionKeys, writeTranscriptionKeys] = sessionSlot(
+    TRANSCRIPTION_KEYS_KEY,
+    () => window.__transcriptionKeys__ || {},
+  );
+  const [readTranscriptionConsents, writeTranscriptionConsents] = sessionSlot(
+    TRANSCRIPTION_CONSENTS_KEY,
+    () => window.__transcriptionConsents__ || {},
+  );
   function transcriptionProviders() {
     const keys = readTranscriptionKeys();
     return [
