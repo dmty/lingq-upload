@@ -1,26 +1,18 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
 test.describe("always-confirm flow", () => {
   test("library badges unconfirmed project as Needs review", async ({
     page,
   }) => {
-    await page.addInitScript(`;(() => {
-      window.__libraryEntries__ = [{
-        id: { content_hash: "proj-unconfirmed", audible_asin: null, isbn13: null, calibre_uuid: null },
-        title: "Unconfirmed Book",
-        language: "en",
-        completed_lesson_count: 0,
-        receipt_count: 0,
-        mtime: null,
-        cover_path: null,
-        authors: [],
-        series: null,
-        lingq_collection_id: null,
-        last_activity_at: null,
-        status: "needs_match",
-        failed_reason: null,
-      }];
-    })();`);
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry("proj-unconfirmed", {
+          title: "Unconfirmed Book",
+          status: "needs_match",
+        }),
+      ],
+    });
 
     await page.goto("/library");
     await expect(page.getByText("Needs review")).toBeVisible();

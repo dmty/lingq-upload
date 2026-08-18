@@ -1,4 +1,5 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
 const KEY = "course-errors";
 // The route resolves its param through joinKey, same as the other course
@@ -6,25 +7,13 @@ const KEY = "course-errors";
 // `ch:<hash>` form.
 const ROUTE_KEY = encodeURIComponent(`ch:${KEY}`);
 
-const entryScript = () => `
-;(() => {
-  window.__libraryEntries__ = [{
-    id: { content_hash: "${KEY}", audible_asin: null, isbn13: null, calibre_uuid: null },
-    title: "Broken Course",
-    language: "ja",
-    completed_lesson_count: 1,
-    receipt_count: 1,
-    mtime: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 7,
-    status: "done",
-  }];
-})();
-`;
-
-const failWith = (error: unknown) =>
-  `;(() => { window.__courseError__ = ${JSON.stringify(error)}; })();`;
+const entry = libraryEntry(KEY, {
+  title: "Broken Course",
+  language: "ja",
+  completed_lesson_count: 1,
+  receipt_count: 1,
+  lingq_collection_id: 7,
+});
 
 const fetchCount = (
   page: import("@playwright/test").Page,
@@ -37,13 +26,13 @@ const fetchCount = (
 
 test.describe("course screen failures", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(entryScript());
+    await seed(page, { __libraryEntries__: [entry] });
   });
 
   test("a missing API key points at Settings and keeps the LingQ button", async ({
     page,
   }) => {
-    await page.addInitScript(failWith({ kind: "MissingApiKey" }));
+    await seed(page, { __courseError__: { kind: "MissingApiKey" } });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toContainText("API key");
@@ -53,12 +42,12 @@ test.describe("course screen failures", () => {
   });
 
   test("a transport failure offers a retry", async ({ page }) => {
-    await page.addInitScript(
-      failWith({
+    await seed(page, {
+      __courseError__: {
         kind: "Lingq",
         message: { kind: "Transport", message: "dns" },
-      }),
-    );
+      },
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toContainText(
@@ -69,9 +58,9 @@ test.describe("course screen failures", () => {
   });
 
   test("a deleted course says so and offers no retry", async ({ page }) => {
-    await page.addInitScript(
-      failWith({ kind: "Lingq", message: { kind: "NotFound" } }),
-    );
+    await seed(page, {
+      __courseError__: { kind: "Lingq", message: { kind: "NotFound" } },
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toContainText(
@@ -82,18 +71,24 @@ test.describe("course screen failures", () => {
   });
 
   test("a failed refresh keeps the cached numbers", async ({ page }) => {
-    await page.addInitScript(`
-      ;(() => {
-        window.__courseView__ = {
-          collection: {
-            id: 7, title: "Broken Course", description: null, level: null,
-            duration: 600, lessons_count: 3, new_words_count: 10,
-            image_url: null, status: "private", roses_count: null, views_count: null,
-          },
-          lessons: [],
-        };
-      })();
-    `);
+    await seed(page, {
+      __courseView__: {
+        collection: {
+          id: 7,
+          title: "Broken Course",
+          description: null,
+          level: null,
+          duration: 600,
+          lessons_count: 3,
+          new_words_count: 10,
+          image_url: null,
+          status: "private",
+          roses_count: null,
+          views_count: null,
+        },
+        lessons: [],
+      },
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
     await expect(page.getByTestId("stat-lessons")).toContainText("3");
 
@@ -116,9 +111,9 @@ test.describe("course screen failures", () => {
     // Unlike the fixtures above (plain objects the stub throws, mirroring an
     // app-level AppError), this is a real Error instance — the shape the
     // generated binding rethrows instead of returning as a result.
-    await page.addInitScript(
-      `window.__courseError__ = new Error("socket reset");`,
-    );
+    await page.addInitScript(() => {
+      window.__courseError__ = new Error("socket reset");
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-alert")).toBeVisible();
@@ -134,22 +129,15 @@ test.describe("course screen failures", () => {
   }) => {
     const unuploadedKey = "course-errors-unuploaded";
     const routeKey = encodeURIComponent(`ch:${unuploadedKey}`);
-    await page.addInitScript(`
-      ;(() => {
-        window.__libraryEntries__ = [{
-          id: { content_hash: "${unuploadedKey}", audible_asin: null, isbn13: null, calibre_uuid: null },
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(unuploadedKey, {
           title: "Not Yet Uploaded",
           language: "ja",
-          completed_lesson_count: 0,
-          receipt_count: 0,
-          mtime: null,
-          authors: [],
-          series: null,
-          lingq_collection_id: null,
-          status: "mapped",
-        }];
-      })();
-    `);
+          status: "idle",
+        }),
+      ],
+    });
     await page.goto(`/course/${routeKey}`);
 
     await expect(page.getByTestId("course-not-uploaded")).toBeVisible();
@@ -162,30 +150,31 @@ test.describe("course screen failures", () => {
   }) => {
     const emptyKey = "course-errors-empty";
     const routeKey = encodeURIComponent(`ch:${emptyKey}`);
-    await page.addInitScript(`
-      ;(() => {
-        window.__libraryEntries__ = [{
-          id: { content_hash: "${emptyKey}", audible_asin: null, isbn13: null, calibre_uuid: null },
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(emptyKey, {
           title: "Freshly Uploaded",
           language: "ja",
-          completed_lesson_count: 0,
-          receipt_count: 0,
-          mtime: null,
-          authors: [],
-          series: null,
           lingq_collection_id: 9,
-          status: "done",
-        }];
-        window.__courseView__ = {
-          collection: {
-            id: 9, title: "Freshly Uploaded", description: null, level: null,
-            duration: 0, lessons_count: 0, new_words_count: 0,
-            image_url: null, status: "private", roses_count: null, views_count: null,
-          },
-          lessons: [],
-        };
-      })();
-    `);
+        }),
+      ],
+      __courseView__: {
+        collection: {
+          id: 9,
+          title: "Freshly Uploaded",
+          description: null,
+          level: null,
+          duration: 0,
+          lessons_count: 0,
+          new_words_count: 0,
+          image_url: null,
+          status: "private",
+          roses_count: null,
+          views_count: null,
+        },
+        lessons: [],
+      },
+    });
     await page.goto(`/course/${routeKey}`);
 
     await expect(page.getByTestId("course-stat-band")).toBeVisible();
@@ -195,13 +184,13 @@ test.describe("course screen failures", () => {
   test("a cold deep link waits for the library before calling the course missing", async ({
     page,
   }) => {
-    await page.addInitScript(`
-      ;(() => {
-        window.__libraryGate__ = new Promise((resolve) => {
-          window.__releaseLibrary__ = resolve;
-        });
-      })();
-    `);
+    // A pending promise and its resolver aren't serializable, so this stays
+    // a plain init script rather than a seed() call.
+    await page.addInitScript(() => {
+      window.__libraryGate__ = new Promise((resolve) => {
+        window.__releaseLibrary__ = resolve;
+      });
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     // Anchors the timing: proves the loading branch actually rendered before
@@ -218,9 +207,9 @@ test.describe("course screen failures", () => {
   test("a library read failure says so instead of calling the course missing", async ({
     page,
   }) => {
-    await page.addInitScript(`
-      ;(() => { window.__libraryError__ = { kind: "Io", message: "disk unreadable" }; })();
-    `);
+    await seed(page, {
+      __libraryError__: { kind: "Io", message: "disk unreadable" },
+    });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-library-error")).toBeVisible();
@@ -230,7 +219,7 @@ test.describe("course screen failures", () => {
   test("a route key with no matching entry says the course isn't in your library", async ({
     page,
   }) => {
-    await page.addInitScript(`;(() => { window.__libraryEntries__ = []; })();`);
+    await seed(page, { __libraryEntries__: [] });
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-not-found")).toBeVisible();

@@ -1,35 +1,21 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
+import type { LibraryStatus } from "../src/lib/ipc/bindings";
 
-function entriesScript(): string {
-  const entry = (i: number, language: string, status: string) => ({
-    id: {
-      content_hash: `book-${i}`,
-      audible_asin: null,
-      isbn13: null,
-      calibre_uuid: null,
-    },
+const entry = (i: number, language: string, status: LibraryStatus) =>
+  libraryEntry(`book-${i}`, {
     title: `Book ${i}`,
     authors: ["Author"],
     language,
-    completed_lesson_count: 0,
-    receipt_count: 0,
-    mtime: null,
     status,
-    cover_path: null,
-    last_activity_at: null,
     lingq_collection_id: status === "done" ? 42 : null,
-    series: null,
-    failed_reason: null,
   });
-  return `window.__libraryEntries__ = ${JSON.stringify([
-    entry(1, "de", "done"),
-    entry(2, "fr", "idle"),
-  ])};`;
-}
+
+const entries = [entry(1, "de", "done"), entry(2, "fr", "idle")];
 
 test.describe("library filter language names + badge casing", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(entriesScript());
+    await seed(page, { __libraryEntries__: entries });
   });
 
   test("filter shows display names, value stays the code", async ({ page }) => {

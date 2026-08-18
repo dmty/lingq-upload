@@ -1,30 +1,15 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
-function entriesScript(): string {
-  const entry = {
-    id: {
-      content_hash: "book-1",
-      audible_asin: null,
-      isbn13: null,
-      calibre_uuid: null,
-    },
-    title: "War and Peace",
-    authors: ["Tolstoy"],
-    language: "en",
-    completed_lesson_count: 0,
-    receipt_count: 0,
-    mtime: null,
-    status: "idle",
-    cover_path: null,
-    last_activity_at: null,
-    lingq_collection_id: null,
-  };
-  return `window.__libraryEntries__ = ${JSON.stringify([entry])};`;
-}
+const entry = libraryEntry("book-1", {
+  title: "War and Peace",
+  authors: ["Tolstoy"],
+  status: "idle",
+});
 
 test.describe("typography", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(entriesScript());
+    await seed(page, { __libraryEntries__: [entry] });
   });
 
   // The split is content vs chrome, not book vs app: a title in a list row

@@ -1,30 +1,17 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
-function entriesScript(): string {
-  const entry = (i: number) => ({
-    id: {
-      content_hash: `book-${i}`,
-      audible_asin: null,
-      isbn13: null,
-      calibre_uuid: null,
-    },
+const entries = [1, 2, 3].map((i) =>
+  libraryEntry(`book-${i}`, {
     title: `Book ${i}`,
     authors: ["Author"],
-    language: "en",
-    completed_lesson_count: 0,
-    receipt_count: 0,
-    mtime: null,
     status: "idle",
-    cover_path: null,
-    last_activity_at: null,
-    lingq_collection_id: null,
-  });
-  return `window.__libraryEntries__ = ${JSON.stringify([entry(1), entry(2), entry(3)])};`;
-}
+  }),
+);
 
 test.describe("library focus reset on filter change", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(entriesScript());
+    await seed(page, { __libraryEntries__: entries });
   });
 
   test("typing in search clears the keyboard focus index", async ({ page }) => {

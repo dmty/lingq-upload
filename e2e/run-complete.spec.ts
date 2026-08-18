@@ -1,4 +1,5 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "run-fixture";
@@ -99,27 +100,17 @@ const courseLinkProjectScript = () =>
     lingqCollectionId: 7,
   });
 
-const courseLinkLibraryScript = () => `
-;(() => {
-  window.__libraryEntries__ = [{
-    id: { content_hash: "${COURSE_LINK_KEY}", audible_asin: null, isbn13: null, calibre_uuid: null },
-    title: "Run Fixture",
-    language: "en",
-    completed_lesson_count: 1,
-    receipt_count: 1,
-    mtime: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 7,
-    status: "done",
-  }];
-})();
-`;
+const courseLinkEntry = libraryEntry(COURSE_LINK_KEY, {
+  title: "Run Fixture",
+  completed_lesson_count: 1,
+  receipt_count: 1,
+  lingq_collection_id: 7,
+});
 
 test.describe("run completion links to the course screen", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(courseLinkProjectScript());
-    await page.addInitScript(courseLinkLibraryScript());
+    await seed(page, { __libraryEntries__: [courseLinkEntry] });
   });
 
   test("View Course opens the course screen for the finished project", async ({
