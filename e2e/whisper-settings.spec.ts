@@ -1,6 +1,9 @@
 import { expect, seed, test } from "./setup/test";
 import type { Project } from "../src/lib/ipc/bindings";
 
+// A byte-identity sentinel: "saves the complete app preference pair without
+// changing project JSON" compares JSON.stringify(window.__projectByKey__)
+// before and after a preferences save.
 const project: Project = {
   id: { content_hash: "settings-project" },
   sources: { text: { kind: "missing" } },

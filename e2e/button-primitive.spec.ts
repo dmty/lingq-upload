@@ -16,6 +16,10 @@ function svelteFiles(dir: string): string[] {
 test("no component hand-rolls a button the primitive already provides", () => {
   const offenders = svelteFiles("src")
     .filter((p) => !p.endsWith("Button.svelte"))
-    .filter((p) => /bg-accent\s+px-|bg-accent\s+hover:bg-accent-hover/.test(readFileSync(p, "utf8")));
+    .filter((p) =>
+      /bg-accent\s+px-|bg-accent\s+hover:bg-accent-hover/.test(
+        readFileSync(p, "utf8"),
+      ),
+    );
   expect(offenders).toEqual([]);
 });

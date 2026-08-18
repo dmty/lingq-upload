@@ -6,7 +6,7 @@ const KEY = "run-fixture";
 
 test.describe("run completion and cancel states", () => {
   test.beforeEach(async ({ page }) => {
-    // No plan hook: this spec covers the receipts-only fallback path.
+    // Empty plan: this spec covers the receipts-only fallback path.
     await seed(
       page,
       runFixture({
