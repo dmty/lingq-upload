@@ -1,17 +1,17 @@
 import { expect, seed, test } from "./setup/test";
 import { libraryEntry } from "./setup/library-fixture";
 
-const entries = [1, 2, 3].map((i) =>
-  libraryEntry(`book-${i}`, {
-    title: `Book ${i}`,
-    authors: ["Author"],
-    status: "idle",
-  }),
-);
-
 test.describe("library focus reset on filter change", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, { __libraryEntries__: entries });
+    await seed(page, {
+      __libraryEntries__: [1, 2, 3].map((i) =>
+        libraryEntry(`book-${i}`, {
+          title: `Book ${i}`,
+          authors: ["Author"],
+          status: "idle",
+        }),
+      ),
+    });
   });
 
   test("typing in search clears the keyboard focus index", async ({ page }) => {

@@ -11,11 +11,11 @@ const entry = (i: number, language: string, status: LibraryStatus) =>
     lingq_collection_id: status === "done" ? 42 : null,
   });
 
-const entries = [entry(1, "de", "done"), entry(2, "fr", "idle")];
-
 test.describe("library filter language names + badge casing", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, { __libraryEntries__: entries });
+    await seed(page, {
+      __libraryEntries__: [entry(1, "de", "done"), entry(2, "fr", "idle")],
+    });
   });
 
   test("filter shows display names, value stays the code", async ({ page }) => {

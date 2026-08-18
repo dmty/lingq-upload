@@ -7,14 +7,6 @@ const KEY = "course-errors";
 // `ch:<hash>` form.
 const ROUTE_KEY = encodeURIComponent(`ch:${KEY}`);
 
-const entry = libraryEntry(KEY, {
-  title: "Broken Course",
-  language: "ja",
-  completed_lesson_count: 1,
-  receipt_count: 1,
-  lingq_collection_id: 7,
-});
-
 const fetchCount = (
   page: import("@playwright/test").Page,
   workerIndex: number,
@@ -26,7 +18,17 @@ const fetchCount = (
 
 test.describe("course screen failures", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, { __libraryEntries__: [entry] });
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(KEY, {
+          title: "Broken Course",
+          language: "ja",
+          completed_lesson_count: 1,
+          receipt_count: 1,
+          lingq_collection_id: 7,
+        }),
+      ],
+    });
   });
 
   test("a missing API key points at Settings and keeps the LingQ button", async ({

@@ -1,15 +1,17 @@
 import { expect, seed, test } from "./setup/test";
 import { libraryEntry } from "./setup/library-fixture";
 
-const entry = libraryEntry("book-1", {
-  title: "War and Peace",
-  authors: ["Tolstoy"],
-  status: "idle",
-});
-
 test.describe("typography", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, { __libraryEntries__: [entry] });
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry("book-1", {
+          title: "War and Peace",
+          authors: ["Tolstoy"],
+          status: "idle",
+        }),
+      ],
+    });
   });
 
   // The split is content vs chrome, not book vs app: a title in a list row

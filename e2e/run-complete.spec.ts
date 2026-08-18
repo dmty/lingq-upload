@@ -100,17 +100,19 @@ const courseLinkProjectScript = () =>
     lingqCollectionId: 7,
   });
 
-const courseLinkEntry = libraryEntry(COURSE_LINK_KEY, {
-  title: "Run Fixture",
-  completed_lesson_count: 1,
-  receipt_count: 1,
-  lingq_collection_id: 7,
-});
-
 test.describe("run completion links to the course screen", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(courseLinkProjectScript());
-    await seed(page, { __libraryEntries__: [courseLinkEntry] });
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(COURSE_LINK_KEY, {
+          title: "Run Fixture",
+          completed_lesson_count: 1,
+          receipt_count: 1,
+          lingq_collection_id: 7,
+        }),
+      ],
+    });
   });
 
   test("View Course opens the course screen for the finished project", async ({
