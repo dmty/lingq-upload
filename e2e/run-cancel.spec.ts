@@ -3,24 +3,24 @@ import { runFixture } from "./setup/run-fixture";
 
 const KEY = "cancel-fixture";
 
-// Three planned chapters, none uploaded yet.
-const fixture = () =>
-  runFixture({
-    key: KEY,
-    title: "Cancel Fixture",
-    plan: [
-      { chapter_index: 0, title: "Approach to Dunwich" },
-      { chapter_index: 1, title: "The Fields Beyond" },
-      { chapter_index: 2, title: "Return by Night" },
-    ],
-  });
-
 const rows = (page: import("@playwright/test").Page) =>
   page.locator("[data-testid='chapter-row']");
 
 test.describe("run screen cancel flow", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, fixture());
+    // Three planned chapters, none uploaded yet.
+    await seed(
+      page,
+      runFixture({
+        key: KEY,
+        title: "Cancel Fixture",
+        plan: [
+          { chapter_index: 0, title: "Approach to Dunwich" },
+          { chapter_index: 1, title: "The Fields Beyond" },
+          { chapter_index: 2, title: "Return by Night" },
+        ],
+      }),
+    );
   });
 
   test("every planned chapter starts queued", async ({ page }) => {

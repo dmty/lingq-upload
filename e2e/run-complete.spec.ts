@@ -4,21 +4,21 @@ import { runFixture } from "./setup/run-fixture";
 
 const KEY = "run-fixture";
 
-// No plan hook: this spec covers the receipts-only fallback path.
-const projectFixture = () =>
-  runFixture({
-    key: KEY,
-    title: "Run Fixture",
-    receipts: [
-      { chapter_index: 0 },
-      { chapter_index: 1 },
-      { chapter_index: 2 },
-    ],
-  });
-
 test.describe("run completion and cancel states", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, projectFixture());
+    // No plan hook: this spec covers the receipts-only fallback path.
+    await seed(
+      page,
+      runFixture({
+        key: KEY,
+        title: "Run Fixture",
+        receipts: [
+          { chapter_index: 0 },
+          { chapter_index: 1 },
+          { chapter_index: 2 },
+        ],
+      }),
+    );
   });
 
   test("chapter counter, completion banner, course link", async ({ page }) => {
@@ -92,26 +92,24 @@ test.describe("run completion and cancel states", () => {
 const COURSE_LINK_KEY = "run-course-link";
 const COURSE_LINK_ROUTE_KEY = encodeURIComponent(`ch:${COURSE_LINK_KEY}`);
 
-const courseLinkFixture = (): Partial<Window> => ({
-  ...runFixture({
-    key: `ch:${COURSE_LINK_KEY}`,
-    title: "Run Fixture",
-    receipts: [{ chapter_index: 0 }],
-    lingqCollectionId: 7,
-  }),
-  __libraryEntries__: [
-    libraryEntry(COURSE_LINK_KEY, {
-      title: "Run Fixture",
-      completed_lesson_count: 1,
-      receipt_count: 1,
-      lingq_collection_id: 7,
-    }),
-  ],
-});
-
 test.describe("run completion links to the course screen", () => {
   test.beforeEach(async ({ page }) => {
-    await seed(page, courseLinkFixture());
+    await seed(page, {
+      ...runFixture({
+        key: `ch:${COURSE_LINK_KEY}`,
+        title: "Run Fixture",
+        receipts: [{ chapter_index: 0 }],
+        lingqCollectionId: 7,
+      }),
+      __libraryEntries__: [
+        libraryEntry(COURSE_LINK_KEY, {
+          title: "Run Fixture",
+          completed_lesson_count: 1,
+          receipt_count: 1,
+          lingq_collection_id: 7,
+        }),
+      ],
+    });
   });
 
   test("View Course opens the course screen for the finished project", async ({
