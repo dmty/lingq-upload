@@ -4,7 +4,6 @@ import { tauriStubInitScriptFor } from "./setup/tauri-stub";
 import type {
   AppError,
   DetectStartResult,
-  DetectedRange,
   DetectionPreview,
 } from "../src/lib/ipc/bindings";
 
@@ -185,19 +184,12 @@ async function emitDetected(
   });
 }
 
-type ConfirmDetectedRangeArgs = {
-  selectedRange: DetectedRange;
-  evidence: DetectionPreview;
-};
-
-async function confirmedRangeArgs(
-  page: Page,
-): Promise<ConfirmDetectedRangeArgs> {
+async function confirmedRangeArgs(page: Page) {
   const args = await page.evaluate(
     () => window.__confirmDetectedRangeCalls__?.[0],
   );
   if (!args) throw new Error("cmd_confirm_detected_range was not called");
-  return args as ConfirmDetectedRangeArgs;
+  return args;
 }
 
 /** Return a typed detection outcome straight from the command, no events. */

@@ -9,7 +9,9 @@ import type {
   Collection,
   CourseView,
   DetectStartResult,
+  DetectedRange,
   DetectionAvailability,
+  DetectionPreview,
   LibraryEntry,
   Language,
   MappingState,
@@ -17,13 +19,13 @@ import type {
   MismatchInspection,
   PlanStep,
   Project,
+  ProjectId,
+  TranscribeProviderId,
 } from "../../src/lib/ipc/bindings";
 
 type Fixture = Record<string, unknown>;
 // Shapes that recur across the fixtures below, named once so each
 // declaration reads as what it is rather than its structure.
-type CallLog = Fixture[];
-type JobIdArgs = { jobId?: string }[];
 type Gate = Promise<void>;
 type Release = () => void;
 
@@ -86,14 +88,14 @@ declare global {
     __matcherInspectionByProject__?: Record<string, MismatchInspection | null>;
     __matcherSeedByProject__?: Record<string, Fixture>;
     __failNextMappingOp__?: boolean;
-    __confirmMappingCalls__?: CallLog;
+    __confirmMappingCalls__?: { projectId: ProjectId }[];
 
     // Upload fixtures.
     __uploadOneShotResult__?: { lesson_id: number; collection_id: number };
     __uploadOneShotError__?: AppError | Error;
     __uploadOneShotGate__?: Gate;
     __releaseUpload__?: Release;
-    __cancelJobCalls__?: JobIdArgs;
+    __cancelJobCalls__?: { jobId: string }[];
 
     // Transcription / detection fixtures.
     __transcriptionPreferences__?: AppTranscriptionPreferences;
@@ -101,7 +103,10 @@ declare global {
     __transcriptionConsents__?: Record<string, boolean>;
     __failNextTranscriptionPreferences__?: boolean;
     __failNextTranscribeConsent__?: boolean;
-    __transcribeConsentCalls__?: CallLog;
+    __transcribeConsentCalls__?: {
+      projectId: ProjectId;
+      providerId: TranscribeProviderId;
+    }[];
     __transcribeConsentGate__?: Gate;
     __releaseTranscribeConsent__?: Release;
     __detectionAvailability__?: DetectionAvailability;
@@ -111,12 +116,16 @@ declare global {
     __detectionGate__?: Gate;
     __releaseDetection__?: Release;
     __detectionStartCalls__?: number;
-    __detectionStartArgs__?: JobIdArgs;
+    __detectionStartArgs__?: { projectId: ProjectId; jobId: string }[];
     __detectionListenerCountAtStart__?: number;
-    __confirmDetectedRangeCalls__?: CallLog;
+    __confirmDetectedRangeCalls__?: {
+      projectId: ProjectId;
+      selectedRange: DetectedRange;
+      evidence: DetectionPreview;
+    }[];
     __confirmDetectedRangeError__?: AppError | Error;
     __confirmDetectedRangeGate__?: Gate;
-    __resetDetectionCalls__?: CallLog;
+    __resetDetectionCalls__?: { projectId: ProjectId }[];
     __resetDetectionError__?: AppError | Error;
     __resetDetectionGate__?: Gate;
     __dialogPickPath__?: string | null;
