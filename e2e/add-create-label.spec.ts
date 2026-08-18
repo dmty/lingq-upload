@@ -1,12 +1,10 @@
-import { expect, test } from "./setup/test";
-
-const seed = `;(() => {
-  window.__languages__ = [{ code: "en", title: "English", known_words: 500 }];
-})();`;
+import { expect, seed, test } from "./setup/test";
 
 test.describe("add page create-button reasons", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(seed);
+    await seed(page, {
+      __languages__: [{ code: "en", title: "English", known_words: 500 }],
+    });
   });
 
   test("the disabled Create button says what's missing", async ({ page }) => {

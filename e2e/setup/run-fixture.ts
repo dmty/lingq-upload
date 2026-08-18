@@ -66,8 +66,9 @@ export function runFixture(opts: {
     degraded: s.degraded ?? false,
   }));
 
-  // A spec with no plan exercises the receipts-only fallback, so leave the
-  // plan hook unset rather than seeding an empty array.
+  // The stub reads __planByKey__?.[key] || [], so an empty array and an
+  // absent key already resolve identically — this branch just avoids adding
+  // a no-op property to the fixture.
   return steps.length
     ? { __projectByKey__: { [key]: project }, __planByKey__: { [key]: steps } }
     : { __projectByKey__: { [key]: project } };

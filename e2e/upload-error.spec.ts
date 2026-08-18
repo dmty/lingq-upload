@@ -1,13 +1,11 @@
-import { expect, test } from "./setup/test";
-
-const seed = `;(() => {
-  window.__languages__ = [{ code: "en", title: "English", known_words: 500 }];
-  window.__collections__ = [{ id: 7, title: "Course A" }];
-})();`;
+import { expect, seed, test } from "./setup/test";
 
 test.describe("one-shot upload error surface", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(seed);
+    await seed(page, {
+      __languages__: [{ code: "en", title: "English", known_words: 500 }],
+      __collections__: [{ id: 7, title: "Course A" }],
+    });
   });
 
   test("a failed upload after progress events shows the error, not a stalled bar", async ({

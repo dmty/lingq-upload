@@ -1,11 +1,6 @@
 import { type Page } from "@playwright/test";
 
-import { expect, test } from "./setup/test";
-
-const seed = `;(() => {
-  window.__languages__ = [{ code: "en", title: "English", known_words: 500 }];
-  window.__collections__ = [{ id: 7, title: "Course A" }];
-})();`;
+import { expect, seed, test } from "./setup/test";
 
 async function startUpload(page: Page) {
   await page.goto("/upload");
@@ -29,7 +24,10 @@ async function startUpload(page: Page) {
 
 test.describe("aggregate upload progress", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(seed);
+    await seed(page, {
+      __languages__: [{ code: "en", title: "English", known_words: 500 }],
+      __collections__: [{ id: 7, title: "Course A" }],
+    });
   });
 
   test("upload bar accumulates without resetting", async ({ page }) => {

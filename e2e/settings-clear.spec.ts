@@ -1,8 +1,8 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
 
 test.describe("settings key clear confirm", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(`window.__lingqKey__ = "sk-test-abcd1234";`);
+    await seed(page, { __lingqKey__: "sk-test-abcd1234" });
   });
 
   test("first click arms, second click clears", async ({ page }) => {

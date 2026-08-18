@@ -1,4 +1,8 @@
-import { expect, test } from "./setup/test";
+import { type Page } from "@playwright/test";
+
+import { libraryEntry } from "./setup/library-fixture";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
+import { expect, seed, test } from "./setup/test";
 
 test.describe("macOS shell tokens", () => {
   test.beforeEach(async ({ page }) => {
@@ -224,7 +228,7 @@ test.describe("text selection", () => {
   test.beforeEach(async ({ page }) => {
     // Without entries the library renders its empty state, which has no
     // search field for the probe below to read.
-    await page.addInitScript(statusEntriesScript());
+    await seed(page, libraryEntriesFixture());
   });
 
   test("chrome is unselectable but fields and alerts are not", async ({
@@ -258,7 +262,7 @@ test.describe("text selection", () => {
 test.describe("form controls", () => {
   test.beforeEach(async ({ page }) => {
     // The search field and popup button only exist on a non-empty library.
-    await page.addInitScript(statusEntriesScript());
+    await seed(page, libraryEntriesFixture());
   });
 
   test("every text input carries the shared field chrome", async ({ page }) => {
@@ -389,83 +393,54 @@ test.describe("form controls", () => {
 // Minimal single-project fixture: just enough for the evidence panel's
 // "Reset detected range" secondary button to render without a click, so the
 // push-button assertion targets a real DOM node rather than a synthetic one.
-function pushButtonFixtureScript(key: string): string {
-  const chapters = [
-    { id: "spine:start", order: 0, title: "Start", body: "", kind: "body" },
-    { id: "spine:end", order: 1, title: "End", body: "", kind: "body" },
-  ];
-  const detection = {
-    provider_id: "groq",
-    align_source: "transcript",
-    range: { start_chapter_id: "spine:start", end_chapter_id: "spine:end" },
-    confidence: 0.9,
-    transcript_head_preview: null,
-    transcript_tail_preview: null,
-    detected_at: "2026-08-16T00:00:00Z",
-  };
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "spine:start",
-        track_id: "t0",
-        confidence: 1,
-        original_confidence: 1,
-        touched: false,
-      },
-      {
-        chapter_id: "spine:end",
-        track_id: "t1",
-        confidence: 1,
-        original_confidence: 1,
-        touched: false,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-  };
-  return `;(() => {
-    const key = ${JSON.stringify(key)};
-    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
-    window.__matcherDecisionByProject__ = {
+async function seedPushButtonFixture(page: Page, key: string): Promise<void> {
+  const pairs = [pair(0, "t0", 1), pair(1, "t1", 1)];
+  await installMapping(page, {
+    key,
+    chapters: chapters(2, 0),
+    mapping: { pairs, parking_lot: [], op_id: 0 },
+  });
+  await seed(page, {
+    __matcherDecisionByProject__: {
       [key]: {
         condition: "many_to_few",
         response: "split_proportional",
-        chapter_count: ${chapters.length},
+        chapter_count: pairs.length,
         track_count: 2,
         user_overrode: false,
-        decided_at: ${JSON.stringify(detection.detected_at)},
-        detection: ${JSON.stringify(detection)},
+        decided_at: "2026-08-16T00:00:00Z",
+        detection: {
+          provider_id: "groq",
+          align_source: "transcript",
+          range: {
+            start_chapter_id: pairs[0].chapter_id,
+            end_chapter_id: pairs[1].chapter_id,
+          },
+          confidence: 0.9,
+          transcript_head_preview: null,
+          transcript_tail_preview: null,
+          detected_at: "2026-08-16T00:00:00Z",
+        },
       },
-    };
-    window.__mappingState__.seed(key, ${JSON.stringify(mapping)});
-  })();`;
+    },
+  });
 }
 
-function statusEntriesScript(): string {
-  const entry = {
-    id: {
-      content_hash: "book-1",
-      audible_asin: null,
-      isbn13: null,
-      calibre_uuid: null,
-    },
-    title: "War and Peace",
-    authors: ["Tolstoy"],
-    language: "en",
-    completed_lesson_count: 0,
-    receipt_count: 0,
-    mtime: null,
-    status: "needs_match",
-    cover_path: null,
-    last_activity_at: null,
-    lingq_collection_id: null,
+function libraryEntriesFixture(): Partial<Window> {
+  return {
+    __libraryEntries__: [
+      libraryEntry("book-1", {
+        title: "War and Peace",
+        authors: ["Tolstoy"],
+        status: "needs_match",
+      }),
+    ],
   };
-  return `window.__libraryEntries__ = ${JSON.stringify([entry])};`;
 }
 
 test.describe("AppKit list and status treatment", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(statusEntriesScript());
+    await seed(page, libraryEntriesFixture());
   });
 
   test("the selected row is accent-filled, not tinted", async ({ page }) => {
@@ -588,52 +563,38 @@ test.describe("AppKit list and status treatment", () => {
   });
 });
 
-function matchSelectionFixtureScript(key: string): string {
-  const chapters = [
-    { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
-  ];
-  const mappingState = { pairs: [], parking_lot: [], op_id: 0 };
-  return `;(() => {
-    const key = ${JSON.stringify(key)};
-    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
-    window.__mappingState__.seed(key, ${JSON.stringify(mappingState)});
-  })();`;
+async function seedMatchSelectionFixture(
+  page: Page,
+  key: string,
+): Promise<void> {
+  await installMapping(page, {
+    key,
+    chapters: chapters(1, 0),
+    mapping: { pairs: [], parking_lot: [], op_id: 0 },
+  });
 }
 
 // A low-confidence, untouched pair so the grid renders its Confirm button —
 // the control G1 is about (its own bg-surface, untouched by the colour remap).
-function matchConfirmFixtureScript(key: string): string {
-  const chapters = [
-    { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
-  ];
-  const mappingState = {
-    pairs: [
-      {
-        chapter_id: "idx:0",
-        track_id: "t0",
-        confidence: 0.5,
-        original_confidence: 0.5,
-        touched: false,
-      },
-    ],
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Track One",
-        atomDurationSec: 120,
-        charsPerSec: 10,
-        audioPath: null,
-        window: [0, 120],
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-  };
-  return `;(() => {
-    const key = ${JSON.stringify(key)};
-    window.__pickerState__.chaptersByProject[key] = ${JSON.stringify(chapters)};
-    window.__mappingState__.seed(key, ${JSON.stringify(mappingState)});
-  })();`;
+async function seedMatchConfirmFixture(page: Page, key: string): Promise<void> {
+  await installMapping(page, {
+    key,
+    chapters: chapters(1, 0),
+    mapping: {
+      pairs: [pair(0, "t0", 0.5)],
+      buckets: [
+        {
+          trackId: "t0",
+          atomTitle: "Track One",
+          atomDurationSec: 120,
+          charsPerSec: 10,
+          window: [0, 120],
+        },
+      ],
+      parking_lot: [],
+      op_id: 0,
+    },
+  });
 }
 
 test.describe("mapping grid selection", () => {
@@ -641,7 +602,7 @@ test.describe("mapping grid selection", () => {
     page,
   }) => {
     const key = "match-selection-fixture";
-    await page.addInitScript(matchSelectionFixtureScript(key));
+    await seedMatchSelectionFixture(page, key);
     await page.goto(`/match/${key}`);
     await page.waitForLoadState("networkidle");
     const row = page.getByTestId("mapping-chapter-row").first();
@@ -696,7 +657,7 @@ test.describe("mapping grid selection", () => {
     page,
   }) => {
     const key = "match-confirm-hover-fixture";
-    await page.addInitScript(matchConfirmFixtureScript(key));
+    await seedMatchConfirmFixture(page, key);
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       await page.goto(`/match/${key}`);
@@ -747,7 +708,7 @@ test.describe("button primitive", () => {
     page,
   }) => {
     const key = "push-button-fixture";
-    await page.addInitScript(pushButtonFixtureScript(key));
+    await seedPushButtonFixture(page, key);
     await page.goto(`/match/${key}`);
     const button = page.getByRole("button", { name: "Reset detected range" });
     await expect(button).toBeVisible();
