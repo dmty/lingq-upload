@@ -4,7 +4,7 @@ import type {
   MismatchInspection,
 } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
-import { installMapping, pair } from "./setup/mapping-fixture";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "bucket-fixture";
 
@@ -196,7 +196,12 @@ const nonContiguousInspection: MismatchInspection = {
 
 test.describe("banded bucket list", () => {
   test.beforeEach(async ({ page }) => {
-    await installMapping(page, { key: PROJECT_KEY, mapping, inspection });
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+      inspection,
+    });
   });
 
   test("renders bands grouped by track with numbered chapters", async ({

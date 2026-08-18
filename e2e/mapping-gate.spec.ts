@@ -1,6 +1,6 @@
 import type { MappingState } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
-import { installMapping, pair } from "./setup/mapping-fixture";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "gate-fixture";
 
@@ -36,7 +36,11 @@ const mapping: MappingState = {
 
 test.describe("mapping grid gate + arrows", () => {
   test.beforeEach(async ({ page }) => {
-    await installMapping(page, { key: PROJECT_KEY, mapping });
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+    });
   });
 
   test("gate reason is inline and clears on confirm", async ({ page }) => {

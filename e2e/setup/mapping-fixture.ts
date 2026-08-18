@@ -49,32 +49,21 @@ export const seedMapping = (page: Page, key: string, mapping: MappingState) =>
     mapping,
   });
 
-export function mappingFixture(opts: {
-  key: string;
-  chapters?: Chapter[];
-  mapping: MappingState;
-  inspection?: MismatchInspection | null;
-}) {
-  return {
-    chapters: opts.chapters ?? chapters(5),
-    mapping: opts.mapping,
-    globals: {
-      // A spec that passes `inspection: null` explicitly is asserting on the
-      // empty inspection itself; one that omits it just doesn't care and
-      // rides this default. Keep that distinction at call sites — don't
-      // "clean up" an explicit null into an omitted field.
-      __matcherInspection__: opts.inspection ?? null,
-    } satisfies Partial<Window>,
-  };
-}
-
 // One call per spec: the two stateful seams plus the plain-data globals.
 export async function installMapping(
   page: Page,
-  opts: Parameters<typeof mappingFixture>[0],
+  opts: {
+    key: string;
+    chapters: Chapter[];
+    mapping: MappingState;
+    inspection?: MismatchInspection | null;
+  },
 ): Promise<void> {
-  const fixture = mappingFixture(opts);
-  await seed(page, fixture.globals);
-  await seedChapters(page, opts.key, fixture.chapters);
-  await seedMapping(page, opts.key, fixture.mapping);
+  // A spec that passes `inspection: null` explicitly is asserting on the
+  // empty inspection itself; one that omits it just doesn't care and rides
+  // this default. Keep that distinction at call sites — don't "clean up" an
+  // explicit null into an omitted field.
+  await seed(page, { __matcherInspection__: opts.inspection ?? null });
+  await seedChapters(page, opts.key, opts.chapters);
+  await seedMapping(page, opts.key, opts.mapping);
 }
