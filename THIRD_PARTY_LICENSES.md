@@ -20,10 +20,6 @@ https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt.
 File-level copyleft; bundle-level compatible. Upstream:
 https://github.com/pdeljanov/Symphonia.
 
-## mp4 (MIT)
-
-Upstream: https://github.com/alfg/mp4-rust.
-
 ## hound (MIT OR Apache-2.0, dev-dep only)
 
 Upstream: https://github.com/ruuda/hound.

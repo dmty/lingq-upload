@@ -6,11 +6,6 @@ Tauri 2 + SvelteKit 5 + Bun + Rust. Works on macOS, Windows, Linux.
 
 - **Rust** stable. Install via [rustup](https://rustup.rs/). Pinned via `rust-toolchain.toml` once committed.
 - **Bun** 1.x. Install: `curl -fsSL https://bun.sh/install | bash`. No npm / pnpm — `bun.lock` is the only lockfile.
-- **ffmpeg** for dev runs.
-  - macOS: `brew install ffmpeg`
-  - Linux: `sudo apt install ffmpeg`
-  - Windows: `choco install ffmpeg` or `scoop install ffmpeg`
-  - Release builds bundle ffmpeg as a Tauri resource — see AD-008.
 - **Tauri 2 system deps (Linux only):**
 
   ```sh
@@ -53,16 +48,6 @@ First Tauri build is slow (~5 min on macOS, ~10 min on Linux first time) — web
 | Lint                                     | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` |
 | Build release                            | `bun tauri build`                                                  |
 
-## ffmpeg override in dev
-
-Dev builds locate ffmpeg via `PATH` by default. To force a specific binary:
-
-```sh
-FFMPEG_BIN=/opt/homebrew/bin/ffmpeg bun tauri dev
-```
-
-Release builds use the bundled binary at `src-tauri/resources/ffmpeg/<platform>/ffmpeg(.exe)`. Sourcing of that binary (BtbN LGPL builds) is documented in `docs/architecture/decisions.md` AD-008.
-
 ## macOS keychain on dev builds
 
 Unsigned dev builds prompt for keychain access on every API-key read. Two options:
@@ -84,7 +69,6 @@ Unsigned dev builds prompt for keychain access on every API-key read. Two option
 
 - **Bun + SvelteKit hot reload occasionally wedges Vite.** Kill `bun dev` / `bun tauri dev` and rerun. Not a Tauri issue.
 - **specta drift in CI**: if a command signature changes but `bindings.ts` isn't regenerated locally before pushing, CI will fail at the "Specta bindings drift check" step. Run `cargo build` and commit the result.
-- **Windows + ffmpeg**: chocolatey installs ffmpeg under `C:\ProgramData\chocolatey\bin` which may not be on PATH in non-elevated shells. Use `FFMPEG_BIN` to be explicit.
 - **`bun tauri dev` complains about cargo target dir on Windows** with long paths: enable long-path support in Group Policy or set `CARGO_TARGET_DIR` to a short absolute path.
 
 ## Project structure quick reference
@@ -98,7 +82,7 @@ Unsigned dev builds prompt for keychain access on every API-key read. Two option
 | `src-tauri/src/main.rs`          | Tauri boot                                                  |
 | `src-tauri/src/commands/`        | `#[tauri::command]` thin wrappers                           |
 | `src-tauri/src/core/`            | Pure-Rust domain logic                                      |
-| `src-tauri/src/codecs/`          | `AudioCodec` impls — AD-014                                 |
+| `src-tauri/src/codecs/`          | Decode / encode / chapter / silence impls — AD-014          |
 | `src-tauri/src/languages/`       | `LanguageProfile` impls — AD-015                            |
 | `src-tauri/src/epub/strategies/` | `HeadingStrategy` impls — AD-016                            |
 | `src-tauri/src/ingest/`          | `IngestSource` impls — AD-019                               |

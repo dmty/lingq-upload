@@ -15,18 +15,17 @@ Single GitHub Actions workflow `.github/workflows/ci.yml` runs on `push` to `mai
 
 Runs on macOS, Windows, Ubuntu. Each entry does:
 
-1. Install ffmpeg (brew / apt / choco depending on OS).
-2. Install Linux-only system deps for Tauri 2 (webkit2gtk, etc.).
-3. Set up stable Rust + clippy.
-4. Set up Bun.
-5. `Swatinem/rust-cache` for the `src-tauri` workspace.
-6. `bun install --frozen-lockfile`.
-7. `bun run check` — SvelteKit type check.
-8. `bun run build` — frontend production build smoke.
-9. `cargo build --locked` in `src-tauri`.
-10. `cargo test --locked` in `src-tauri`.
-11. `cargo clippy --locked -- -D warnings`.
-12. `bun tauri build --debug` — Tauri smoke build.
+1. Install Linux-only system deps for Tauri 2 (webkit2gtk, etc.).
+2. Set up stable Rust + clippy.
+3. Set up Bun.
+4. `Swatinem/rust-cache` for the `src-tauri` workspace.
+5. `bun install --frozen-lockfile`.
+6. `bun run check` — SvelteKit type check.
+7. `bun run build` — frontend production build smoke.
+8. `cargo build --locked` in `src-tauri`.
+9. `cargo test --locked` in `src-tauri`.
+10. `cargo clippy --locked -- -D warnings`.
+11. `bun tauri build --debug` — Tauri smoke build.
 
 `#[ignore]`-marked tests (cassette recorders, live-API smokes) are NOT run.
 

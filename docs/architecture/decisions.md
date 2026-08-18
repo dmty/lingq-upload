@@ -79,15 +79,13 @@ Emitted on a single channel `"job"`; frontend routes by `job_id` and `kind`.
 
 **Why:** One channel = one `listen()` per app, simpler subscription lifecycle. Discriminated union prevents add-a-new-field-and-forget-the-other-end bugs.
 
-## AD-008 — Audio: subprocess to bundled ffmpeg, not ffmpeg-next bindings
+## AD-008 — Audio: in-process pure-Rust decode / encode, no external binary
 
-**Decision:** Shell out to a bundled ffmpeg binary via `tokio::process::Command`. Defer `ffmpeg-next` bindings to a possible post-v1 perf pass.
+**Decision:** Decode with `symphonia` (m4b, m4a, mp3, aac, wav, flac, ogg/vorbis, raw PCM) into interleaved f32 PCM; encode mp3 with `mp3lame-encoder`. Both run on a `tokio::task::spawn_blocking` thread and stream frame-by-frame rather than buffering whole files.
 
-**Why:** Bindings add a C build dependency to a Rust-only project. Bundled binary keeps the build dead simple on all three platforms. Sequential file writes (AD-011) handle the known corruption hazard from parallel writes to a sync-mounted filesystem.
+**Why:** No external binary to locate, bundle, sign, or notarise per platform, and no PATH divergence between dev and release builds. Every stage — duration probe, chapter probe, silence detection, window slicing, transcode — consumes the same PCM frame iterator.
 
-**Source of binary:** BtbN's LGPL-built static ffmpeg.
-
-**Cancellation:** Dropping the `Child` kills ffmpeg. macOS verified; Windows requires further verification.
+**Cancellation:** Cooperative. `transcode_batch_sequential` checks a `CancellationToken` between files and races it against the in-flight transcode; partial output is unlinked. Sequential file writes (AD-011) cover the corruption hazard from parallel writes to a sync-mounted filesystem.
 
 ## AD-009 — Secrets: keyring-rs, never project.json
 
@@ -107,7 +105,7 @@ Emitted on a single channel `"job"`; frontend routes by `job_id` and `kind`.
 
 **Decision:** Audio transcoding is sequential by default. A `concurrency: 1` setting exists in `project.settings.encoder` but defaults to 1 and is not exposed in v1 UI.
 
-**Why:** Parallel ffmpeg invocations writing to a sync-mounted filesystem (iCloud, OneDrive, Dropbox) produced silently-corrupted mp3 files with arbitrary duration drift. Optional parallelism — if ever added — must transcode to a local scratch directory first, then move the verified files into place.
+**Why:** Parallel transcodes writing to a sync-mounted filesystem (iCloud, OneDrive, Dropbox) produced silently-corrupted mp3 files with arbitrary duration drift. Optional parallelism — if ever added — must transcode to a local scratch directory first, then move the verified files into place.
 
 ## AD-012 — Repository layout
 
@@ -124,7 +122,7 @@ lingq-upload/                  # repo root
 │       ├── lib.rs             # library entry
 │       ├── commands/          # #[tauri::command] thin wrappers
 │       ├── core/              # pure-Rust domain modules
-│       ├── codecs/            # AudioCodec strategy registry (AD-014)
+│       ├── codecs/            # decode / encode / chapter / silence (AD-014)
 │       ├── languages/         # LanguageProfile registry (AD-015)
 │       ├── core/epub/         # EpubVendor enum dispatch + strategies (AD-016, AD-026)
 │       ├── ingest/            # IngestSource registry (AD-019)
@@ -146,8 +144,7 @@ lingq-upload/                  # repo root
 ├── static/                    # static assets
 ├── svelte.config.js
 ├── vite.config.ts
-├── package.json
-└── resources/                 # ffmpeg binary, icons
+└── package.json
 ```
 
 Notes: `src/` follows SvelteKit's top-level convention. Tailwind config at root.
@@ -162,36 +159,37 @@ Notes: `src/` follows SvelteKit's top-level convention. Tailwind config at root.
 
 CI matrix runs Rust + Vitest on macOS / Windows / Ubuntu. Playwright runs on Ubuntu only.
 
-## AD-014 — Audio codec strategy: pluggable AudioCodec trait
+## AD-014 — Audio codec strategy: decode / metadata traits in `codecs/`
 
-**Decision:** Wrap all audio decoding / transcoding behind a single trait so adding new input formats (`.opus`, `.aac`, `.wav`, `.flac`, raw `.mp3`) does not touch the carver, uploader, or UI.
+**Decision:** All container and format handling lives in `src-tauri/src/codecs/`, behind two traits plus a small set of free functions, so adding an input format does not touch the carver, uploader, or UI.
 
 ```rust
 // src-tauri/src/codecs/mod.rs
-pub trait AudioCodec: Send + Sync {
-    fn id(&self) -> &'static str;
-    fn extensions(&self) -> &'static [&'static str];
-    fn can_decode(&self, path: &Path) -> bool;
-    fn probe(&self, path: &Path) -> BoxFuture<'_, Result<MediaInfo, AudioError>>;
-    fn transcode(
-        &self,
-        src: &Path,
-        dst: &Path,
-        target: &EncoderSettings,
-    ) -> BoxFuture<'_, Result<TranscodeReport, AudioError>>;
+pub trait AudioDecoder: Send {
+    fn open(path: &Path) -> Result<Self, AudioError> where Self: Sized;
+    fn info(&self) -> StreamInfo;
+    fn seek(&mut self, sec: f64) -> Result<(), AudioError>;
+    fn next_frame(&mut self) -> Result<Option<PcmFrame>, AudioError>;
 }
 
-pub struct CodecRegistry { /* Vec<Box<dyn AudioCodec>> */ }
-impl CodecRegistry {
-    pub fn detect(&self, path: &Path) -> Option<&dyn AudioCodec>;
+pub trait AudioMetadata: Send {
+    fn probe_chapters(path: &Path) -> Result<Vec<ChapterAtom>, AudioError> where Self: Sized;
+    fn probe_duration(path: &Path) -> Result<f64, AudioError> where Self: Sized;
 }
 ```
 
-**Built-in registrations:** `FfmpegCodec` covers `m4b`, `m4a`, `mp3`, `aac`, `wav`, `opus`, `flac`, `ogg` via the bundled ffmpeg subprocess (ffmpeg autodetects by extension + container probe). The strategy boundary still pays off: a future `OpusCodec` using `libopus` bindings, or a hypothetical streaming-source codec, slots in without rewriting `core/`.
+`PcmFrame` (interleaved f32 samples) and `StreamInfo` (sample rate, channels, duration) are the currency between every stage — decode, silence detection, encode.
 
-**Why:** Today everything happens to be ffmpeg-only, but the trait shape forces every consumer to call `registry.detect(path)?.transcode(…)` instead of `ffmpeg::transcode(…)` — so future codecs don't ripple.
+**Built-in impls:**
 
-**Anti-pattern banned:** `core::carver` or `core::project` importing anything from `codecs/ffmpeg.rs` directly. They depend on the trait only.
+- `SymphoniaDecoder` / `SymphoniaMetadata` (`symphonia_impl.rs`) — `m4b`, `m4a`, `mp3`, `aac`, `wav`, `flac`, `ogg`/vorbis, raw PCM. Format is detected from the container probe, not the extension.
+- `mp3_encoder::encode_mp3` — LAME-backed mp3 output, the only encode target.
+- `mp4_chapters::read_chapters` — MP4 chapter atoms, QuickTime `tref/chap` first, Nero `chpl` fallback.
+- `silence::detect_silence` — windowed-RMS detector (see `docs/specs/silence-detection.md`).
+
+**Why the boundary:** consumers hold a decoder and pull frames; they never reason about containers, codecs, or sample formats. A second decoder (a streaming source, a format symphonia lacks) slots in without rewriting `core/`.
+
+**Anti-pattern banned:** anything under `core/` naming `symphonia` or `mp3lame_encoder` directly. `core/` depends on `crate::codecs` only.
 
 ## AD-015 — Language profile strategy: pluggable LanguageProfile trait
 
@@ -314,13 +312,13 @@ pub struct IngestRegistry { /* Vec<Box<dyn IngestSource>> */ }
 
 ## AD-018 — Public extension points are stable, internal impls are not
 
-**Decision:** The three strategy traits (`AudioCodec`, `LanguageProfile`, `IngestSource`), the `EpubVendor` enum dispatch (AD-016 / AD-026), the `JobEvent` enum, the `project.json` schema, and the `library.index.json` schema are the **public extension surface**. Breaking changes to these require a `schemaVersion` bump and a migrator. Everything else (concrete codec impls, internal carver helpers, frontend stores) is free to churn.
+**Decision:** The strategy traits (`AudioDecoder` + `AudioMetadata`, `LanguageProfile`, `IngestSource`), the `EpubVendor` enum dispatch (AD-016 / AD-026), the `JobEvent` enum, the `project.json` schema, and the `library.index.json` schema are the **public extension surface**. Breaking changes to these require a `schemaVersion` bump and a migrator. Everything else (concrete codec impls, internal carver helpers, frontend stores) is free to churn.
 
 **Why:** Without naming the contract, every refactor risks invalidating a downstream extension. Naming it lets internal cleanup happen without ceremony.
 
 **Convention:** Public extension traits live under `src-tauri/src/{codecs,languages,ingest}/mod.rs` and re-export via `lib.rs` so out-of-tree builds (a future plugin host) can depend on them. Heading strategies are not a trait — adding an EPUB vendor is an additive `EpubVendor` variant plus a strategy module (AD-016).
 
-**Realisation:** `AudioCodec` is realised as two traits — `AudioDecoder` and `AudioMetadata` — plus two free functions (`encode_mp3`, `detect_silence`) in `src-tauri/src/codecs/`. See `docs/specs/silence-detection.md` for the detector contract.
+**Audio surface (AD-014):** the two audio traits plus the free functions `encode_mp3`, `read_chapters`, and `detect_silence` in `src-tauri/src/codecs/`. See `docs/specs/silence-detection.md` for the detector contract.
 
 **`AudioSource` variant set.** `ingest::AudioSource` has four variants — `SingleFile`, `Folder`, `LibationManifest`, `MultipleFiles` — and the enum is the public contract for "where the audio bytes for a project come from". Adding a variant is additive but the compiler must enforce that every dispatch site updates in lockstep: the resolver in `core/job/mod.rs::resolve_audio_tracks` matches the variant set **exhaustively** (no `_ =>` arm), the upload guard in `commands/upload.rs` flows through the shared `audio_source_paths` helper in `ingest/mod.rs`, the builder helpers in `ingest/manual.rs` pick the right variant from the input shape, and any new `IngestSource` impl picks the right variant at scan time. Drop a variant and every one of those sites must be re-checked the same way.
 
@@ -380,7 +378,7 @@ pub trait ProjectStore: Send + Sync {
 
 ## AD-023 — m4b chapter atoms are a track source; ManyToFew uses proportional packing
 
-**Decision:** A single m4b file dropped by the user is **not always one track**. If the file carries embedded chapter atoms (`nb_chapters >= 2` per `ffprobe`), the audio probe expands those atoms into N virtual tracks and the matcher sees the audio as having N tracks, not 1. When the resulting track count is *less* than the text-chapter count (both ≥ 2) the matcher emits a new `MismatchCondition::ManyToFew` and offers a new `MismatchResponse::SplitProportional` that packs text chapters into audio buckets proportional to atom duration.
+**Decision:** A single m4b file dropped by the user is **not always one track**. If the file carries at least two embedded chapter atoms, the audio probe expands those atoms into N virtual tracks and the matcher sees the audio as having N tracks, not 1. When the resulting track count is *less* than the text-chapter count (both ≥ 2) the matcher emits a new `MismatchCondition::ManyToFew` and offers a new `MismatchResponse::SplitProportional` that packs text chapters into audio buckets proportional to atom duration.
 
 ```rust
 // src-tauri/src/core/matcher/mismatch.rs
@@ -413,7 +411,7 @@ pub enum MismatchResponse {
 
 **Audio probe is per-file, always.** Same-series files differ — a single Drama-CD folder can mix files with 5 atoms and files with 0. The probe does not cache by folder.
 
-**Atom representation:** `core::audio::ChapterAtom { start: f64, end: f64, title: Option<String> }`. Times are seconds. The integer `start` / `end` + `time_base` triple from ffprobe is discarded; the float `start_time` / `end_time` fields are the contract surface. This isolates the rest of the codebase from `time_base` variance (`1/1000` on Lavf-encoded sources, `1/44100` on Audible delivery).
+**Atom representation:** `core::audio::ChapterAtom { start: f64, end: f64, title: Option<String> }`. Times are seconds, converted from the chapter track's own timescale at parse time, so the rest of the codebase never sees timescale variance (`1/1000` on typical encoder output, `1/44100` on Audible delivery).
 
 **`IngestSource` extension is unchanged.** The `IngestSource::audio_tracks` shape per AD-019 + AD-018 stays `Vec<PathBuf>` — adding a slice variant would break every existing impl and consumer. The atom probe + fanout happens **inside** the job orchestrator's `resolve_audio_tracks` step (the single place that converts `AudioSource::SingleFile` and `AudioSource::LibationManifest` into `AudioTrack` records). For a single-file audio source that probes to N ≥ 2 atoms, `resolve_audio_tracks` emits N `AudioTrack` records — one per atom — instead of the current one-per-path. `AudioSource::Folder` stays as-is (one `AudioTrack` per file, no probe).
 
@@ -509,7 +507,7 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 ## AD-027 — Chapter-divider absorb policy is a pure carver function
 
-**Decision:** `core::audio::carver` is a pure-function module. `boundaries_from_silences` maps detected `SilenceRun`s to `Boundary` records per `AbsorbPolicy`; `carve` adds the ffmpeg `silencedetect` driver. The orchestrator does not yet consume the output — wiring lands in a follow-up. The on-disk `Project::absorb_policy` field is persisted today so user intent survives until the wire-in.
+**Decision:** `core::audio::carver` is a pure-function module. `boundaries_from_silences` maps detected `SilenceRun`s to `Boundary` records per `AbsorbPolicy`; `carve` adds the decode + `detect_silence` driver. The orchestrator does not yet consume the output — wiring lands in a follow-up. The on-disk `Project::absorb_policy` field is persisted today so user intent survives until the wire-in.
 
 **Boundary shape:** every `Boundary` carries a `BoundaryKind`:
 
@@ -520,9 +518,9 @@ See `docs/specs/m4b-chapters.md` for the full probe + filter + packer contract, 
 
 **Persistence:** `Project::absorb_policy` (`#[serde(default)]` → `Forward`) is mutated by `cmd_set_absorb_policy`. The Tauri command is debounced from the Svelte radio and silently reverts on error (AD-025). Until the carver is wired into the job runner (open question 5), the radio renders disabled with an inline hint — persisted intent must not masquerade as runtime behaviour.
 
-**Fixtures:** `src-tauri/tests/fixtures/audio/silence_corpus/clip_{a,b}.wav` are immutable test inputs pinned by sha256. Regenerate via `scripts/fixtures/gen_silence_corpus.sh`. The ffmpeg-backed integration tests are `#[ignore]`-flagged and opt-in via `cargo test -- --include-ignored`; setting `LINGQ_E2E_AUDIO=0` skips them when run that way.
+**Fixtures:** `src-tauri/tests/fixtures/audio/silence_corpus/clip_{a,b,c}.wav` are immutable committed test inputs, pinned by sha256 in the test. `clip_c` ends mid-silence to exercise EOF `silence_end` synthesis. Detection runs unconditionally in the normal test run — no external tooling, no opt-in flag.
 
-**Golden contract:** the offsets JSONs pin **detected silence edges** as reported by ffmpeg `silencedetect`, not authored midpoints — detection skew makes authored-timing assertions brittle across ffmpeg versions. Each golden records the generating ffmpeg version as an informational field; a version-bump-induced diff is a tripwire to re-inspect, not an automatic regeneration.
+**Golden contract:** the offsets JSONs pin **detected silence edges** per absorb policy, not authored midpoints — detector skew makes authored-timing assertions brittle. A diff against a golden is a tripwire to re-inspect the detector, not an automatic regeneration.
 
 ## Open architecture questions
 

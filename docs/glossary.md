@@ -27,7 +27,7 @@ Plain-English term list. Update whenever the codebase coins a new term or repurp
 - **Job** — a long-running async task on the Rust side. Identified by a `JobId` (UUID); emits `JobEvent`s the frontend listens to.
 - **JobEvent** — a typed message on the `"job"` Tauri channel. Variants: `Started`, `Progress`, `Log`, `Result`, `Cancelled`. See AD-007.
 - **AppError** — single discriminated `thiserror` enum returned from every `#[tauri::command]`. See AD-006.
-- **Strategy** — a pluggable trait impl: `AudioCodec` (AD-014), `LanguageProfile` (AD-015), `HeadingStrategy` (AD-016), `IngestSource` (AD-019). The four extension surfaces.
+- **Strategy** — a pluggable trait impl: `AudioDecoder` / `AudioMetadata` (AD-014), `LanguageProfile` (AD-015), `HeadingStrategy` (AD-016), `IngestSource` (AD-019). The four extension surfaces.
 - **Profile** — synonym for `LanguageProfile`. The bundle of per-language behaviour (text normalisation, fuzzy metric, defaults).
 - **Spike** — a timeboxed research task whose deliverable is a documented decision, not shippable code. Used for probing undocumented external APIs.
 

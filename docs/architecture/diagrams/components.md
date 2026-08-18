@@ -40,14 +40,13 @@ flowchart LR
   end
 
   subgraph Pluggable["Strategy registries (public extension surface)"]
-    Codecs["codecs/ AudioCodec"]
+    Codecs["codecs/ AudioDecoder + AudioMetadata"]
     Languages["languages/ LanguageProfile"]
     Headings["epub/strategies/ HeadingStrategy"]
   end
 
   subgraph External["External"]
     Keychain[(OS keychain)]
-    Ffmpeg[(bundled ffmpeg)]
     LingqAPI[(LingQ API v3)]
     Disk[(project.json)]
   end
@@ -88,7 +87,6 @@ flowchart LR
   Carver --> Languages
   Lingq --> Languages
 
-  Audio --> Ffmpeg
   Lingq --> LingqAPI
   Project --> Disk
 
