@@ -65,6 +65,9 @@ jobs:
       - name: bun run check
         run: bun run check
 
+      - name: bun run check:e2e
+        run: bun run check:e2e
+
       - name: bun run build (frontend smoke)
         run: bun run build
 
