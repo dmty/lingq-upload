@@ -1,124 +1,101 @@
 import { expect, test } from "./setup/test";
+import { installMapping, pair } from "./setup/mapping-fixture";
+import type {
+  BucketMeta,
+  Chapter,
+  MismatchInspection,
+} from "../src/lib/ipc/bindings";
 
 const PROJECT_KEY = "skip-fixture";
 
-function fixtureScript(): string {
-  const chapters = [
-    {
-      id: "idx:0",
-      order: 0,
-      title: "Preface",
-      body: "x".repeat(50),
-      kind: "front_matter",
-    },
-    {
-      id: "idx:1",
-      order: 1,
-      title: "Chapter One",
-      body: "x".repeat(100),
-      kind: "body",
-    },
-    {
-      id: "idx:2",
-      order: 2,
-      title: "Chapter Two",
-      body: "x".repeat(100),
-      kind: "body",
-    },
-    {
-      id: "idx:3",
-      order: 3,
-      title: "Chapter Three",
-      body: "x".repeat(100),
-      kind: "body",
-    },
-    {
-      id: "idx:4",
-      order: 4,
-      title: "Epilogue",
-      body: "x".repeat(50),
-      kind: "back_matter",
-    },
-  ];
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "idx:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:1",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:2",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:3",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:4",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/x/a0.m4b",
-        window: null,
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/x/a1.m4b",
-        window: null,
-      },
-    ],
-  };
-  const inspection = {
-    title: "Skip Fixture",
-    chapter_count: 5,
-    track_count: 2,
-    condition: "many_to_few" as const,
-    options: ["split_proportional", "cancel"] as const,
-    preselect: "split_proportional" as const,
-    bucket_preview: null,
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+const chapters: Chapter[] = [
+  {
+    id: "idx:0",
+    order: 0,
+    title: "Preface",
+    body: "x".repeat(50),
+    kind: "front_matter",
+  },
+  {
+    id: "idx:1",
+    order: 1,
+    title: "Chapter One",
+    body: "x".repeat(100),
+    kind: "body",
+  },
+  {
+    id: "idx:2",
+    order: 2,
+    title: "Chapter Two",
+    body: "x".repeat(100),
+    kind: "body",
+  },
+  {
+    id: "idx:3",
+    order: 3,
+    title: "Chapter Three",
+    body: "x".repeat(100),
+    kind: "body",
+  },
+  {
+    id: "idx:4",
+    order: 4,
+    title: "Epilogue",
+    body: "x".repeat(50),
+    kind: "back_matter",
+  },
+];
+
+const buckets: BucketMeta[] = [
+  {
+    trackId: "t0",
+    atomTitle: "Audio 1",
+    atomDurationSec: 600,
+    charsPerSec: 5,
+    audioPath: "/x/a0.m4b",
+    window: null,
+  },
+  {
+    trackId: "t1",
+    atomTitle: "Audio 2",
+    atomDurationSec: 300,
+    charsPerSec: 5,
+    audioPath: "/x/a1.m4b",
+    window: null,
+  },
+];
+
+const mapping = {
+  pairs: [
+    pair(0, "t0", 1),
+    pair(1, "t0", 1),
+    pair(2, "t1", 1),
+    pair(3, "t1", 1),
+    pair(4, "t1", 1),
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets,
+};
+
+const inspection: MismatchInspection = {
+  title: "Skip Fixture",
+  chapter_count: 5,
+  track_count: 2,
+  condition: "many_to_few",
+  options: ["split_proportional", "cancel"],
+  preselect: "split_proportional",
+  bucket_preview: null,
+};
 
 test.describe("bulk matter toggle", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters,
+      mapping,
+      inspection,
+    });
   });
 
   test("skip-matter-chip removes front/back matter and restores non-destructively", async ({

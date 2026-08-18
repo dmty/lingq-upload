@@ -1,4 +1,6 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import type { DetectionAvailabilitySeed } from "./setup/window";
+import type { MismatchInspection } from "../src/lib/ipc/bindings";
 
 // The match page component is reused across `/match/:projectId` navigations.
 // Every project-scoped state piece (title, counts, bucket preview, selected
@@ -8,8 +10,8 @@ import { expect, test } from "./setup/test";
 const PROJECT_A = "project-a";
 const PROJECT_B = "project-b";
 
-function multiProjectScript(): string {
-  const inspectionA = {
+function multiProjectFixture(): Partial<Window> {
+  const inspectionA: MismatchInspection = {
     title: "Book A — Toki",
     chapter_count: 9,
     track_count: 5,
@@ -33,7 +35,7 @@ function multiProjectScript(): string {
       },
     ],
   };
-  const inspectionB = {
+  const inspectionB: MismatchInspection = {
     title: "Book B — Silent Witch",
     chapter_count: 85,
     track_count: 6,
@@ -42,29 +44,28 @@ function multiProjectScript(): string {
     preselect: "cancel",
     bucket_preview: null,
   };
-  return `;(() => {
-    window.__matcherInspectionByProject__ = {
-      ${JSON.stringify(PROJECT_A)}: ${JSON.stringify(inspectionA)},
-      ${JSON.stringify(PROJECT_B)}: ${JSON.stringify(inspectionB)},
-    };
-    window.__transcriptionKeys__ = { groq: true };
-    window.__detectionAvailabilityByProject__ = {
-      ${JSON.stringify(PROJECT_A)}: {
-        eligible: true,
-        condition: "count_off",
-        chapter_count: 9,
-        track_count: 5,
-        existing_evidence: null,
-      },
-      ${JSON.stringify(PROJECT_B)}: {
-        eligible: false,
-        condition: "count_off",
-        chapter_count: 85,
-        track_count: 6,
-        existing_evidence: null,
-      },
-    };
-  })();`;
+  const availabilities: Record<string, DetectionAvailabilitySeed> = {
+    [PROJECT_A]: {
+      eligible: true,
+      condition: "count_off",
+      chapter_count: 9,
+      track_count: 5,
+    },
+    [PROJECT_B]: {
+      eligible: false,
+      condition: "count_off",
+      chapter_count: 85,
+      track_count: 6,
+    },
+  };
+  return {
+    __matcherInspectionByProject__: {
+      [PROJECT_A]: inspectionA,
+      [PROJECT_B]: inspectionB,
+    },
+    __transcriptionKeys__: { groq: true },
+    __detectionAvailabilityByProject__: availabilities,
+  };
 }
 
 async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
@@ -77,7 +78,7 @@ async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
 
 test.describe("match navigation", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(multiProjectScript());
+    await seed(page, multiProjectFixture());
   });
 
   test("switching projects refreshes the mismatch resolver state", async ({

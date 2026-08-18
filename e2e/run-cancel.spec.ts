@@ -1,11 +1,11 @@
-import { expect, test } from "./setup/test";
-import { runFixtureScript } from "./setup/run-fixture";
+import { expect, seed, test } from "./setup/test";
+import { runFixture } from "./setup/run-fixture";
 
 const KEY = "cancel-fixture";
 
 // Three planned chapters, none uploaded yet.
-const fixtureScript = () =>
-  runFixtureScript({
+const fixture = () =>
+  runFixture({
     key: KEY,
     title: "Cancel Fixture",
     plan: [
@@ -20,7 +20,7 @@ const rows = (page: import("@playwright/test").Page) =>
 
 test.describe("run screen cancel flow", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await seed(page, fixture());
   });
 
   test("every planned chapter starts queued", async ({ page }) => {

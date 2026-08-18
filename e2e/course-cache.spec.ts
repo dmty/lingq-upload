@@ -1,37 +1,48 @@
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
 const KEY = "course-cache";
 // Same joinKey fallback as course-stats.spec.ts: no asin/isbn/uuid on the
 // fixture, so the route resolves the `ch:<hash>` form.
 const ROUTE_KEY = encodeURIComponent(`ch:${KEY}`);
 
-const seedScript = () => `
-;(() => {
-  window.__libraryEntries__ = [{
-    id: { content_hash: "${KEY}", audible_asin: null, isbn13: null, calibre_uuid: null },
-    title: "Cached Course",
-    language: "ja",
-    completed_lesson_count: 1,
-    receipt_count: 1,
-    mtime: null,
-    authors: [],
-    series: null,
-    lingq_collection_id: 7,
-    status: "done",
-  }];
-  window.__courseView__ = {
+const fixture = (): Partial<Window> => ({
+  __libraryEntries__: [
+    libraryEntry(KEY, {
+      title: "Cached Course",
+      language: "ja",
+      completed_lesson_count: 1,
+      receipt_count: 1,
+      lingq_collection_id: 7,
+    }),
+  ],
+  __courseView__: {
     collection: {
-      id: 7, title: "Cached Course", description: null, level: null,
-      duration: 600, lessons_count: 1, new_words_count: 10,
-      image_url: null, status: "private", roses_count: null, views_count: null,
+      id: 7,
+      title: "Cached Course",
+      description: null,
+      level: null,
+      duration: 600,
+      lessons_count: 1,
+      new_words_count: 10,
+      image_url: null,
+      status: "private",
+      roses_count: null,
+      views_count: null,
     },
     lessons: [
-      { id: 10, title: "Only Chapter", duration: 600, word_count: 100,
-        unique_word_count: 80, new_words_count: 10, percent_completed: 0 },
+      {
+        id: 10,
+        title: "Only Chapter",
+        duration: 600,
+        word_count: 100,
+        unique_word_count: 80,
+        new_words_count: 10,
+        percent_completed: 0,
+      },
     ],
-  };
-})();
-`;
+  },
+});
 
 const fetchCount = (
   page: import("@playwright/test").Page,
@@ -54,7 +65,7 @@ async function leaveAndReturn(page: import("@playwright/test").Page) {
 test.describe("course stats caching", () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.install();
-    await page.addInitScript(seedScript());
+    await seed(page, fixture());
   });
 
   test("a revisit inside the TTL does not refetch", async ({

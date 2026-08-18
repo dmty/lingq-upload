@@ -1,5 +1,6 @@
 import { expect, seed, test } from "./setup/test";
 import { libraryEntry } from "./setup/library-fixture";
+import type { Project } from "../src/lib/ipc/bindings";
 
 test.describe("always-confirm flow", () => {
   test("library badges unconfirmed project as Needs review", async ({
@@ -21,7 +22,7 @@ test.describe("always-confirm flow", () => {
   test("/run hides Start when confirmed_at is null, shows it when set", async ({
     page,
   }) => {
-    const baseProject = {
+    const baseProject: Project = {
       schema_version: 1,
       id: {
         content_hash: "proj-guard",
@@ -29,7 +30,7 @@ test.describe("always-confirm flow", () => {
         isbn13: null,
         calibre_uuid: null,
       },
-      sources: { text: null, audio: null },
+      sources: { text: { kind: "missing" }, audio: null },
       settings: {
         language: "en",
         collection_title: "Guard Book",
@@ -51,21 +52,24 @@ test.describe("always-confirm flow", () => {
       mapping: null,
     };
 
-    await page.addInitScript(`;(() => {
-      window.__projectByKey__ = {
-        "proj-guard": ${JSON.stringify({ ...baseProject, confirmed_at: null })},
-      };
-    })();`);
+    await seed(page, {
+      __projectByKey__: {
+        "proj-guard": { ...baseProject, confirmed_at: null },
+      },
+    });
 
     await page.goto("/run/proj-guard");
     await expect(page.getByRole("button", { name: "Start" })).toHaveCount(0);
 
     // Re-navigate with confirmed_at set — Start must appear.
-    await page.addInitScript(`;(() => {
-      window.__projectByKey__ = {
-        "proj-guard": ${JSON.stringify({ ...baseProject, confirmed_at: "2026-01-01T00:00:00Z" })},
-      };
-    })();`);
+    await seed(page, {
+      __projectByKey__: {
+        "proj-guard": {
+          ...baseProject,
+          confirmed_at: "2026-01-01T00:00:00Z",
+        },
+      },
+    });
     await page.goto("/run/proj-guard");
     await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
   });
@@ -73,7 +77,7 @@ test.describe("always-confirm flow", () => {
   test("/match renders mapping grid for a count-match seeded project", async ({
     page,
   }) => {
-    const seededProject = {
+    const seededProject: Project = {
       schema_version: 1,
       id: {
         content_hash: "proj-seeded",
@@ -81,7 +85,7 @@ test.describe("always-confirm flow", () => {
         isbn13: null,
         calibre_uuid: null,
       },
-      sources: { text: null, audio: null },
+      sources: { text: { kind: "missing" }, audio: null },
       settings: {
         language: "en",
         collection_title: "Seeded Book",
@@ -116,11 +120,9 @@ test.describe("always-confirm flow", () => {
       confirmed_at: null,
     };
 
-    await page.addInitScript(`;(() => {
-      window.__projectByKey__ = {
-        "proj-seeded": ${JSON.stringify(seededProject)},
-      };
-    })();`);
+    await seed(page, {
+      __projectByKey__: { "proj-seeded": seededProject },
+    });
 
     await page.goto("/match/proj-seeded");
     await expect(page.getByTestId("match-title")).toBeVisible();

@@ -1,13 +1,13 @@
-import { expect, test } from "./setup/test";
-import { runFixtureScript } from "./setup/run-fixture";
+import { expect, seed, test } from "./setup/test";
+import { runFixture } from "./setup/run-fixture";
 
 const KEY = "seed-fixture";
 
 // A fresh confirmed project: a plan exists, but nothing has uploaded yet.
 // This is the state the old code rendered as "Press Start" while running,
 // with a 1/1 counter once the first chapter landed.
-const fixtureScript = () =>
-  runFixtureScript({
+const fixture = () =>
+  runFixture({
     key: KEY,
     title: "Seed Fixture",
     plan: [
@@ -19,7 +19,7 @@ const fixtureScript = () =>
 
 test.describe("run queue seeding", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await seed(page, fixture());
   });
 
   test("shows the whole queue with real titles before any upload", async ({

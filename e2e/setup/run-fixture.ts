@@ -1,3 +1,5 @@
+import type { PlanStep, Project } from "../../src/lib/ipc/bindings";
+
 // Shared fixture builder for the run screen's specs.
 //
 // A run-screen spec needs two stub hooks in agreement: `__projectByKey__`
@@ -18,16 +20,16 @@ export type ReceiptFixture = {
   degraded?: boolean;
 };
 
-export function runFixtureScript(opts: {
+export function runFixture(opts: {
   key: string;
   title: string;
   plan?: PlanStepFixture[];
   receipts?: ReceiptFixture[];
   lingqCollectionId?: number | null;
-}): string {
+}): Partial<Window> {
   const { key, title, plan = [], receipts = [], lingqCollectionId = 42 } = opts;
 
-  const project = {
+  const project: Project = {
     schema_version: 1,
     id: {
       content_hash: key,
@@ -35,7 +37,7 @@ export function runFixtureScript(opts: {
       isbn13: null,
       calibre_uuid: null,
     },
-    sources: { text: null, audio: null },
+    sources: { text: { kind: "missing" }, audio: null },
     settings: { language: "en", collection_title: title, level: 1, tags: [] },
     receipts: receipts.map((r) => ({
       chapter_index: r.chapter_index,
@@ -58,18 +60,15 @@ export function runFixtureScript(opts: {
     confirmed_at: "2026-01-01T00:00:00Z",
   };
 
-  const steps = plan.map((s) => ({
+  const steps: PlanStep[] = plan.map((s) => ({
     chapter_index: s.chapter_index,
     title: s.title,
     degraded: s.degraded ?? false,
   }));
 
-  const projectJson = `{ ${JSON.stringify(key)}: ${JSON.stringify(project)} }`;
   // A spec with no plan exercises the receipts-only fallback, so leave the
   // plan hook unset rather than seeding an empty array.
-  const planJson = steps.length
-    ? `window.__planByKey__ = { ${JSON.stringify(key)}: ${JSON.stringify(steps)} };`
-    : "";
-
-  return `window.__projectByKey__ = ${projectJson};${planJson}`;
+  return steps.length
+    ? { __projectByKey__: { [key]: project }, __planByKey__: { [key]: steps } }
+    : { __projectByKey__: { [key]: project } };
 }
