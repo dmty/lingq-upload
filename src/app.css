@@ -125,6 +125,14 @@
     background: transparent;
   }
 
+  /* WebKit rubber-bands the viewport on a swipe even with no document
+     scroller, and bounces every nested scroller past its ends — an app window
+     doesn't do that. Property only affects scroll containers, so the blanket
+     selector costs nothing and also stops swipes chaining out of dialogs. */
+  * {
+    overscroll-behavior: none;
+  }
+
   body {
     color: var(--color-fg);
     font-family: var(--font-sans);
