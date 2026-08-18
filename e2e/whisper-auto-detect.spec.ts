@@ -91,7 +91,6 @@ const ELIGIBLE: DetectionAvailabilitySeed = {
   condition: "many_to_few",
   chapter_count: chapters.length,
   track_count: 2,
-  existing_evidence: null,
 };
 
 // Every gate the pure predicate can refuse on. Backend eligibility rules are

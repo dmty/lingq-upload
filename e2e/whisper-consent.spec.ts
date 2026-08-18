@@ -22,14 +22,12 @@ function consentScenario(): Partial<Window> {
       condition: "many_to_few",
       chapter_count: 12,
       track_count: 3,
-      existing_evidence: null,
     },
     [INELIGIBLE]: {
       eligible: false,
       condition: "count_off",
       chapter_count: 3,
       track_count: 3,
-      existing_evidence: null,
     },
     [MISSING_KEY]: {
       eligible: true,
@@ -37,7 +35,6 @@ function consentScenario(): Partial<Window> {
       chapter_count: 12,
       track_count: 3,
       key_present: false,
-      existing_evidence: null,
     },
   };
   return {

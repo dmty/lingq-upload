@@ -133,7 +133,6 @@ function fixture(): Partial<Window> {
       condition: "many_to_few",
       chapter_count: chapters.length,
       track_count: 2,
-      existing_evidence: null,
     };
   }
   return {
