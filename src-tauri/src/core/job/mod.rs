@@ -1492,6 +1492,14 @@ async fn expand_single_file(path: &Path) -> Result<Vec<AudioTrack>, AppError> {
         tracing::warn!(path = %path.display(), error = %e, "probe_chapters failed; treating as one track");
         Vec::new()
     });
+    let atoms = if atoms.len() < 2 {
+        atoms
+    } else {
+        // A failed duration probe leaves the filter on its floor, which still
+        // catches the obvious sub-6 s branding atoms.
+        let total = audio::probe_duration(path).await.unwrap_or(0.0);
+        audio::filter_atoms(atoms, total)
+    };
     if atoms.len() < 2 {
         return Ok(vec![track_for(path, 0).await]);
     }

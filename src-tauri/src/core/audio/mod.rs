@@ -14,7 +14,7 @@ pub use carver::{
     boundaries_from_silences, carve, AbsorbPolicy, Boundary, BoundaryKind, CarveError, CarveOpts,
     SilenceRun,
 };
-pub use probe::{probe_chapters, ChapterAtom};
+pub use probe::{filter_atoms, probe_chapters, ChapterAtom};
 pub use track::AudioTrack;
 
 /// Threshold above which |dst - src| seconds is considered a transcode mismatch.
