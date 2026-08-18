@@ -25,6 +25,10 @@ pub fn cmd_system_accent(app: tauri::AppHandle) -> Result<Option<SystemAccent>, 
 }
 
 /// NSColor components are 0.0-1.0 floats; CSS wants `#rrggbb`.
+///
+/// Only the AppKit path and its tests call this; without the gate it is dead
+/// code on every other platform, which `-D warnings` rejects.
+#[cfg(any(target_os = "macos", test))]
 fn to_hex(red: f64, green: f64, blue: f64) -> String {
     let channel = |value: f64| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
     format!(
