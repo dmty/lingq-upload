@@ -26,6 +26,7 @@ test.describe("pipeline step indicator", () => {
       key: PROJECT_KEY,
       chapters: chapters(1),
       mapping,
+      inspection: null,
     });
   });
 

@@ -59,6 +59,10 @@ export function mappingFixture(opts: {
     chapters: opts.chapters ?? chapters(5),
     mapping: opts.mapping,
     globals: {
+      // A spec that passes `inspection: null` explicitly is asserting on the
+      // empty inspection itself; one that omits it just doesn't care and
+      // rides this default. Keep that distinction at call sites — don't
+      // "clean up" an explicit null into an omitted field.
       __matcherInspection__: opts.inspection ?? null,
     } satisfies Partial<Window>,
   };
