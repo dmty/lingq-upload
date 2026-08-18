@@ -15,9 +15,18 @@ function specFiles(dir: string): string[] {
 
 // Comments legitimately reference `window.__foo__` in backticks (see
 // tauri-stub.ts's own doc comment) — strip them before scanning so those
-// don't read as page-context code.
+// don't read as page-context code. Only whole-line `//` comments are
+// stripped: a blanket `//[^\n]*` also eats a `//` inside a template literal
+// (e.g. a URL), which deletes that literal's closing backtick and leaves
+// everything after it mis-paired. String-concatenation offenders
+// (`"window.__foo__ = " + 1`) are an accepted gap — the contract is about
+// template literals, and nobody reaches for concatenation here.
 function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join("\n");
 }
 
 // Extracted individually (rather than one regex over the whole file) so a
