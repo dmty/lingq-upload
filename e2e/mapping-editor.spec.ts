@@ -1,4 +1,10 @@
+import type {
+  Chapter,
+  MappingState,
+  MismatchInspection,
+} from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { installMapping } from "./setup/mapping-fixture";
 
 // Mapping editor: score-gate + rehydrate-on-reload. No DnD simulation
 // (Playwright's drag harness is flaky and the pure-state contract is already
@@ -7,24 +13,26 @@ import { expect, test } from "./setup/test";
 
 const PROJECT_KEY = "mapping-fixture";
 
-function fixtureScript(opts: {
+const chapters: Chapter[] = [
+  { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
+  { id: "idx:1", order: 1, title: "Chapter Two", body: "", kind: "body" },
+];
+
+const inspection: MismatchInspection = {
+  title: "Mapping Fixture",
+  chapter_count: 2,
+  track_count: 2,
+  condition: "count_off",
+  options: ["pair_accept", "cancel"],
+  preselect: "pair_accept",
+  bucket_preview: null,
+};
+
+function mapping(opts: {
   withRed: boolean;
   displacedRed?: boolean;
-}): string {
-  const chapters = [
-    { id: "idx:0", order: 0, title: "Chapter One", body: "", kind: "body" },
-    { id: "idx:1", order: 1, title: "Chapter Two", body: "", kind: "body" },
-  ];
-  const inspection = {
-    title: "Mapping Fixture",
-    chapter_count: 2,
-    track_count: 2,
-    condition: "count_off",
-    options: ["pair_accept", "cancel"],
-    preselect: "pair_accept",
-    bucket_preview: null,
-  };
-  const mapping = {
+}): MappingState {
+  return {
     pairs: [
       { chapter_id: "idx:0", track_id: "t0", confidence: 0.9, touched: false },
       opts.displacedRed
@@ -47,22 +55,18 @@ function fixtureScript(opts: {
     parking_lot: [],
     op_id: 0,
   };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || {
-      skippedByProject: {},
-      chaptersByProject: {},
-    };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
 }
 
 test.describe("mapping editor", () => {
   test("Continue is disabled until untouched red rows are confirmed", async ({
     page,
   }) => {
-    await page.addInitScript(fixtureScript({ withRed: true }));
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters,
+      mapping: mapping({ withRed: true }),
+      inspection,
+    });
     await page.goto(`/match/${PROJECT_KEY}`);
 
     const grid = page.getByTestId("mapping-grid");
@@ -94,9 +98,12 @@ test.describe("mapping editor", () => {
   test("untouched displaced pair gates on its original confidence", async ({
     page,
   }) => {
-    await page.addInitScript(
-      fixtureScript({ withRed: false, displacedRed: true }),
-    );
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters,
+      mapping: mapping({ withRed: false, displacedRed: true }),
+      inspection,
+    });
     await page.goto(`/match/${PROJECT_KEY}`);
 
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
@@ -113,7 +120,12 @@ test.describe("mapping editor", () => {
   });
 
   test("state rehydrates from project.json after reload", async ({ page }) => {
-    await page.addInitScript(fixtureScript({ withRed: true }));
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters,
+      mapping: mapping({ withRed: true }),
+      inspection,
+    });
     await page.goto(`/match/${PROJECT_KEY}`);
 
     const grid = page.getByTestId("mapping-grid");

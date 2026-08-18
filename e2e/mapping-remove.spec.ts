@@ -1,94 +1,57 @@
+import type { MappingState, MismatchInspection } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "bucket-fixture";
 
-function fixtureScript(): string {
-  const chapters = Array.from({ length: 5 }, (_, i) => ({
-    id: `idx:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "idx:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:1",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:2",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:3",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:4",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/x/a0.m4b",
-        window: null,
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/x/a1.m4b",
-        window: null,
-      },
-    ],
-  };
-  const inspection = {
-    title: "Bucket Fixture",
-    chapter_count: 5,
-    track_count: 2,
-    condition: "many_to_few" as const,
-    options: ["split_proportional", "cancel"] as const,
-    preselect: "split_proportional" as const,
-    bucket_preview: null,
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+const mapping: MappingState = {
+  pairs: [
+    pair(0, "t0", 1),
+    pair(1, "t0", 1),
+    pair(2, "t0", 1),
+    pair(3, "t1", 1),
+    pair(4, "t1", 1),
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/x/a0.m4b",
+      window: null,
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/x/a1.m4b",
+      window: null,
+    },
+  ],
+};
+
+const inspection: MismatchInspection = {
+  title: "Bucket Fixture",
+  chapter_count: 5,
+  track_count: 2,
+  condition: "many_to_few",
+  options: ["split_proportional", "cancel"],
+  preselect: "split_proportional",
+  bucket_preview: null,
+};
 
 test.describe("mapping remove", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+      inspection,
+    });
   });
 
   test("removing a chapter drops it and renumbers", async ({ page }) => {

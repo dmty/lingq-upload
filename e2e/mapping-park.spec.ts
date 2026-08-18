@@ -1,70 +1,55 @@
+import type { MappingState } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "park-fixture";
 
-function fixtureScript(): string {
-  const chapters = Array.from({ length: 5 }, (_, i) => ({
-    id: `idx:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const pair = (i: number, t: string | null) => ({
-    chapter_id: `idx:${i}`,
-    track_id: t,
-    confidence: 1,
-    touched: false,
-    original_confidence: 1,
-  });
-  const mapping = {
-    pairs: [
-      pair(0, "t0"),
-      pair(1, "t0"),
-      pair(2, "t0"),
-      pair(3, "t1"),
-      pair(4, "t2"),
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/x/a0.m4b",
-        window: null,
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/x/a1.m4b",
-        window: null,
-      },
-      {
-        trackId: "t2",
-        atomTitle: "Audio 3",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/x/a2.m4b",
-        window: null,
-      },
-    ],
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = null;
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+const mapping: MappingState = {
+  pairs: [
+    pair(0, "t0", 1),
+    pair(1, "t0", 1),
+    pair(2, "t0", 1),
+    pair(3, "t1", 1),
+    pair(4, "t2", 1),
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/x/a0.m4b",
+      window: null,
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/x/a1.m4b",
+      window: null,
+    },
+    {
+      trackId: "t2",
+      atomTitle: "Audio 3",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/x/a2.m4b",
+      window: null,
+    },
+  ],
+};
 
 test.describe("parking via button", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+      inspection: null,
+    });
   });
 
   test("Park button parks the track and the lot shows its title", async ({

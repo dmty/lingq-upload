@@ -1,251 +1,207 @@
+import type {
+  Chapter,
+  MappingState,
+  MismatchInspection,
+} from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "bucket-fixture";
 
-function fixtureScript(): string {
-  const chapters = Array.from({ length: 5 }, (_, i) => ({
-    id: `idx:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "idx:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:1",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:2",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:3",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "idx:4",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/audio/t0.m4a",
-        window: [0, 600],
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/audio/t1.m4a",
-        window: [0, 300],
-      },
-    ],
-  };
-  // Set a non-null inspection so hydrateFromBackend doesn't redirect to /run.
-  // The mapping is already seeded so the grid renders; inspection just satisfies
-  // the page's "no pending decision" guard.
-  const inspection = {
-    title: "Bucket Fixture",
-    chapter_count: 5,
-    track_count: 2,
-    condition: "many_to_few" as const,
-    options: ["split_proportional", "cancel"] as const,
-    preselect: "split_proportional" as const,
-    bucket_preview: null,
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+const mapping: MappingState = {
+  pairs: [
+    pair(0, "t0", 1),
+    pair(1, "t0", 1),
+    pair(2, "t0", 1),
+    pair(3, "t1", 1),
+    pair(4, "t1", 1),
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/audio/t0.m4a",
+      window: [0, 600],
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/audio/t1.m4a",
+      window: [0, 300],
+    },
+  ],
+};
+
+// Set a non-null inspection so hydrateFromBackend doesn't redirect to /run.
+// The mapping is already seeded so the grid renders; inspection just satisfies
+// the page's "no pending decision" guard.
+const inspection: MismatchInspection = {
+  title: "Bucket Fixture",
+  chapter_count: 5,
+  track_count: 2,
+  condition: "many_to_few",
+  options: ["split_proportional", "cancel"],
+  preselect: "split_proportional",
+  bucket_preview: null,
+};
 
 const DRIFT_KEY = "drift-fixture";
 
-function driftFixtureScript(): string {
-  // 3 tracks: t0 and t1 have charsPerSec 5 (median = 5), t2 has charsPerSec 12 (~140% deviation → drift).
-  const chapters = Array.from({ length: 3 }, (_, i) => ({
-    id: `dr:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "dr:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "dr:1",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "dr:2",
-        track_id: "t2",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/audio/t0.m4a",
-        window: [0, 300],
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/audio/t1.m4a",
-        window: [0, 300],
-      },
-      {
-        trackId: "t2",
-        atomTitle: "Audio 3",
-        atomDurationSec: 300,
-        charsPerSec: 12,
-        audioPath: "/audio/t2.m4a",
-        window: [0, 300],
-      },
-    ],
-  };
-  const inspection = {
-    title: "Drift Fixture",
-    chapter_count: 3,
-    track_count: 3,
-    condition: "many_to_few" as const,
-    options: ["split_proportional", "cancel"] as const,
-    preselect: "split_proportional" as const,
-    bucket_preview: null,
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(DRIFT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(DRIFT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+// 3 tracks: t0 and t1 have charsPerSec 5 (median = 5), t2 has charsPerSec 12
+// (~140% deviation → drift).
+const driftChapters: Chapter[] = Array.from({ length: 3 }, (_, i) => ({
+  id: `dr:${i}`,
+  order: i,
+  title: `Chapter ${i + 1}`,
+  body: "x".repeat(100),
+  kind: "body",
+}));
+
+const driftMapping: MappingState = {
+  pairs: [
+    {
+      chapter_id: "dr:0",
+      track_id: "t0",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+    {
+      chapter_id: "dr:1",
+      track_id: "t1",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+    {
+      chapter_id: "dr:2",
+      track_id: "t2",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/audio/t0.m4a",
+      window: [0, 300],
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/audio/t1.m4a",
+      window: [0, 300],
+    },
+    {
+      trackId: "t2",
+      atomTitle: "Audio 3",
+      atomDurationSec: 300,
+      charsPerSec: 12,
+      audioPath: "/audio/t2.m4a",
+      window: [0, 300],
+    },
+  ],
+};
+
+const driftInspection: MismatchInspection = {
+  title: "Drift Fixture",
+  chapter_count: 3,
+  track_count: 3,
+  condition: "many_to_few",
+  options: ["split_proportional", "cancel"],
+  preselect: "split_proportional",
+  bucket_preview: null,
+};
 
 const NON_CONTIGUOUS_KEY = "nc-fixture";
 
-function nonContiguousFixtureScript(): string {
-  // 3 chapters: t0, t1, t0 — non-adjacent same track_id produces 3 distinct bands.
-  const chapters = Array.from({ length: 3 }, (_, i) => ({
-    id: `nc:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "nc:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "nc:1",
-        track_id: "t1",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-      {
-        chapter_id: "nc:2",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/audio/t0.m4a",
-        window: [0, 600],
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/audio/t1.m4a",
-        window: [0, 300],
-      },
-    ],
-  };
-  const inspection = {
-    title: "NC Fixture",
-    chapter_count: 3,
-    track_count: 2,
-    condition: "many_to_few" as const,
-    options: ["split_proportional", "cancel"] as const,
-    preselect: "split_proportional" as const,
-    bucket_preview: null,
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(NON_CONTIGUOUS_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = ${JSON.stringify(inspection)};
-    window.__mappingState__.seed(${JSON.stringify(NON_CONTIGUOUS_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+// 3 chapters: t0, t1, t0 — non-adjacent same track_id produces 3 distinct bands.
+const nonContiguousChapters: Chapter[] = Array.from({ length: 3 }, (_, i) => ({
+  id: `nc:${i}`,
+  order: i,
+  title: `Chapter ${i + 1}`,
+  body: "x".repeat(100),
+  kind: "body",
+}));
+
+const nonContiguousMapping: MappingState = {
+  pairs: [
+    {
+      chapter_id: "nc:0",
+      track_id: "t0",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+    {
+      chapter_id: "nc:1",
+      track_id: "t1",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+    {
+      chapter_id: "nc:2",
+      track_id: "t0",
+      confidence: 1,
+      touched: false,
+      original_confidence: 1,
+    },
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/audio/t0.m4a",
+      window: [0, 600],
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/audio/t1.m4a",
+      window: [0, 300],
+    },
+  ],
+};
+
+const nonContiguousInspection: MismatchInspection = {
+  title: "NC Fixture",
+  chapter_count: 3,
+  track_count: 2,
+  condition: "many_to_few",
+  options: ["split_proportional", "cancel"],
+  preselect: "split_proportional",
+  bucket_preview: null,
+};
 
 test.describe("banded bucket list", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+      inspection,
+    });
   });
 
   test("renders bands grouped by track with numbered chapters", async ({
@@ -272,7 +228,12 @@ test.describe("banded bucket list", () => {
   });
 
   test("flags a drifting band", async ({ page }) => {
-    await page.addInitScript(driftFixtureScript());
+    await installMapping(page, {
+      key: DRIFT_KEY,
+      chapters: driftChapters,
+      mapping: driftMapping,
+      inspection: driftInspection,
+    });
     await page.goto(`/match/${DRIFT_KEY}`);
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
     // Only t2 (charsPerSec 12) deviates >30% from median 5; t0 and t1 are at the median.
@@ -286,7 +247,12 @@ test.describe("banded bucket list", () => {
     // invariant prevents this in production, but the renderer must still be
     // sane: one band per bucket in audio order, so t0's band holds both
     // chapters in EPUB order.
-    await page.addInitScript(nonContiguousFixtureScript());
+    await installMapping(page, {
+      key: NON_CONTIGUOUS_KEY,
+      chapters: nonContiguousChapters,
+      mapping: nonContiguousMapping,
+      inspection: nonContiguousInspection,
+    });
     await page.goto(`/match/${NON_CONTIGUOUS_KEY}`);
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
     await expect(page.getByTestId("mapping-bucket-band")).toHaveCount(2);
@@ -304,7 +270,7 @@ test.describe("banded bucket list", () => {
     // BOTH t0 and t1 — t1 has no paired chapter (orphan). Expect bands:
     //   [t0 + Chapter 1], [t1 empty], [tail + Chapter 2].
     const ORPHAN_KEY = "orphan-fixture";
-    const chapters = [
+    const orphanChapters: Chapter[] = [
       {
         id: "or:0",
         order: 0,
@@ -320,7 +286,7 @@ test.describe("banded bucket list", () => {
         kind: "body",
       },
     ];
-    const mapping = {
+    const orphanMapping: MappingState = {
       pairs: [
         {
           chapter_id: "or:0",
@@ -358,21 +324,21 @@ test.describe("banded bucket list", () => {
         },
       ],
     };
-    const inspection = {
+    const orphanInspection: MismatchInspection = {
       title: "Orphan Fixture",
       chapter_count: 2,
       track_count: 2,
-      condition: "many_to_few" as const,
-      options: ["split_proportional", "cancel"] as const,
-      preselect: "split_proportional" as const,
+      condition: "many_to_few",
+      options: ["split_proportional", "cancel"],
+      preselect: "split_proportional",
       bucket_preview: null,
     };
-    await page.addInitScript(`;(() => {
-      window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-      window.__pickerState__.chaptersByProject[${JSON.stringify(ORPHAN_KEY)}] = ${JSON.stringify(chapters)};
-      window.__matcherInspection__ = ${JSON.stringify(inspection)};
-      window.__mappingState__.seed(${JSON.stringify(ORPHAN_KEY)}, ${JSON.stringify(mapping)});
-    })();`);
+    await installMapping(page, {
+      key: ORPHAN_KEY,
+      chapters: orphanChapters,
+      mapping: orphanMapping,
+      inspection: orphanInspection,
+    });
     await page.goto(`/match/${ORPHAN_KEY}`);
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
     // 3 bands: t0 (paired), t1 (orphan, audio-only), tail (unpaired chapter).
@@ -408,7 +374,7 @@ test.describe("banded bucket list", () => {
     // Buckets [t0, t1, t2]. Only t0 and t2 carry a chapter. t1 is orphan and
     // must render between them, not appended at the end.
     const MID_KEY = "orphan-mid-fixture";
-    const chapters = [
+    const midChapters: Chapter[] = [
       {
         id: "om:0",
         order: 0,
@@ -424,7 +390,7 @@ test.describe("banded bucket list", () => {
         kind: "body",
       },
     ];
-    const mapping = {
+    const midMapping: MappingState = {
       pairs: [
         {
           chapter_id: "om:0",
@@ -470,21 +436,21 @@ test.describe("banded bucket list", () => {
         },
       ],
     };
-    const inspection = {
+    const midInspection: MismatchInspection = {
       title: "Orphan Mid Fixture",
       chapter_count: 2,
       track_count: 3,
-      condition: "many_to_few" as const,
-      options: ["split_proportional", "cancel"] as const,
-      preselect: "split_proportional" as const,
+      condition: "many_to_few",
+      options: ["split_proportional", "cancel"],
+      preselect: "split_proportional",
       bucket_preview: null,
     };
-    await page.addInitScript(`;(() => {
-      window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-      window.__pickerState__.chaptersByProject[${JSON.stringify(MID_KEY)}] = ${JSON.stringify(chapters)};
-      window.__matcherInspection__ = ${JSON.stringify(inspection)};
-      window.__mappingState__.seed(${JSON.stringify(MID_KEY)}, ${JSON.stringify(mapping)});
-    })();`);
+    await installMapping(page, {
+      key: MID_KEY,
+      chapters: midChapters,
+      mapping: midMapping,
+      inspection: midInspection,
+    });
     await page.goto(`/match/${MID_KEY}`);
     await expect(page.getByTestId("mapping-grid")).toBeVisible();
     // 3 bands, in audio order: Audio 1 (paired), Audio 2 (orphan), Audio 3 (paired).

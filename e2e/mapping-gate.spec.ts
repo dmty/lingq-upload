@@ -1,62 +1,47 @@
+import type { MappingState } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "gate-fixture";
 
-function fixtureScript(): string {
-  const chapters = Array.from({ length: 5 }, (_, i) => ({
-    id: `idx:${i}`,
-    order: i,
-    title: `Chapter ${i + 1}`,
-    body: "x".repeat(100),
-    kind: "body",
-  }));
-  const pair = (i: number, t: string, conf: number) => ({
-    chapter_id: `idx:${i}`,
-    track_id: t,
-    confidence: conf,
-    touched: false,
-    original_confidence: conf,
-  });
-  const mapping = {
-    pairs: [
-      pair(0, "t0", 1),
-      pair(1, "t0", 1),
-      pair(2, "t0", 1),
-      pair(3, "t1", 0.3),
-      pair(4, "t1", 1),
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/x/a0.m4b",
-        window: null,
-      },
-      {
-        trackId: "t1",
-        atomTitle: "Audio 2",
-        atomDurationSec: 300,
-        charsPerSec: 5,
-        audioPath: "/x/a1.m4b",
-        window: null,
-      },
-    ],
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = null;
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+const mapping: MappingState = {
+  pairs: [
+    pair(0, "t0", 1),
+    pair(1, "t0", 1),
+    pair(2, "t0", 1),
+    pair(3, "t1", 0.3),
+    pair(4, "t1", 1),
+  ],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
+    {
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/x/a0.m4b",
+      window: null,
+    },
+    {
+      trackId: "t1",
+      atomTitle: "Audio 2",
+      atomDurationSec: 300,
+      charsPerSec: 5,
+      audioPath: "/x/a1.m4b",
+      window: null,
+    },
+  ],
+};
 
 test.describe("mapping grid gate + arrows", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(5),
+      mapping,
+      inspection: null,
+    });
   });
 
   test("gate reason is inline and clears on confirm", async ({ page }) => {

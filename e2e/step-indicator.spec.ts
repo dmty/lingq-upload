@@ -1,51 +1,33 @@
+import type { MappingState } from "../src/lib/ipc/bindings";
 import { expect, test } from "./setup/test";
+import { chapters, installMapping, pair } from "./setup/mapping-fixture";
 
 const PROJECT_KEY = "steps-fixture";
 
-function fixtureScript(): string {
-  const chapters = [
+const mapping: MappingState = {
+  pairs: [pair(0, "t0", 1)],
+  parking_lot: [],
+  op_id: 0,
+  buckets: [
     {
-      id: "idx:0",
-      order: 0,
-      title: "Chapter 1",
-      body: "x".repeat(100),
-      kind: "body",
+      trackId: "t0",
+      atomTitle: "Audio 1",
+      atomDurationSec: 600,
+      charsPerSec: 5,
+      audioPath: "/x/a0.m4b",
+      window: null,
     },
-  ];
-  const mapping = {
-    pairs: [
-      {
-        chapter_id: "idx:0",
-        track_id: "t0",
-        confidence: 1,
-        touched: false,
-        original_confidence: 1,
-      },
-    ],
-    parking_lot: [],
-    op_id: 0,
-    buckets: [
-      {
-        trackId: "t0",
-        atomTitle: "Audio 1",
-        atomDurationSec: 600,
-        charsPerSec: 5,
-        audioPath: "/x/a0.m4b",
-        window: null,
-      },
-    ],
-  };
-  return `;(() => {
-    window.__pickerState__ = window.__pickerState__ || { skippedByProject: {}, chaptersByProject: {} };
-    window.__pickerState__.chaptersByProject[${JSON.stringify(PROJECT_KEY)}] = ${JSON.stringify(chapters)};
-    window.__matcherInspection__ = null;
-    window.__mappingState__.seed(${JSON.stringify(PROJECT_KEY)}, ${JSON.stringify(mapping)});
-  })();`;
-}
+  ],
+};
 
 test.describe("pipeline step indicator", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(fixtureScript());
+    await installMapping(page, {
+      key: PROJECT_KEY,
+      chapters: chapters(1),
+      mapping,
+      inspection: null,
+    });
   });
 
   test("add page marks step 1 current", async ({ page }) => {
