@@ -225,8 +225,8 @@
   overflow: hidden;
 }
 
-/* Height matches main's 1px border + 31px padding-top exactly; any taller
-   and it would swallow clicks on the first heading. */
+/* 32px is the AppKit titlebar height. main's top padding clears it with the
+   page inset to spare, so this strip never overlaps a heading. */
 .titlebar-drag {
   position: absolute;
   top: 0;

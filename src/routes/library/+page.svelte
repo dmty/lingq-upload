@@ -197,7 +197,7 @@
   });
 </script>
 
-<section class="col-wide pt-6">
+<section class="col-wide">
   <header class="mb-4 flex items-center justify-between">
     <div>
       <h1 class="text-lg font-semibold text-fg">Library</h1>

@@ -385,7 +385,7 @@
   }
 </script>
 
-<section class="col-form pt-6">
+<section class="col-form">
   <h1 class="text-xl font-semibold text-fg">Quick upload</h1>
   <p class="mt-2 text-base text-fg-muted">
     Pick a destination, then drop in your text and audio.

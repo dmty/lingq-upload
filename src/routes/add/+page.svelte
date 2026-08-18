@@ -423,7 +423,7 @@
   }
 </script>
 
-<section class="col-form space-y-6 pt-6">
+<section class="col-form space-y-6">
   <header>
     <StepIndicator current={1} />
     <h1 class="text-lg font-semibold text-fg">Add Project</h1>

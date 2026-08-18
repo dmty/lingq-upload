@@ -272,7 +272,7 @@
   onDestroy(() => unlisten?.());
 </script>
 
-<section class="col-wide space-y-4 pt-6">
+<section class="col-wide space-y-4">
   <header class="flex items-center justify-between">
     <div>
       <StepIndicator current={3} />
