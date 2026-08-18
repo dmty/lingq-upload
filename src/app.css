@@ -126,9 +126,9 @@
   }
 
   /* WebKit rubber-bands the viewport on a swipe even with no document
-     scroller, and bounces every nested scroller past its ends — an app window
-     doesn't do that. Property only affects scroll containers, so the blanket
-     selector costs nothing and also stops swipes chaining out of dialogs. */
+     scroller, which drags the whole window chrome. Off by default everywhere;
+     scroll views that should bounce opt back in (see main). Property only
+     affects scroll containers, so the blanket selector costs nothing. */
   * {
     overscroll-behavior: none;
   }
@@ -238,6 +238,10 @@
 
 .app-shell > main {
   overflow-y: auto;
+  /* Opts back into the bounce the blanket rule above kills — AppKit scroll
+     views rubber-band at their ends. `contain`, not `auto`: the bounce stays
+     inside main and never chains out to drag the window. */
+  overscroll-behavior: contain;
   background: var(--color-canvas);
 }
 
