@@ -1,12 +1,7 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 test.describe("dark color scheme", () => {
   test.use({ colorScheme: "dark" });
-
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
 
   test("canvas and surface tokens flip dark", async ({ page }) => {
     await page.goto("/library");
@@ -21,10 +16,6 @@ test.describe("dark color scheme", () => {
 });
 
 test.describe("light color scheme stays default", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("canvas stays light", async ({ page }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");

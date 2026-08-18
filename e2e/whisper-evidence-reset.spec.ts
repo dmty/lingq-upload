@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 import type {
   AppTranscriptionPreferences,
   DetectionAvailability,
@@ -154,8 +154,7 @@ async function resetCalls(page: Page): Promise<number> {
 }
 
 test.describe("confirmed detection evidence and reset", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

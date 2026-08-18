@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { tauriStubInitScript } from "./setup/tauri-stub";
+import { tauriStub } from "./setup/tauri-stub";
 
 // Live smoke against the real LingQ staging API. Disabled by default; set
 // LINGQ_LIVE=1 (and LINGQ_STAGING_KEY for the actual upload steps) to run.
@@ -13,10 +13,10 @@ import { tauriStubInitScript } from "./setup/tauri-stub";
 //   5. Assert receipts populated for every chapter.
 //   6. Assert the corresponding LingQ collection exists with N lessons.
 test.describe("library happy path", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     // Inject the Tauri IPC stub before any page script runs so calls to
     // `commands.cmd_library_list` (and friends) resolve under Vite.
-    await page.addInitScript(tauriStubInitScript);
+    await page.addInitScript(tauriStub, testInfo.workerIndex);
   });
 
   test("library empty-state shows Add CTA", async ({ page }) => {

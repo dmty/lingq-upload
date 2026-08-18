@@ -1,9 +1,7 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 test.describe("macOS shell tokens", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
   });
@@ -83,10 +81,6 @@ test.describe("macOS shell tokens", () => {
 });
 
 test.describe("source list sidebar", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("all four sections live in a labelled sidebar nav", async ({ page }) => {
     await page.goto("/library");
     const nav = page.getByRole("navigation", { name: "Sections" });
@@ -96,7 +90,9 @@ test.describe("source list sidebar", () => {
     }
   });
 
-  test("the sidebar sits beside the content, not above it", async ({ page }) => {
+  test("the sidebar sits beside the content, not above it", async ({
+    page,
+  }) => {
     await page.goto("/library");
     const nav = await page
       .getByRole("navigation", { name: "Sections" })
@@ -110,14 +106,12 @@ test.describe("source list sidebar", () => {
   test("the current section is marked for assistive tech", async ({ page }) => {
     await page.goto("/settings");
     const nav = page.getByRole("navigation", { name: "Sections" });
-    await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    await expect(nav.getByRole("link", { name: "Library", exact: true })).not.toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(
+      nav.getByRole("link", { name: "Settings", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      nav.getByRole("link", { name: "Library", exact: true }),
+    ).not.toHaveAttribute("aria-current", "page");
   });
 
   test("content scrolls while the sidebar stays put", async ({ page }) => {
@@ -142,9 +136,9 @@ test.describe("source list sidebar", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
     const main = page.locator("main");
-    expect(await main.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(
-      "rgba(0, 0, 0, 0)",
-    );
+    expect(
+      await main.evaluate((el) => getComputedStyle(el).borderTopColor),
+    ).toBe("rgba(0, 0, 0, 0)");
     await main.evaluate((el) => {
       el.style.height = "200px";
       el.scrollTop = 400;
@@ -158,10 +152,6 @@ test.describe("source list sidebar", () => {
 });
 
 test.describe("overlay titlebar", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("a drag strip reserves room above the sidebar sections", async ({
     page,
   }) => {
@@ -231,8 +221,7 @@ test.describe("overlay titlebar", () => {
 });
 
 test.describe("text selection", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     // Without entries the library renders its empty state, which has no
     // search field for the probe below to read.
     await page.addInitScript(statusEntriesScript());
@@ -267,8 +256,7 @@ test.describe("text selection", () => {
 });
 
 test.describe("form controls", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     // The search field and popup button only exist on a non-empty library.
     await page.addInitScript(statusEntriesScript());
   });
@@ -276,7 +264,9 @@ test.describe("form controls", () => {
   test("every text input carries the shared field chrome", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
-    const inputs = page.locator('input[type="text"], input[type="password"], select');
+    const inputs = page.locator(
+      'input[type="text"], input[type="password"], select',
+    );
     const count = await inputs.count();
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i += 1) {
@@ -290,9 +280,7 @@ test.describe("form controls", () => {
     const field = page.locator("input.field, input.field-lg").first();
     await field.focus();
     await page.waitForTimeout(150); // let the 120ms box-shadow transition settle
-    const shadow = await field.evaluate(
-      (el) => getComputedStyle(el).boxShadow,
-    );
+    const shadow = await field.evaluate((el) => getComputedStyle(el).boxShadow);
     expect(shadow).not.toBe("none");
     expect(shadow).toContain("3.5px");
   });
@@ -398,7 +386,6 @@ test.describe("form controls", () => {
   });
 });
 
-
 // Minimal single-project fixture: just enough for the evidence panel's
 // "Reset detected range" secondary button to render without a click, so the
 // push-button assertion targets a real DOM node rather than a synthetic one.
@@ -456,7 +443,12 @@ function pushButtonFixtureScript(key: string): string {
 
 function statusEntriesScript(): string {
   const entry = {
-    id: { content_hash: "book-1", audible_asin: null, isbn13: null, calibre_uuid: null },
+    id: {
+      content_hash: "book-1",
+      audible_asin: null,
+      isbn13: null,
+      calibre_uuid: null,
+    },
     title: "War and Peace",
     authors: ["Tolstoy"],
     language: "en",
@@ -472,8 +464,7 @@ function statusEntriesScript(): string {
 }
 
 test.describe("AppKit list and status treatment", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(statusEntriesScript());
   });
 
@@ -576,7 +567,9 @@ test.describe("AppKit list and status treatment", () => {
           const [r, g, b] = composite(c);
           const f = (v: number) => {
             const s = v / 255;
-            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            return s <= 0.03928
+              ? s / 12.92
+              : Math.pow((s + 0.055) / 1.055, 2.4);
           };
           return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
         };
@@ -587,7 +580,10 @@ test.describe("AppKit list and status treatment", () => {
         );
         return (a + 0.05) / (b + 0.05);
       });
-      expect(ratio, `title contrast on hover in ${colorScheme} mode`).toBeGreaterThan(4.5);
+      expect(
+        ratio,
+        `title contrast on hover in ${colorScheme} mode`,
+      ).toBeGreaterThan(4.5);
     }
   });
 });
@@ -641,10 +637,6 @@ function matchConfirmFixtureScript(key: string): string {
 }
 
 test.describe("mapping grid selection", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("the selected chapter row's title stays legible on the fill", async ({
     page,
   }) => {
@@ -685,9 +677,7 @@ test.describe("mapping grid selection", () => {
       };
       const fillColor = getComputedStyle(el).backgroundColor;
       const title = el.querySelector("span.flex-1.truncate")!;
-      const chapterNumber = el.querySelector(
-        '[data-testid="chapter-number"]',
-      )!;
+      const chapterNumber = el.querySelector('[data-testid="chapter-number"]')!;
       return {
         title: contrast(getComputedStyle(title).color, fillColor),
         // The muted chapter-number remap (.text-fg-muted) is a separate,
@@ -732,7 +722,9 @@ test.describe("mapping grid selection", () => {
           const [r, g, b] = composite(c);
           const f = (v: number) => {
             const s = v / 255;
-            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            return s <= 0.03928
+              ? s / 12.92
+              : Math.pow((s + 0.055) / 1.055, 2.4);
           };
           return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
         };
@@ -742,16 +734,15 @@ test.describe("mapping grid selection", () => {
         );
         return (a + 0.05) / (b + 0.05);
       });
-      expect(ratio, `Confirm hover contrast in ${colorScheme} mode`).toBeGreaterThan(4.5);
+      expect(
+        ratio,
+        `Confirm hover contrast in ${colorScheme} mode`,
+      ).toBeGreaterThan(4.5);
     }
   });
 });
 
 test.describe("button primitive", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("secondary buttons sit on the surface with a hairline shadow", async ({
     page,
   }) => {
@@ -777,10 +768,6 @@ test.describe("button primitive", () => {
 });
 
 test.describe("sheets", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("a modal is attached to the top edge, not centred", async ({ page }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");

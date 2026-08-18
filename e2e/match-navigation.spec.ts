@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 // The match page component is reused across `/match/:projectId` navigations.
 // Every project-scoped state piece (title, counts, bucket preview, selected
@@ -78,8 +76,7 @@ async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
 }
 
 test.describe("match navigation", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(multiProjectScript());
   });
 

@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "seed-fixture";
@@ -19,26 +18,35 @@ const fixtureScript = () =>
   });
 
 test.describe("run queue seeding", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 
-  test("shows the whole queue with real titles before any upload", async ({ page }) => {
+  test("shows the whole queue with real titles before any upload", async ({
+    page,
+  }) => {
     await page.goto(`/run/${KEY}`);
 
     await expect(page.getByText("The Wind on the Heath")).toBeVisible();
     await expect(page.getByText("A Night in Sussex")).toBeVisible();
     await expect(page.getByText("Bonus Track")).toBeVisible();
-    await expect(page.getByTestId("chapter-rows").getByRole("listitem")).toHaveCount(3);
+    await expect(
+      page.getByTestId("chapter-rows").getByRole("listitem"),
+    ).toHaveCount(3);
   });
 
-  test("counter denominator is the full queue, not the completed count", async ({ page }) => {
+  test("counter denominator is the full queue, not the completed count", async ({
+    page,
+  }) => {
     await page.goto(`/run/${KEY}`);
     await page.getByRole("button", { name: "Start" }).click();
 
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
     );
     await page.evaluate(() =>
       window.__emitEvent__("job", {
@@ -64,7 +72,11 @@ test.describe("run queue seeding", () => {
     await page.getByRole("button", { name: "Start" }).click();
 
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
     );
     await page.evaluate(() =>
       window.__emitEvent__("job", {
@@ -76,13 +88,22 @@ test.describe("run queue seeding", () => {
       }),
     );
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Result", job_id: "job-1", ok: true, payload: null }),
+      window.__emitEvent__("job", {
+        kind: "Result",
+        job_id: "job-1",
+        ok: true,
+        payload: null,
+      }),
     );
 
-    await expect(page.getByTestId("run-complete")).toContainText("All chapters uploaded");
+    await expect(page.getByTestId("run-complete")).toContainText(
+      "All chapters uploaded",
+    );
     await expect(page.getByText("The Wind on the Heath")).toBeVisible();
     await expect(page.getByText("A Night in Sussex")).toBeVisible();
     await expect(page.getByText("Bonus Track")).toBeVisible();
-    await expect(page.getByTestId("chapter-rows").getByRole("listitem")).toHaveCount(3);
+    await expect(
+      page.getByTestId("chapter-rows").getByRole("listitem"),
+    ).toHaveCount(3);
   });
 });

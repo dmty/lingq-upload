@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const PROJECT_KEY = "savefail-fixture";
 
@@ -23,8 +22,22 @@ function fixtureScript(): string {
     parking_lot: [],
     op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a0.m4b", window: null },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/x/a1.m4b", window: null },
+      {
+        trackId: "t0",
+        atomTitle: "Audio 1",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a0.m4b",
+        window: null,
+      },
+      {
+        trackId: "t1",
+        atomTitle: "Audio 2",
+        atomDurationSec: 300,
+        charsPerSec: 5,
+        audioPath: "/x/a1.m4b",
+        window: null,
+      },
     ],
   };
   return `;(() => {
@@ -36,8 +49,7 @@ function fixtureScript(): string {
 }
 
 test.describe("mapping save failure notice", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 import { runFixtureScript } from "./setup/run-fixture";
 
 const KEY = "run-fixture";
@@ -9,12 +8,15 @@ const projectScript = () =>
   runFixtureScript({
     key: KEY,
     title: "Run Fixture",
-    receipts: [{ chapter_index: 0 }, { chapter_index: 1 }, { chapter_index: 2 }],
+    receipts: [
+      { chapter_index: 0 },
+      { chapter_index: 1 },
+      { chapter_index: 2 },
+    ],
   });
 
 test.describe("run completion and cancel states", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(projectScript());
   });
 
@@ -23,7 +25,11 @@ test.describe("run completion and cancel states", () => {
     await page.getByRole("button", { name: "Resume" }).click();
 
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
     );
     await page.evaluate(() =>
       window.__emitEvent__("job", {
@@ -37,21 +43,36 @@ test.describe("run completion and cancel states", () => {
     await expect(page.getByText("1/3")).toBeVisible();
 
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Result", job_id: "job-1", ok: true, payload: null }),
+      window.__emitEvent__("job", {
+        kind: "Result",
+        job_id: "job-1",
+        ok: true,
+        payload: null,
+      }),
     );
-    await expect(page.getByTestId("run-complete")).toContainText("All chapters uploaded");
+    await expect(page.getByTestId("run-complete")).toContainText(
+      "All chapters uploaded",
+    );
     await expect(page.getByTestId("run-complete")).toContainText("View Course");
   });
 
-  test("Cancel shows a pending state until Cancelled arrives", async ({ page }) => {
+  test("Cancel shows a pending state until Cancelled arrives", async ({
+    page,
+  }) => {
     await page.goto(`/run/${KEY}`);
     await page.getByRole("button", { name: "Resume" }).click();
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
     );
 
     await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByRole("button", { name: "Cancelling…" })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Cancelling…" }),
+    ).toBeDisabled();
 
     await page.evaluate(() =>
       window.__emitEvent__("job", { kind: "Cancelled", job_id: "job-1" }),
@@ -96,8 +117,7 @@ const courseLinkLibraryScript = () => `
 `;
 
 test.describe("run completion links to the course screen", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(courseLinkProjectScript());
     await page.addInitScript(courseLinkLibraryScript());
   });
@@ -109,16 +129,27 @@ test.describe("run completion links to the course screen", () => {
     await page.getByRole("button", { name: "Resume" }).click();
 
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Started", job_id: "job-1", stage: { kind: "uploading" } }),
+      window.__emitEvent__("job", {
+        kind: "Started",
+        job_id: "job-1",
+        stage: { kind: "uploading" },
+      }),
     );
     await page.evaluate(() =>
-      window.__emitEvent__("job", { kind: "Result", job_id: "job-1", ok: true, payload: null }),
+      window.__emitEvent__("job", {
+        kind: "Result",
+        job_id: "job-1",
+        ok: true,
+        payload: null,
+      }),
     );
     await expect(page.getByTestId("run-complete")).toBeVisible();
 
     await page.getByRole("button", { name: "View Course" }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/course/${COURSE_LINK_ROUTE_KEY}`));
+    await expect(page).toHaveURL(
+      new RegExp(`/course/${COURSE_LINK_ROUTE_KEY}`),
+    );
     await expect(page.getByTestId("course-header")).toBeVisible();
   });
 });

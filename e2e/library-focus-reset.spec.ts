@@ -1,9 +1,13 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 function entriesScript(): string {
   const entry = (i: number) => ({
-    id: { content_hash: `book-${i}`, audible_asin: null, isbn13: null, calibre_uuid: null },
+    id: {
+      content_hash: `book-${i}`,
+      audible_asin: null,
+      isbn13: null,
+      calibre_uuid: null,
+    },
     title: `Book ${i}`,
     authors: ["Author"],
     language: "en",
@@ -19,8 +23,7 @@ function entriesScript(): string {
 }
 
 test.describe("library focus reset on filter change", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(entriesScript());
   });
 
@@ -32,11 +35,15 @@ test.describe("library focus reset on filter change", () => {
     // single row that also sits at index 0 — a stale focusIndex of 0 would
     // wrongly land on it.
     await page.keyboard.press("ArrowDown");
-    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+    await expect(
+      page.locator('[role="option"][aria-selected="true"]'),
+    ).toHaveCount(1);
 
     await page.locator('input[type="search"]').fill("Book 3");
     await expect(page.locator('[role="option"]')).toHaveCount(1);
     // Focus must not silently point at the only remaining row.
-    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(0);
+    await expect(
+      page.locator('[role="option"][aria-selected="true"]'),
+    ).toHaveCount(0);
   });
 });

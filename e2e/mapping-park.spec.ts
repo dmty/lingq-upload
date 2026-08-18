@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const PROJECT_KEY = "park-fixture";
 
@@ -19,13 +18,40 @@ function fixtureScript(): string {
     original_confidence: 1,
   });
   const mapping = {
-    pairs: [pair(0, "t0"), pair(1, "t0"), pair(2, "t0"), pair(3, "t1"), pair(4, "t2")],
+    pairs: [
+      pair(0, "t0"),
+      pair(1, "t0"),
+      pair(2, "t0"),
+      pair(3, "t1"),
+      pair(4, "t2"),
+    ],
     parking_lot: [],
     op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a0.m4b", window: null },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/x/a1.m4b", window: null },
-      { trackId: "t2", atomTitle: "Audio 3", atomDurationSec: 300, charsPerSec: 5, audioPath: "/x/a2.m4b", window: null },
+      {
+        trackId: "t0",
+        atomTitle: "Audio 1",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a0.m4b",
+        window: null,
+      },
+      {
+        trackId: "t1",
+        atomTitle: "Audio 2",
+        atomDurationSec: 300,
+        charsPerSec: 5,
+        audioPath: "/x/a1.m4b",
+        window: null,
+      },
+      {
+        trackId: "t2",
+        atomTitle: "Audio 3",
+        atomDurationSec: 300,
+        charsPerSec: 5,
+        audioPath: "/x/a2.m4b",
+        window: null,
+      },
     ],
   };
   return `;(() => {
@@ -37,12 +63,13 @@ function fixtureScript(): string {
 }
 
 test.describe("parking via button", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 
-  test("Park button parks the track and the lot shows its title", async ({ page }) => {
+  test("Park button parks the track and the lot shows its title", async ({
+    page,
+  }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
     await expect(page.getByTestId("mapping-chapter-row")).toHaveCount(5);
 
@@ -57,7 +84,10 @@ test.describe("parking via button", () => {
 
     // Restore round-trips.
     await page.getByTestId("parked-track-restore").click();
-    await page.getByTestId("parked-track-chapters").getByRole("button", { name: "Chapter 4" }).click();
+    await page
+      .getByTestId("parked-track-chapters")
+      .getByRole("button", { name: "Chapter 4" })
+      .click();
     await expect(page.getByTestId("parking-lot-count")).toHaveText("0");
   });
 });

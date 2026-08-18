@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const KEY = "course-fixture";
 // The route reads its param as a joinKey identifier (same as /match and /run
@@ -74,8 +72,7 @@ const mixedSeedScript = () => `
 `;
 
 test.describe("course screen", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(seedScript());
   });
 
@@ -114,12 +111,16 @@ test.describe("course screen", () => {
       .toBe("https://www.lingq.com/ja/learn/ja/web/library/course/7");
   });
 
-  test("the progress strip weights completion by word count", async ({ page }) => {
+  test("the progress strip weights completion by word count", async ({
+    page,
+  }) => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     // 2841 words at 100% + 3190 words at 41.5% = 4164.85 of 6031 = 69%.
     await expect(page.getByTestId("course-progress")).toContainText("69%");
-    await expect(page.getByTestId("course-progress")).toContainText("1 of 2 read");
+    await expect(page.getByTestId("course-progress")).toContainText(
+      "1 of 2 read",
+    );
   });
 
   test("each lesson gets a stat row", async ({ page }) => {

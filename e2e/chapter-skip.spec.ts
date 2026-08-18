@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const PROJECT_KEY = "skip-fixture";
 
@@ -118,8 +117,7 @@ function fixtureScript(): string {
 }
 
 test.describe("bulk matter toggle", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

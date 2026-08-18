@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const KEY = "course-nav";
 const ROUTE_KEY = encodeURIComponent(`ch:${KEY}`);
@@ -31,8 +29,7 @@ const seedScript = () => `
 `;
 
 test.describe("course navigation", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(seedScript());
   });
 

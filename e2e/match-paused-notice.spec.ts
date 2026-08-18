@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const KEY = "paused-fixture";
 const PARAMS =
@@ -7,13 +6,13 @@ const PARAMS =
   "&options=split_proportional,cancel&preselect=split_proportional";
 
 test.describe("match paused notice", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
-  test("URL-param entry (live from run) shows the paused notice", async ({ page }) => {
+  test("URL-param entry (live from run) shows the paused notice", async ({
+    page,
+  }) => {
     await page.goto(`/match/${KEY}${PARAMS}`);
-    await expect(page.getByTestId("paused-notice")).toContainText(/upload paused/i);
+    await expect(page.getByTestId("paused-notice")).toContainText(
+      /upload paused/i,
+    );
   });
 
   test("cold entry from library shows no notice", async ({ page }) => {

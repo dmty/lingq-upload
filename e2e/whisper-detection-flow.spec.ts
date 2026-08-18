@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 import type {
   AppError,
   DetectStartResult,
@@ -213,8 +213,7 @@ function candidateRadio(page: Page, group: "Start chapter" | "End chapter") {
 }
 
 test.describe("detected text range flow", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

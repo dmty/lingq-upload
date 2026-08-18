@@ -1,12 +1,9 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 test.describe("always-confirm flow", () => {
   test("library badges unconfirmed project as Needs review", async ({
     page,
-  }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  }) => {
     await page.addInitScript(`;(() => {
       window.__libraryEntries__ = [{
         id: { content_hash: "proj-unconfirmed", audible_asin: null, isbn13: null, calibre_uuid: null },
@@ -31,7 +28,7 @@ test.describe("always-confirm flow", () => {
 
   test("/run hides Start when confirmed_at is null, shows it when set", async ({
     page,
-  }, testInfo) => {
+  }) => {
     const baseProject = {
       schema_version: 1,
       id: {
@@ -62,7 +59,6 @@ test.describe("always-confirm flow", () => {
       mapping: null,
     };
 
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
     await page.addInitScript(`;(() => {
       window.__projectByKey__ = {
         "proj-guard": ${JSON.stringify({ ...baseProject, confirmed_at: null })},
@@ -84,7 +80,7 @@ test.describe("always-confirm flow", () => {
 
   test("/match renders mapping grid for a count-match seeded project", async ({
     page,
-  }, testInfo) => {
+  }) => {
     const seededProject = {
       schema_version: 1,
       id: {
@@ -128,7 +124,6 @@ test.describe("always-confirm flow", () => {
       confirmed_at: null,
     };
 
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
     await page.addInitScript(`;(() => {
       window.__projectByKey__ = {
         "proj-seeded": ${JSON.stringify(seededProject)},

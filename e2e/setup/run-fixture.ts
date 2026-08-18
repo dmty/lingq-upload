@@ -25,17 +25,16 @@ export function runFixtureScript(opts: {
   receipts?: ReceiptFixture[];
   lingqCollectionId?: number | null;
 }): string {
-  const {
-    key,
-    title,
-    plan = [],
-    receipts = [],
-    lingqCollectionId = 42,
-  } = opts;
+  const { key, title, plan = [], receipts = [], lingqCollectionId = 42 } = opts;
 
   const project = {
     schema_version: 1,
-    id: { content_hash: key, audible_asin: null, isbn13: null, calibre_uuid: null },
+    id: {
+      content_hash: key,
+      audible_asin: null,
+      isbn13: null,
+      calibre_uuid: null,
+    },
     sources: { text: null, audio: null },
     settings: { language: "en", collection_title: title, level: 1, tags: [] },
     receipts: receipts.map((r) => ({

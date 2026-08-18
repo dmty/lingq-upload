@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 // Strategy toggle + sidebar removal. The grid header now carries
 // "Split proportionally" / "One lesson" buttons; the standalone ChapterPicker
@@ -18,16 +16,54 @@ function fixtureScript(): string {
   }));
   const mapping = {
     pairs: [
-      { chapter_id: "idx:0", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:1", track_id: "t0", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:2", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
-      { chapter_id: "idx:3", track_id: "t1", confidence: 1, touched: false, original_confidence: 1 },
+      {
+        chapter_id: "idx:0",
+        track_id: "t0",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:1",
+        track_id: "t0",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:2",
+        track_id: "t1",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
+      {
+        chapter_id: "idx:3",
+        track_id: "t1",
+        confidence: 1,
+        touched: false,
+        original_confidence: 1,
+      },
     ],
     parking_lot: [],
     op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a0.m4b", window: null },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a1.m4b", window: null },
+      {
+        trackId: "t0",
+        atomTitle: "Audio 1",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a0.m4b",
+        window: null,
+      },
+      {
+        trackId: "t1",
+        atomTitle: "Audio 2",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a1.m4b",
+        window: null,
+      },
     ],
   };
   const inspection = {
@@ -48,8 +84,7 @@ function fixtureScript(): string {
 }
 
 test.describe("strategy toggle", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

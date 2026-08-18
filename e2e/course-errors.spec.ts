@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const KEY = "course-errors";
 // The route resolves its param through joinKey, same as the other course
@@ -38,8 +36,7 @@ const fetchCount = (
   );
 
 test.describe("course screen failures", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(entryScript());
   });
 

@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const PROJECT_KEY = "gate-fixture";
 
@@ -19,12 +18,32 @@ function fixtureScript(): string {
     original_confidence: conf,
   });
   const mapping = {
-    pairs: [pair(0, "t0", 1), pair(1, "t0", 1), pair(2, "t0", 1), pair(3, "t1", 0.3), pair(4, "t1", 1)],
+    pairs: [
+      pair(0, "t0", 1),
+      pair(1, "t0", 1),
+      pair(2, "t0", 1),
+      pair(3, "t1", 0.3),
+      pair(4, "t1", 1),
+    ],
     parking_lot: [],
     op_id: 0,
     buckets: [
-      { trackId: "t0", atomTitle: "Audio 1", atomDurationSec: 600, charsPerSec: 5, audioPath: "/x/a0.m4b", window: null },
-      { trackId: "t1", atomTitle: "Audio 2", atomDurationSec: 300, charsPerSec: 5, audioPath: "/x/a1.m4b", window: null },
+      {
+        trackId: "t0",
+        atomTitle: "Audio 1",
+        atomDurationSec: 600,
+        charsPerSec: 5,
+        audioPath: "/x/a0.m4b",
+        window: null,
+      },
+      {
+        trackId: "t1",
+        atomTitle: "Audio 2",
+        atomDurationSec: 300,
+        charsPerSec: 5,
+        audioPath: "/x/a1.m4b",
+        window: null,
+      },
     ],
   };
   return `;(() => {
@@ -36,22 +55,25 @@ function fixtureScript(): string {
 }
 
 test.describe("mapping grid gate + arrows", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 
   test("gate reason is inline and clears on confirm", async ({ page }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
     await expect(page.getByTestId("mapping-continue")).toBeDisabled();
-    await expect(page.getByTestId("continue-blockers")).toContainText("1 low-confidence pair needs review");
+    await expect(page.getByTestId("continue-blockers")).toContainText(
+      "1 low-confidence pair needs review",
+    );
 
     await page.getByTestId("confirm-pair").click();
     await expect(page.getByTestId("mapping-continue")).toBeEnabled();
     await expect(page.getByTestId("continue-blockers")).toHaveCount(0);
   });
 
-  test("every row renders both arrows; only legal ones are enabled", async ({ page }) => {
+  test("every row renders both arrows; only legal ones are enabled", async ({
+    page,
+  }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
     await expect(page.getByTestId("chapter-move-up")).toHaveCount(5);
     await expect(page.getByTestId("chapter-move-down")).toHaveCount(5);

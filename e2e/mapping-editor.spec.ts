@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 // Mapping editor: score-gate + rehydrate-on-reload. No DnD simulation
 // (Playwright's drag harness is flaky and the pure-state contract is already
@@ -61,10 +59,6 @@ function fixtureScript(opts: {
 }
 
 test.describe("mapping editor", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
-  });
-
   test("Continue is disabled until untouched red rows are confirmed", async ({
     page,
   }) => {

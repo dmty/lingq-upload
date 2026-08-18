@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const KEY = "course-cache";
 // Same joinKey fallback as course-stats.spec.ts: no asin/isbn/uuid on the
@@ -54,9 +52,8 @@ async function leaveAndReturn(page: import("@playwright/test").Page) {
 }
 
 test.describe("course stats caching", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({ page }) => {
     await page.clock.install();
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
     await page.addInitScript(seedScript());
   });
 

@@ -1,9 +1,13 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 function entriesScript(): string {
   const entry = (i: number, language: string, status: string) => ({
-    id: { content_hash: `book-${i}`, audible_asin: null, isbn13: null, calibre_uuid: null },
+    id: {
+      content_hash: `book-${i}`,
+      audible_asin: null,
+      isbn13: null,
+      calibre_uuid: null,
+    },
     title: `Book ${i}`,
     authors: ["Author"],
     language,
@@ -24,15 +28,16 @@ function entriesScript(): string {
 }
 
 test.describe("library filter language names + badge casing", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(entriesScript());
   });
 
   test("filter shows display names, value stays the code", async ({ page }) => {
     await page.goto("/library");
     const select = page.locator("select");
-    await expect(select.locator("option", { hasText: "German" })).toHaveCount(1);
+    await expect(select.locator("option", { hasText: "German" })).toHaveCount(
+      1,
+    );
     await select.selectOption("de");
     await expect(page.locator('[role="option"]')).toHaveCount(1);
   });

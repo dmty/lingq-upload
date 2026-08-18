@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 import type { AppError, DetectStartResult } from "../src/lib/ipc/bindings";
 
 const AUTO_KEY = "auto-eligible";
@@ -278,8 +278,7 @@ async function expectNoProviderCall(page: Page): Promise<void> {
 }
 
 test.describe("gated automatic range detection", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript(true));
   });
 

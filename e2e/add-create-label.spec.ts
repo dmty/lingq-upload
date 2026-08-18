@@ -1,13 +1,11 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const seed = `;(() => {
   window.__languages__ = [{ code: "en", title: "English", known_words: 500 }];
 })();`;
 
 test.describe("add page create-button reasons", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(seed);
   });
 
@@ -24,7 +22,9 @@ test.describe("add page create-button reasons", () => {
     await page
       .getByRole("button", { name: "Drop chapter text or click to choose" })
       .click();
-    await expect(page.getByRole("button", { name: "Add the audio" })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Add the audio" }),
+    ).toBeDisabled();
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/book.m4b"));
     await page

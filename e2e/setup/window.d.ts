@@ -80,7 +80,7 @@ declare global {
     __planByKey__?: Record<string, PlanStep[]>;
     __projectMeta__?: Record<
       string,
-      { cover_path?: string | null; authors?: string[] }
+      { title?: string; cover_path?: string | null; authors?: string[] }
     >;
     __receiptsByProject__?: Record<string, ChapterReceipt[]>;
     __matcherDecisionByProject__?: Record<string, MatcherDecision | null>;

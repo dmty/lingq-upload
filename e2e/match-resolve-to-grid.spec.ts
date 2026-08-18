@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 // Confirming a `Split by embedded chapters` decision must seed the mapping
 // grid for review, not jump straight to /run. The user gets one last look at
@@ -44,8 +42,7 @@ function fixtureScript(): string {
 }
 
 test.describe("match resolve transitions to mapping grid", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(fixtureScript());
   });
 

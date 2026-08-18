@@ -1,9 +1,13 @@
-import { expect, test } from "@playwright/test";
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 function entriesScript(): string {
   const entry = {
-    id: { content_hash: "book-1", audible_asin: null, isbn13: null, calibre_uuid: null },
+    id: {
+      content_hash: "book-1",
+      audible_asin: null,
+      isbn13: null,
+      calibre_uuid: null,
+    },
     title: "War and Peace",
     authors: ["Tolstoy"],
     language: "en",
@@ -19,8 +23,7 @@ function entriesScript(): string {
 }
 
 test.describe("typography", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(entriesScript());
   });
 

@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-import { tauriStubInitScriptFor } from "./setup/tauri-stub";
+import { expect, test } from "./setup/test";
 
 const ELIGIBLE = "consent-eligible";
 const INELIGIBLE = "consent-ineligible";
@@ -55,8 +53,7 @@ async function invokeCount(page: import("@playwright/test").Page, cmd: string) {
 }
 
 test.describe("detected-range transcription consent", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    await page.addInitScript(tauriStubInitScriptFor(testInfo.workerIndex));
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(consentScenarioScript());
   });
 
