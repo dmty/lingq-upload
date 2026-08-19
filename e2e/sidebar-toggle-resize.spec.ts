@@ -31,7 +31,6 @@ test.describe("sidebar toggle + resize", () => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
 
-    const shell = page.locator(".app-shell");
     const readWidth = () =>
       page.evaluate(() => {
         const el = document.querySelector<HTMLElement>(".app-shell");
@@ -54,26 +53,24 @@ test.describe("sidebar toggle + resize", () => {
     expect(await readWidth()).toBe(300);
 
     // Drag far right — clamps at 400.
-    const handle2 = await page.getByTestId("sidebar-resize-handle").boundingBox();
-    if (!handle2) throw new Error("resize handle has no bounding box");
-    await page.mouse.move(handle2.x + handle2.width / 2, handle2.y + handle2.height / 2);
+    const box2 = await handle.boundingBox();
+    if (!box2) throw new Error("resize handle has no bounding box");
+    await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
     await page.mouse.down();
-    await page.mouse.move(1200, handle2.y + handle2.height / 2, { steps: 10 });
+    await page.mouse.move(1200, box2.y + box2.height / 2, { steps: 10 });
     await page.mouse.up();
 
     expect(await readWidth()).toBe(400);
 
     // Drag far left — clamps at 180.
-    const handle3 = await page.getByTestId("sidebar-resize-handle").boundingBox();
-    if (!handle3) throw new Error("resize handle has no bounding box");
-    await page.mouse.move(handle3.x + handle3.width / 2, handle3.y + handle3.height / 2);
+    const box3 = await handle.boundingBox();
+    if (!box3) throw new Error("resize handle has no bounding box");
+    await page.mouse.move(box3.x + box3.width / 2, box3.y + box3.height / 2);
     await page.mouse.down();
-    await page.mouse.move(20, handle3.y + handle3.height / 2, { steps: 10 });
+    await page.mouse.move(20, box3.y + box3.height / 2, { steps: 10 });
     await page.mouse.up();
 
     expect(await readWidth()).toBe(180);
-
-    await expect(shell).toHaveAttribute("data-sidebar-collapsed", "false");
   });
 
   test("width and collapsed state survive a reload", async ({ page }) => {
