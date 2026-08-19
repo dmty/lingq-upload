@@ -7,6 +7,7 @@
     ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI",
     sans-serif;
   --font-serif: "Literata Variable", Georgia, "Times New Roman", serif;
+  --font-brand: "Nunito Variable", "Nunito", ui-rounded, "Hiragino Maru Gothic ProN", "Quicksand", system-ui, sans-serif;
 
   /* macOS control sizes: 11 small, 13 regular, 15/17 headings, 22 title. */
   --text-xs: 11px;
@@ -215,14 +216,26 @@
 
 /* `main` owns the scroll: as a scroll container its automatic minimum size is
    0, which caps the implicit grid row at 100vh. Remove overflow here and the
-   row grows past the viewport, and the shell's `overflow: hidden` silently
-   makes the bottom of every long page unreachable. */
+   shell's `overflow: hidden` silently makes the bottom of every long page
+   unreachable. */
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--sidebar-width, 220px) 1fr;
   height: 100vh;
   overflow: hidden;
+}
+
+.app-shell[data-sidebar-collapsed="true"] {
+  grid-template-columns: 0 1fr;
+}
+
+.app-shell[data-sidebar-collapsed="true"] > .app-sidebar {
+  display: none;
+}
+
+.app-shell[data-sidebar-collapsed="true"] > .sidebar-resize-handle {
+  display: none;
 }
 
 /* 32px is the AppKit titlebar height. main's top padding clears it with the
@@ -230,10 +243,14 @@
 .titlebar-drag {
   position: absolute;
   top: 0;
-  inset-inline-start: 220px;
+  inset-inline-start: var(--sidebar-width, 220px);
   inset-inline-end: 0;
   height: 32px;
   z-index: 1;
+}
+
+.app-shell[data-sidebar-collapsed="true"] > .titlebar-drag {
+  inset-inline-start: 0;
 }
 
 .app-shell > main {
@@ -539,4 +556,75 @@ dialog::backdrop {
    the spinner instead); the ring keeps every dot legible regardless. */
 [aria-selected="true"] .status-dot {
   box-shadow: 0 0 0 1px var(--color-accent-fg);
+}
+
+.brand-wordmark {
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--color-fg);
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  inset-inline-start: calc(var(--sidebar-width, 220px) - 2px);
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+  background: transparent;
+  transition: background-color 120ms var(--ease-snappy);
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.sidebar-toggle:hover {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+  color: var(--color-fg);
+}
+
+.sidebar-floating-toggle {
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 76px; /* clears the 64px traffic-light gutter + 8px */
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+  background: color-mix(in srgb, var(--color-canvas) 80%, transparent);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.sidebar-floating-toggle:hover {
+  color: var(--color-fg);
+  background: color-mix(in srgb, var(--color-canvas) 95%, transparent);
 }

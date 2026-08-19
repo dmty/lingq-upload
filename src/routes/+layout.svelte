@@ -1,11 +1,13 @@
 <script lang="ts">
   import "../app.css";
   import "@fontsource-variable/literata";
+  import "@fontsource-variable/nunito";
   import { page } from "$app/state";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import Button from "$lib/components/Button.svelte";
   import { commands } from "$lib/ipc/bindings";
+  import { sidebar } from "$lib/stores/sidebar.svelte";
 
   let { children } = $props();
 
@@ -104,19 +106,61 @@
       installing = false;
     }
   }
+
+  function startResize(event: PointerEvent) {
+    event.preventDefault();
+    const move = (ev: PointerEvent) => sidebar.setWidth(ev.clientX);
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  }
 </script>
 
-<div class="app-shell">
+<div
+  class="app-shell"
+  data-sidebar-collapsed={sidebar.collapsed}
+  style="--sidebar-width: {sidebar.width}px"
+>
   <div
+    id="app-sidebar"
     class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
   >
     <div
       data-tauri-drag-region="deep"
-      class="flex h-[52px] flex-none items-end px-[8px] pb-[6px]"
+      class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]"
     >
-      <span class="pl-[64px] text-xs font-semibold text-fg-muted">
-        LingQ Importer
+      <span class="pl-[64px] text-sm text-fg-muted">
+        <span class="brand-wordmark">LingQ</span> Importer
       </span>
+      <button
+        type="button"
+        class="sidebar-toggle ml-auto"
+        data-testid="sidebar-toggle"
+        aria-label={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!sidebar.collapsed}
+        aria-controls="app-sidebar"
+        onclick={() => sidebar.toggle()}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="2" y="3" width="12" height="10" rx="1.5" />
+          <line x1="6" y1="3" x2="6" y2="13" />
+        </svg>
+      </button>
     </div>
     <nav aria-label="Sections" class="flex flex-col gap-[2px]">
       {#each sections as section (section.href)}
@@ -143,6 +187,15 @@
     </nav>
   </div>
 
+  <div
+    class="sidebar-resize-handle"
+    data-testid="sidebar-resize-handle"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize sidebar"
+    onpointerdown={startResize}
+  ></div>
+
   <main
     class="border-t px-8 pt-[55px] pb-8 transition-colors duration-120 {scrolled
       ? 'border-sidebar-border'
@@ -157,6 +210,33 @@
        the page scrolls — and scrolled-under content is inert in a titlebar
        on macOS anyway. -->
   <div data-tauri-drag-region="deep" class="titlebar-drag"></div>
+
+  {#if sidebar.collapsed}
+    <button
+      type="button"
+      class="sidebar-floating-toggle"
+      data-testid="sidebar-floating-toggle"
+      aria-label="Expand sidebar"
+      aria-expanded="false"
+      aria-controls="app-sidebar"
+      onclick={() => sidebar.toggle()}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="2" y="3" width="12" height="10" rx="1.5" />
+        <line x1="6" y1="3" x2="6" y2="13" />
+      </svg>
+    </button>
+  {/if}
 </div>
 
 <dialog
