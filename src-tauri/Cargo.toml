@@ -90,3 +90,8 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# Our own audio code (codecs::*) dominates integration-test runtime; the dev
+# profile stays at opt-level 0 so `cargo build` rebuilds stay fast.
+[profile.test]
+opt-level = 2
