@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0](https://github.com/dmty/lingq-upload/compare/v0.5.0...v0.6.0) (2026-08-19)
+
+
+### Features
+
+* add sidebar state store with clamped width and persistence ([a62a1d9](https://github.com/dmty/lingq-upload/commit/a62a1d9bbdb1f9dc3d8532a6f13aaa5b4b4200eb))
+* sidebar toggle, resize handle, and brand wordmark title ([7ad4276](https://github.com/dmty/lingq-upload/commit/7ad4276a16b922a0eb6d80cc537010abfb050ddf))
+
+
+### Bug Fixes
+
+* sidebar collapse under Tauri drag region and grid placement ([aa364b3](https://github.com/dmty/lingq-upload/commit/aa364b35be7d2f9fe9e62bfb8e61e51f622c6ce4))
+* stretch sidebar drag region to full titlebar height ([627d3c6](https://github.com/dmty/lingq-upload/commit/627d3c6fefc9f9eb4c47c631b628b4aceac4109d))
+
+
+### Performance Improvements
+
+* **build:** cut dev rebuild time with line-tables debuginfo and rlib-only lib ([89cf70a](https://github.com/dmty/lingq-upload/commit/89cf70a30bd5db5bf4e7434c3125cc83fa8c6625))
+* **test:** build dependencies with opt-level 2 in the dev profile ([84f6da4](https://github.com/dmty/lingq-upload/commit/84f6da4b346c77a788e2067967ba98ce7f748f0d))
+* **test:** compile the crate with opt-level 2 in the test profile ([d241bfc](https://github.com/dmty/lingq-upload/commit/d241bfcce0050e3fb6322faf1bce995b2b45d961))
+
 ## [0.5.0](https://github.com/dmty/lingq-upload/compare/v0.4.0...v0.5.0) (2026-08-18)
 
 
