@@ -156,7 +156,7 @@
     <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
       <div
         data-tauri-drag-region="deep"
-        class="flex flex-1 items-center"
+        class="flex self-stretch flex-1 items-center"
       >
         <span class="pl-[64px] text-sm text-fg-muted">
           <span class="brand-wordmark">LingQ</span> Importer
