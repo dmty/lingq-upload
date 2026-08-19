@@ -230,10 +230,7 @@
   grid-template-columns: 0 1fr;
 }
 
-.app-shell[data-sidebar-collapsed="true"] > .app-sidebar {
-  display: none;
-}
-
+.app-shell[data-sidebar-collapsed="true"] > .app-sidebar,
 .app-shell[data-sidebar-collapsed="true"] > .sidebar-resize-handle {
   display: none;
 }
@@ -584,20 +581,23 @@ dialog::backdrop {
   background: color-mix(in srgb, var(--color-accent) 40%, transparent);
 }
 
-.sidebar-toggle {
+.sidebar-toggle,
+.sidebar-floating-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
   color: var(--color-fg-muted);
-  background: transparent;
   cursor: pointer;
+}
+
+.sidebar-toggle {
+  width: 24px;
+  height: 24px;
+  background: transparent;
   -webkit-app-region: no-drag;
-  app-region: no-drag;
 }
 
 .sidebar-toggle:hover {
@@ -610,18 +610,10 @@ dialog::backdrop {
   top: 8px;
   inset-inline-start: 76px; /* clears the 64px traffic-light gutter + 8px */
   z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 28px;
   height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-muted);
   background: color-mix(in srgb, var(--color-canvas) 80%, transparent);
   backdrop-filter: blur(6px);
-  cursor: pointer;
 }
 
 .sidebar-floating-toggle:hover {

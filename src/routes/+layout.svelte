@@ -121,6 +121,23 @@
   }
 </script>
 
+{#snippet toggleIcon()}
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="2" y="3" width="12" height="10" rx="1.5" />
+    <line x1="6" y1="3" x2="6" y2="13" />
+  </svg>
+{/snippet}
+
 <div
   class="app-shell"
   data-sidebar-collapsed={sidebar.collapsed}
@@ -146,20 +163,7 @@
         aria-controls="app-sidebar"
         onclick={() => sidebar.toggle()}
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="2" y="3" width="12" height="10" rx="1.5" />
-          <line x1="6" y1="3" x2="6" y2="13" />
-        </svg>
+        {@render toggleIcon()}
       </button>
     </div>
     <nav aria-label="Sections" class="flex flex-col gap-[2px]">
@@ -221,20 +225,7 @@
       aria-controls="app-sidebar"
       onclick={() => sidebar.toggle()}
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.3"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="2" y="3" width="12" height="10" rx="1.5" />
-        <line x1="6" y1="3" x2="6" y2="13" />
-      </svg>
+      {@render toggleIcon()}
     </button>
   {/if}
 </div>
