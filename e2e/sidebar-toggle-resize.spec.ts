@@ -1,4 +1,12 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./setup/test";
+
+const readSidebarWidth = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".app-shell");
+    const raw = el?.style.getPropertyValue("--sidebar-width") ?? "";
+    return Number.parseInt(raw.replace("px", ""), 10);
+  });
 
 test.describe("sidebar toggle + resize", () => {
   test("toggle hides the sidebar and floating button restores it", async ({
@@ -31,14 +39,7 @@ test.describe("sidebar toggle + resize", () => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
 
-    const readWidth = () =>
-      page.evaluate(() => {
-        const el = document.querySelector<HTMLElement>(".app-shell");
-        const raw = el?.style.getPropertyValue("--sidebar-width") ?? "";
-        return Number.parseInt(raw.replace("px", ""), 10);
-      });
-
-    expect(await readWidth()).toBe(220);
+    expect(await readSidebarWidth(page)).toBe(220);
 
     const handle = page.getByTestId("sidebar-resize-handle");
     const box = await handle.boundingBox();
@@ -50,7 +51,7 @@ test.describe("sidebar toggle + resize", () => {
     await page.mouse.move(300, box.y + box.height / 2, { steps: 10 });
     await page.mouse.up();
 
-    expect(await readWidth()).toBe(300);
+    expect(await readSidebarWidth(page)).toBe(300);
 
     // Drag far right — clamps at 400.
     const box2 = await handle.boundingBox();
@@ -60,7 +61,7 @@ test.describe("sidebar toggle + resize", () => {
     await page.mouse.move(1200, box2.y + box2.height / 2, { steps: 10 });
     await page.mouse.up();
 
-    expect(await readWidth()).toBe(400);
+    expect(await readSidebarWidth(page)).toBe(400);
 
     // Drag far left — clamps at 180.
     const box3 = await handle.boundingBox();
@@ -70,7 +71,7 @@ test.describe("sidebar toggle + resize", () => {
     await page.mouse.move(20, box3.y + box3.height / 2, { steps: 10 });
     await page.mouse.up();
 
-    expect(await readWidth()).toBe(180);
+    expect(await readSidebarWidth(page)).toBe(180);
   });
 
   test("width and collapsed state survive a reload", async ({ page }) => {
@@ -88,13 +89,7 @@ test.describe("sidebar toggle + resize", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    const readWidth = () =>
-      page.evaluate(() => {
-        const el = document.querySelector<HTMLElement>(".app-shell");
-        const raw = el?.style.getPropertyValue("--sidebar-width") ?? "";
-        return Number.parseInt(raw.replace("px", ""), 10);
-      });
-    expect(await readWidth()).toBe(275);
+    expect(await readSidebarWidth(page)).toBe(275);
 
     await page.getByTestId("sidebar-toggle").click();
     await expect(page.locator(".app-shell")).toHaveAttribute(

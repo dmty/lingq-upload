@@ -1,7 +1,7 @@
 <script lang="ts">
   import "../app.css";
   import "@fontsource-variable/literata";
-  import "@fontsource-variable/nunito";
+  import "@fontsource-variable/nunito/wght.css";
   import { page } from "$app/state";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
