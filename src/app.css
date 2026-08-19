@@ -226,15 +226,6 @@
   overflow: hidden;
 }
 
-.app-shell[data-sidebar-collapsed="true"] {
-  grid-template-columns: 0 1fr;
-}
-
-.app-shell[data-sidebar-collapsed="true"] > .app-sidebar,
-.app-shell[data-sidebar-collapsed="true"] > .sidebar-resize-handle {
-  display: none;
-}
-
 /* 32px is the AppKit titlebar height. main's top padding clears it with the
    page inset to spare, so this strip never overlaps a heading. */
 .titlebar-drag {
@@ -246,11 +237,8 @@
   z-index: 1;
 }
 
-.app-shell[data-sidebar-collapsed="true"] > .titlebar-drag {
-  inset-inline-start: 0;
-}
-
 .app-shell > main {
+  grid-column: 2;
   overflow-y: auto;
   /* Opts back into the bounce the blanket rule above kills — AppKit scroll
      views rubber-band at their ends. `contain`, not `auto`: the bounce stays
@@ -261,6 +249,11 @@
 
 .app-sidebar {
   background: var(--color-sidebar);
+}
+
+.app-sidebar[hidden],
+.sidebar-resize-handle[hidden] {
+  display: none !important;
 }
 
 @supports (-webkit-backdrop-filter: blur(0px)) {

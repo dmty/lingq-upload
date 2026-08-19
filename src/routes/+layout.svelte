@@ -107,6 +107,8 @@
     }
   }
 
+  const effectiveWidth = $derived(sidebar.collapsed ? 0 : sidebar.width);
+
   function startResize(event: PointerEvent) {
     event.preventDefault();
     const move = (ev: PointerEvent) => sidebar.setWidth(ev.clientX);
@@ -141,22 +143,25 @@
 <div
   class="app-shell"
   data-sidebar-collapsed={sidebar.collapsed}
-  style="--sidebar-width: {sidebar.width}px"
+  style="grid-template-columns: {effectiveWidth}px 1fr; --sidebar-width: {effectiveWidth}px"
 >
   <div
     id="app-sidebar"
     class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
+    hidden={sidebar.collapsed}
   >
-    <div
-      data-tauri-drag-region="deep"
-      class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]"
-    >
-      <span class="pl-[64px] text-sm text-fg-muted">
-        <span class="brand-wordmark">LingQ</span> Importer
-      </span>
+    <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
+      <div
+        data-tauri-drag-region="deep"
+        class="flex flex-1 items-center"
+      >
+        <span class="pl-[64px] text-sm text-fg-muted">
+          <span class="brand-wordmark">LingQ</span> Importer
+        </span>
+      </div>
       <button
         type="button"
-        class="sidebar-toggle ml-auto"
+        class="sidebar-toggle"
         data-testid="sidebar-toggle"
         aria-label={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
         aria-expanded={!sidebar.collapsed}
@@ -197,6 +202,7 @@
     role="separator"
     aria-orientation="vertical"
     aria-label="Resize sidebar"
+    hidden={sidebar.collapsed}
     onpointerdown={startResize}
   ></div>
 
