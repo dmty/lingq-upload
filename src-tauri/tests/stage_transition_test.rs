@@ -166,3 +166,17 @@ fn powercut_between_stage_writes_keeps_prior_stage() {
     let got = store.get(&p.id).unwrap().unwrap();
     assert_eq!(got.stage(), ProjectStage::Parsed, "prior stage survives");
 }
+
+// `ProjectStage` and `events::Stage` model different things and must never be
+// collapsed into one type (or a type alias for the other). Comparing TypeIds
+// catches that in microseconds; the equivalent trybuild compile-fail case cost
+// ~100 s per CI run because it builds the whole dependency tree in a nested
+// target directory.
+#[test]
+fn project_stage_not_interchangeable_with_event_stage() {
+    use std::any::TypeId;
+    assert_ne!(
+        TypeId::of::<ProjectStage>(),
+        TypeId::of::<lingq_upload_lib::events::Stage>()
+    );
+}
