@@ -29,15 +29,6 @@ function readPersisted(): Persisted {
   }
 }
 
-function writePersisted(next: Persisted): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Quota or disabled storage — silently drop; state stays in memory.
-  }
-}
-
 export class SidebarState {
   width = $state(SIDEBAR_DEFAULT_WIDTH);
   collapsed = $state(false);
@@ -61,7 +52,15 @@ export class SidebarState {
   }
 
   private persist(): void {
-    writePersisted({ width: this.width, collapsed: this.collapsed });
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_STORAGE_KEY,
+        JSON.stringify({ width: this.width, collapsed: this.collapsed }),
+      );
+    } catch {
+      // Quota or disabled storage — silently drop; state stays in memory.
+    }
   }
 }
 
