@@ -108,11 +108,14 @@
   }
 
   const effectiveWidth = $derived(sidebar.collapsed ? 0 : sidebar.width);
+  let isDragging = $state(false);
 
   function startResize(event: PointerEvent) {
     event.preventDefault();
+    isDragging = true;
     const move = (ev: PointerEvent) => sidebar.setWidth(ev.clientX);
     const stop = () => {
+      isDragging = false;
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
@@ -142,13 +145,13 @@
 
 <div
   class="app-shell"
+  class:dragging={isDragging}
   data-sidebar-collapsed={sidebar.collapsed}
   style="grid-template-columns: {effectiveWidth}px 1fr; --sidebar-width: {effectiveWidth}px"
 >
   <div
     id="app-sidebar"
     class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
-    hidden={sidebar.collapsed}
   >
     <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
       <div
