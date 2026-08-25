@@ -3,9 +3,11 @@
 
   let {
     coverPath,
+    imageUrl = null,
     title,
   }: {
     coverPath: string | null;
+    imageUrl?: string | null;
     title: string;
   } = $props();
 
@@ -19,7 +21,14 @@
     return seg[Symbol.iterator]().next().value?.segment ?? "?";
   }
 
-  const src = $derived(coverPath ? convertFileSrc(coverPath) : null);
+  const src = $derived(
+    imageUrl ? imageUrl : coverPath ? convertFileSrc(coverPath) : null,
+  );
+
+  $effect(() => {
+    void src;
+    errored = false;
+  });
   const glyph = $derived(firstGrapheme(title));
   const showImage = $derived(src !== null && !errored);
 </script>

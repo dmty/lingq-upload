@@ -69,7 +69,11 @@
   </p>
 {:else}
   <header data-testid="course-header" class="flex items-start gap-4">
-    <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
+    <CoverThumb
+      coverPath={entry.cover_path ?? null}
+      imageUrl={cached?.view?.collection.image_url ?? null}
+      title={entry.title}
+    />
     <div class="flex-1">
       <h1>{entry.title}</h1>
       {#if authorLine}<p class="text-fg-muted">{authorLine}</p>{/if}

@@ -183,4 +183,40 @@ test.describe("course screen", () => {
     // average: (100*2841 + 0*2841) / (2841+2841) = 50%.
     await expect(page.getByTestId("course-progress")).toContainText("50%");
   });
+
+  test("the header prefers the LingQ cover over a local cover", async ({
+    page,
+  }) => {
+    const imageUrl = "https://cdn.lingq.com/covers/kafka.webp";
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.route("https://cdn.lingq.com/**", (route) =>
+      route.fulfill({ status: 200, contentType: "image/png", body: png }),
+    );
+
+    const view = fixture().__courseView__;
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(KEY, {
+          title: "Kafka on the Shore",
+          language: "ja",
+          completed_lesson_count: 42,
+          receipt_count: 42,
+          authors: ["Haruki Murakami"],
+          lingq_collection_id: 7,
+          cover_path: "/tmp/local-cover.jpg",
+        }),
+      ],
+      __courseView__: {
+        ...view!,
+        collection: { ...view!.collection, image_url: imageUrl },
+      },
+    });
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    const img = page.getByTestId("course-header").locator("img");
+    await expect(img).toHaveAttribute("src", imageUrl);
+  });
 });
