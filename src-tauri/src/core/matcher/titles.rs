@@ -126,13 +126,24 @@ fn shared_prefix(titles: &[Option<&str>]) -> String {
 }
 
 /// Fold away the cosmetic differences between an EPUB nav label and an M4B
-/// chapter tag: full-width and ASCII whitespace, case.
+/// chapter tag: full-width and ASCII whitespace, full-width ASCII, case.
 fn normalize(title: &str) -> String {
     title
         .chars()
         .filter(|c| !c.is_whitespace())
+        .map(half_width)
         .flat_map(|c| c.to_lowercase())
         .collect()
+}
+
+/// Map the full-width ASCII block onto its half-width twin. Japanese nav
+/// labels number chapters full-width (`１`) where the audio tag uses ASCII
+/// (`1`); on a short title that one character is most of the score.
+fn half_width(c: char) -> char {
+    match c {
+        '\u{ff01}'..='\u{ff5e}' => char::from_u32(c as u32 - 0xfee0).unwrap_or(c),
+        _ => c,
+    }
 }
 
 /// Sørensen–Dice coefficient over character bigrams. `1.0` for equal strings,
@@ -332,5 +343,13 @@ mod tests {
                 Some(5), // 奥付 → 10
             ]
         );
+    }
+
+    #[test]
+    fn full_width_numbers_match_their_ascii_twins() {
+        let chapters = vec!["表紙", "１\u{3000}出発", "２\u{3000}帰還"];
+        let tracks = vec![Some("1 出発"), Some("2 帰還")];
+        let out = align_by_title(&chapters, &tracks, Leftovers::Squeeze).expect("titles align");
+        assert_eq!(out, vec![Some(0), Some(0), Some(1)]);
     }
 }
