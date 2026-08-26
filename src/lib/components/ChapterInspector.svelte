@@ -96,7 +96,7 @@
 {#if id}
   <aside
     data-testid="chapter-inspector"
-    class="sticky top-4 ml-5 flex max-h-[calc(100vh-2rem)] w-[360px] flex-none flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-card"
+    class="sticky top-4 ml-5 flex max-h-[calc(100vh-2rem)] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-card"
   >
     <header class="border-b border-border px-5 pb-4 pt-5">
       {#if bucketLabel}
@@ -219,7 +219,7 @@
 {:else}
   <aside
     data-testid="chapter-inspector-empty"
-    class="sticky top-4 ml-5 grid max-h-[calc(100vh-2rem)] w-[360px] flex-none place-items-center rounded-lg border border-dashed border-border bg-surface p-8 text-center"
+    class="sticky top-4 ml-5 grid max-h-[calc(100vh-2rem)] min-w-0 flex-1 place-items-center rounded-lg border border-dashed border-border bg-surface p-8 text-center"
   >
     <p class="text-sm text-fg-muted">Select a chapter to preview its text and audio.</p>
   </aside>
