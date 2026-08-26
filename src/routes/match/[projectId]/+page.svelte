@@ -747,7 +747,7 @@
   });
 </script>
 
-<div class="flex h-full">
+<div class="flex">
   <section class="col-wide flex-1 space-y-6">
     {#if mapping.mappingState}
       <header class="flex items-start justify-between gap-3">
