@@ -32,14 +32,23 @@ pub fn align_by_title(
     track_titles: &[Option<&str>],
     leftovers: Leftovers,
 ) -> Option<Vec<Option<usize>>> {
-    let chapters: Vec<String> = chapter_titles.iter().map(|t| normalize(t)).collect();
+    // A shared head that both sides carry is signal, not noise — strip it
+    // symmetrically so equal titles stay equal.
+    let shared = shared_prefix(track_titles);
+    let chapters: Vec<String> = chapter_titles
+        .iter()
+        .map(|t| normalize(t.strip_prefix(shared.as_str()).unwrap_or(t)))
+        .collect();
 
     // Greedy monotone anchoring: each track claims the best-scoring chapter at
     // or after the previous anchor, so anchors can never cross.
     let mut anchors: Vec<(usize, usize)> = Vec::new();
     let mut cursor = 0usize;
     for (t, title) in track_titles.iter().enumerate() {
-        let Some(track) = title.map(normalize).filter(|s| !s.is_empty()) else {
+        let Some(track) = title
+            .map(|t| normalize(t.strip_prefix(shared.as_str()).unwrap_or(t)))
+            .filter(|s| !s.is_empty())
+        else {
             continue;
         };
         let mut best: Option<(usize, f64)> = None;
@@ -86,6 +95,34 @@ pub fn align_by_title(
     }
 
     Some(out)
+}
+
+/// Longest prefix every named track shares. Downloaders name each file after
+/// the whole book — `<book> [<ASIN>] - 07 - <chapter>` — and that constant
+/// head dilutes the bigram score of the chapter name behind it below the
+/// anchor threshold. Empty when fewer than two tracks are named, or when the
+/// shared run would consume a whole title.
+fn shared_prefix(titles: &[Option<&str>]) -> String {
+    let named: Vec<&str> = titles.iter().filter_map(|t| *t).collect();
+    let Some((first, rest)) = named.split_first() else {
+        return String::new();
+    };
+    if rest.is_empty() {
+        return String::new();
+    }
+    let mut prefix: Vec<char> = first.chars().collect();
+    for title in rest {
+        let common = title
+            .chars()
+            .zip(prefix.iter())
+            .take_while(|(a, b)| a == *b)
+            .count();
+        prefix.truncate(common);
+    }
+    if named.iter().any(|t| t.chars().count() <= prefix.len()) {
+        return String::new();
+    }
+    prefix.into_iter().collect()
 }
 
 /// Fold away the cosmetic differences between an EPUB nav label and an M4B
@@ -241,5 +278,59 @@ mod tests {
         let tracks = vec![Some("Chapter One - Arrival"), Some("Chapter Two - Departure")];
         let out = align_by_title(&chapters, &tracks, Leftovers::Squeeze).expect("titles align");
         assert_eq!(out, vec![Some(0), Some(0), Some(1)]);
+    }
+
+    /// ねじまき鳥クロニクル: the EPUB spine opens with three untitled front
+    /// matter documents and a TOC, and every audio file is named
+    /// `<book> [<ASIN>] - NN - <chapter>` — a constant head longer than the
+    /// chapter name that follows it.
+    fn wind_up_bird() -> (Vec<&'static str>, Vec<Option<&'static str>>) {
+        (
+            vec![
+                "Chapter 2",
+                "Chapter 3",
+                "Chapter 4",
+                "目次",
+                "１\u{3000}火曜日のねじまき鳥、六本の指と四つの乳房について",
+                "２\u{3000}満月と日蝕、納屋の中で死んでいく馬たちについて",
+                "３\u{3000}加納マルタの帽子、シャーベット・トーンとアレン・ギンズバーグと十字軍",
+                "４\u{3000}高い塔と深い井戸、あるいはノモンハンを遠く離れて",
+                "５\u{3000}レモンドロップ中毒、飛べない鳥と涸れた井戸",
+                "10\u{3000}マジックタッチ、風呂桶の中の死、形見の配達者",
+                "参考文献",
+                "奥付",
+            ],
+            vec![
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 01 - 1 火曜日のねじまき鳥、六本の指と四つの乳房について"),
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 02 - 2 満月と日蝕、納屋の中で死んでいく馬たちについて"),
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 03 - 3 加納マルタの帽子、シャーベット・トーンとアレン・ギンズバーグと十字軍"),
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 04 - ４ 高い塔と深い井戸、あるいはノモンハンを遠く離れて"),
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 05 - ５ レモンドロップ中毒、飛べない鳥と涸れた井戸"),
+                Some("ねじまき鳥クロニクル ―第１部 泥棒かささぎ編― [B09XXBLD8N] - 10 - 10 マジックタッチ、風呂桶の中の死、形見の配達者"),
+            ],
+        )
+    }
+
+    #[test]
+    fn shared_filename_prefix_does_not_block_anchoring() {
+        let (chapters, tracks) = wind_up_bird();
+        let out = align_by_title(&chapters, &tracks, Leftovers::Squeeze).expect("titles align");
+        assert_eq!(
+            out,
+            vec![
+                Some(0), // Chapter 2 → 01
+                Some(0), // Chapter 3 → 01
+                Some(0), // Chapter 4 → 01
+                Some(0), // 目次 → 01
+                Some(0), // １
+                Some(1),
+                Some(2),
+                Some(3),
+                Some(4), // ５
+                Some(5), // 10
+                Some(5), // 参考文献 → 10
+                Some(5), // 奥付 → 10
+            ]
+        );
     }
 }
