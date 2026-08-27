@@ -117,7 +117,10 @@ fn try_extract_audio_cover(project: &mut Project, store: &dyn ProjectStore) {
     };
     // First track only: the cover is a property of the book, and every file
     // in a multi-part audiobook carries the same one.
-    let Some(first) = audio_source_paths(source).ok().and_then(|p| p.into_iter().next()) else {
+    let Some(first) = audio_source_paths(source)
+        .ok()
+        .and_then(|p| p.into_iter().next())
+    else {
         return;
     };
     let Some(dest_dir) = store.project_dir(&project.id) else {

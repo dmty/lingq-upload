@@ -147,11 +147,7 @@ async fn audio_track_chapters(project: &Project) -> Result<Vec<ChapterMeta>, App
             title: t
                 .title
                 .clone()
-                .or_else(|| {
-                    t.path
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                })
+                .or_else(|| t.path.file_stem().map(|s| s.to_string_lossy().into_owned()))
                 .unwrap_or_else(|| format!("Track {}", i + 1)),
             kind: ChapterKind::default(),
         })
