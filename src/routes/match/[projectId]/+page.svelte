@@ -44,7 +44,7 @@
   let title = $state<string>("Untitled");
   let chapters = $state(0);
   let tracks = $state(0);
-  let hasText = $state(true);
+  let hasText = $state<boolean | null>(null);
   let condition = $state<MismatchCondition>("count_off");
   let options = $state<MismatchResponse[]>(["cancel"]);
   let bucketPreview = $state<BucketPreview[] | null>(null);
@@ -777,12 +777,14 @@
                 {authors.join(", ")}
               </p>
             {/if}
-            <SourceSummary
-              chapterCount={hasText ? mapping.chapters.length : 0}
-              buckets={mapping.buckets}
-              {audioPaths}
-              {hasText}
-            />
+            {#if hasText !== null}
+              <SourceSummary
+                chapterCount={hasText ? mapping.chapters.length : 0}
+                buckets={mapping.buckets}
+                {audioPaths}
+                {hasText}
+              />
+            {/if}
             <div class="mt-1 flex flex-col gap-1">
               <label
                 class="flex min-h-[24px] items-center gap-1.5 text-xs text-fg-muted"
@@ -908,12 +910,14 @@
     {:else}
       <header class="space-y-1">
         <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
-        <SourceSummary
-          chapterCount={chapters}
-          buckets={mapping.buckets}
-          {audioPaths}
-          {hasText}
-        />
+        {#if hasText !== null}
+          <SourceSummary
+            chapterCount={chapters}
+            buckets={mapping.buckets}
+            {audioPaths}
+            {hasText}
+          />
+        {/if}
       </header>
 
       {#if hydrating}

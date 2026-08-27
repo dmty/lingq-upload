@@ -1127,12 +1127,23 @@ fn build_plan(
     if chapters.is_empty() {
         // Selection for an audio-only project is over tracks, keyed by track
         // position — see `audio_track_chapters` in the project commands.
+        // Both exclusions apply: the row-level skip writes `skipped_chapters`,
+        // the band-level Park writes the mapping's `parking_lot`, and the two
+        // controls sit next to each other on the same screen.
         let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+        let parked: HashSet<TrackId> = project
+            .mapping
+            .as_ref()
+            .map(|m| m.parking_lot.iter().cloned().collect())
+            .unwrap_or_default();
         return PlanOrPause::Plan(Plan {
             steps: tracks
                 .iter()
                 .enumerate()
-                .filter(|(k, _)| !skipped.contains(&ChapterId::from_order(*k)))
+                .filter(|(k, t)| {
+                    !skipped.contains(&ChapterId::from_order(*k))
+                        && !parked.contains(&track_id_for(t))
+                })
                 .map(|(k, track)| Step {
                     chapter_index: leftover_base + k,
                     track_index: Some(k),
@@ -1856,6 +1867,35 @@ mod tests {
             Some(FILLER_TEXT),
             "a leftover track in a text project must not spend transcription quota"
         );
+    }
+
+    #[test]
+    fn audio_only_plan_honours_parked_tracks_and_skips() {
+        let tracks = vec![
+            track(0, "/x/a.mp3"),
+            track(1, "/x/b.mp3"),
+            track(2, "/x/c.mp3"),
+        ];
+        let mut project = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
+        let mut state = seed_single_sided(&[], &tracks).expect("audio-only seeds");
+        // Park the middle band, skip the last row.
+        state.parking_lot = vec![track_id_for(&tracks[1])];
+        project.mapping = Some(state);
+        project.skipped_chapters = vec![ChapterId::from_order(2)];
+
+        let plan = match build_plan(&project, &[], &tracks, 0) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        assert_eq!(
+            plan.steps.len(),
+            1,
+            "parked and skipped tracks must both drop out of the upload"
+        );
+        assert_eq!(plan.steps[0].track_index, Some(0));
     }
 
     #[test]
