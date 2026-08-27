@@ -401,11 +401,13 @@ pub fn set_cover_bytes_impl(
                     _ => None,
                 },
             };
-            purge_sidecars(&project_dir, "cover", None);
+            // Write first: `fs::write` truncates in place, so a failed save
+            // must not have already deleted the cover it was replacing.
             if let Err(e) = std::fs::write(&dst, &bytes) {
                 io_err = Some(format!("write cover: {e}"));
                 return;
             }
+            purge_sidecars(&project_dir, "cover", Some(&dst));
             p.cover_path = Some(dst.clone());
             p.cover_original_path = kept.clone();
             p.cover_uploaded_to_lingq = false;

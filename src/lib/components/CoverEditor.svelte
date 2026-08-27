@@ -306,6 +306,10 @@
     >
       {#if src}
         <figure class="frame relative m-0 leading-none shadow-card">
+          <!-- crossorigin is load-bearing: without it WKWebView taints the
+               canvas and the crop's toBlob throws SecurityError. Tauri's asset
+               protocol answers with Access-Control-Allow-Origin, so the CORS
+               load itself succeeds. -->
           <img
             bind:this={img}
             {src}
