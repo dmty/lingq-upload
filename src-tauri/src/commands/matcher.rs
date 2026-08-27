@@ -137,7 +137,7 @@ pub async fn cmd_seed_mapping(
         .into_iter()
         .find(|s| s.id.join_key() == key)
         .ok_or_else(|| AppError::Other(format!("project not found: {key}")))?;
-    seed_mapping_if_count_matches(store.inner().as_ref(), &summary.id)
+    seed_mapping_if_count_matches(store.inner().as_ref(), &summary.id).await
 }
 
 #[cfg(test)]

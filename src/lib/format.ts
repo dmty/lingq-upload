@@ -42,3 +42,13 @@ export function formatAge(iso: string, now: number = Date.now()): string {
   if (hours < 24) return `${hours} hours ago`;
   return formatRelative(iso);
 }
+
+// Coarse duration for totals ("2h 45m"). Per-track labels use a finer m:ss
+// elsewhere; a book-length total in m:ss is unreadable.
+export function formatDuration(sec: number): string {
+  const t = Math.max(0, Math.round(sec));
+  if (t < 60) return `${t}s`;
+  const m = Math.floor(t / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${(m % 60).toString().padStart(2, "0")}m`;
+}

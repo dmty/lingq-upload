@@ -738,7 +738,7 @@ pub async fn inspect_mismatch(project: &Project) -> Result<Option<MismatchInspec
 
 /// Attempt to seed `project.mapping` for a count-match project that has not
 /// run a job yet. No-op when `matcher_decision` or `mapping` is already set.
-pub fn seed_mapping_if_count_matches(
+pub async fn seed_mapping_if_count_matches(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
 ) -> Result<(), AppError> {
@@ -753,26 +753,17 @@ pub fn seed_mapping_if_count_matches(
     let skipped: std::collections::HashSet<ChapterId> =
         project.skipped_chapters.iter().cloned().collect();
     let chapters = eligible_chapters(&all_chapters, &skipped, &project.receipts);
-    // auto_match only needs the track count and order; duration_sec stays None
-    // here. No audio source = nothing to seed.
-    let audio_paths = match &project.sources.audio {
-        Some(src) => match audio_source_paths(src) {
-            Ok(paths) => paths,
-            Err(_) => return Ok(()),
-        },
-        None => return Ok(()),
-    };
-    let tracks: Vec<crate::core::audio::AudioTrack> = audio_paths
-        .into_iter()
-        .enumerate()
-        .map(|(i, p)| crate::core::audio::AudioTrack {
-            order: i,
-            path: p,
-            duration_sec: None,
-            title: None,
-            window: None,
-        })
-        .collect();
+    // Resolved tracks, not raw paths: one m4b expands into one track per
+    // chapter atom, and seeding off the file count would under-count it.
+    let tracks = resolve_audio_tracks(&project).await?;
+    if let Some(seeded) = seed_single_sided(&chapters, &tracks) {
+        persist_with(store, project_id, &mut |p| {
+            if p.mapping.is_none() {
+                p.mapping = Some(seeded.clone());
+            }
+        })?;
+        return Ok(());
+    }
     if let MatchOutcome::Paired { pairs } = auto_match(&chapters, &tracks) {
         let seeded = seed_mapping_state(&pairs, &chapters, &tracks);
         persist_with(store, project_id, &mut |p| {
@@ -841,6 +832,45 @@ pub async fn seed_mapping_for_response(
         MismatchResponse::Cancel | MismatchResponse::Unknown => return Ok(None),
     };
     Ok(Some(mapping_state_from_resolved(pairs, &chapters, &tracks)))
+}
+
+/// Seed a mapping for a project that has only one kind of source. There is
+/// nothing to pair, but the grid still needs a state to render — without one
+/// the match screen falls through to the mismatch card and reports "0 vs 0".
+///
+/// Audio-only gives each track its own row, keyed by track position, because
+/// the track *is* the unit the user selects. Text-only gives each chapter a
+/// row with no track. Returns `None` when both sides are present (a real
+/// match) or both are empty (nothing to show).
+fn seed_single_sided(chapters: &[Chapter], tracks: &[AudioTrack]) -> Option<MappingState> {
+    if chapters.is_empty() == tracks.is_empty() {
+        return None;
+    }
+    let pairs: Vec<MappingPair> = if tracks.is_empty() {
+        chapters
+            .iter()
+            .map(|c| MappingPair {
+                chapter_id: c.id.clone(),
+                track_id: None,
+                confidence: crate::core::matcher::ops::RECOMPUTED_CONFIDENCE,
+                touched: false,
+                original_confidence: crate::core::matcher::ops::RECOMPUTED_CONFIDENCE,
+            })
+            .collect()
+    } else {
+        tracks
+            .iter()
+            .enumerate()
+            .map(|(k, t)| MappingPair {
+                chapter_id: ChapterId::from_order(k),
+                track_id: Some(track_id_for(t)),
+                confidence: crate::core::matcher::ops::RECOMPUTED_CONFIDENCE,
+                touched: false,
+                original_confidence: crate::core::matcher::ops::RECOMPUTED_CONFIDENCE,
+            })
+            .collect()
+    };
+    Some(mapping_state_from_resolved(pairs, chapters, tracks))
 }
 
 fn mapping_state_from_resolved(
@@ -1829,6 +1859,37 @@ mod tests {
     }
 
     #[test]
+    fn seed_single_sided_gives_each_track_its_own_row() {
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
+        let state = seed_single_sided(&[], &tracks).expect("audio-only seeds");
+        assert_eq!(state.pairs.len(), 2, "one row per track");
+        assert!(state.pairs.iter().all(|p| p.track_id.is_some()));
+        assert_eq!(
+            state.pairs[0].chapter_id,
+            ChapterId::from_order(0),
+            "rows key off track position so the picker and the plan agree"
+        );
+        assert_eq!(state.buckets.len(), 2, "buckets carry the audio breakdown");
+    }
+
+    #[test]
+    fn seed_single_sided_leaves_text_only_rows_unpaired() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1")];
+        let state = seed_single_sided(&chapters, &[]).expect("text-only seeds");
+        assert_eq!(state.pairs.len(), 2);
+        assert!(state.pairs.iter().all(|p| p.track_id.is_none()));
+        assert!(state.buckets.is_empty());
+    }
+
+    #[test]
+    fn seed_single_sided_declines_when_both_sides_present() {
+        let chapters = vec![chapter(0, "c0", "b0")];
+        let tracks = vec![track(0, "/x/a.mp3")];
+        assert!(seed_single_sided(&chapters, &tracks).is_none());
+        assert!(seed_single_sided(&[], &[]).is_none());
+    }
+
+    #[test]
     fn build_plan_without_audio_ships_every_chapter_text_only() {
         let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1")];
         let project = Project::new_test(
@@ -2240,8 +2301,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn seed_mapping_if_count_matches_no_op_when_mapping_present() {
+    #[tokio::test]
+    async fn seed_mapping_if_count_matches_no_op_when_mapping_present() {
         use crate::core::matcher::MappingState;
         use crate::core::store::InMemoryProjectStore;
 
@@ -2251,7 +2312,7 @@ mod tests {
         p.mapping = Some(MappingState::default());
         store.put(&p).unwrap();
 
-        seed_mapping_if_count_matches(&store, &id).unwrap();
+        seed_mapping_if_count_matches(&store, &id).await.unwrap();
 
         let after = store.get(&id).unwrap().unwrap();
         // mapping must be unchanged (still default / no new pairs)
@@ -2263,8 +2324,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn seed_mapping_if_count_matches_errors_when_text_source_missing() {
+    #[tokio::test]
+    async fn seed_mapping_if_count_matches_errors_when_text_source_missing() {
         // The Paired-outcome happy path (mapping seeded after a clean auto_match)
         // is exercised end-to-end via the e2e flow; the count-match seed lives on
         // the cold cmd_seed_mapping entry point, not here. This test verifies
@@ -2301,6 +2362,6 @@ mod tests {
 
         // Should return Ok (missing file → zero chapters → no seed, not a hard error)
         // or Err — either way must not panic.
-        let _ = seed_mapping_if_count_matches(&store, &id);
+        let _ = seed_mapping_if_count_matches(&store, &id).await;
     }
 }

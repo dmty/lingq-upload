@@ -21,6 +21,7 @@
   import { appErrorMessage } from "$lib/errors";
   import { basename, extOf } from "$lib/paths";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
+  import SourceSummary from "$lib/components/SourceSummary.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
   import MappingGrid from "$lib/components/MappingGrid.svelte";
   import ChapterInspector from "$lib/components/ChapterInspector.svelte";
@@ -43,6 +44,7 @@
   let title = $state<string>("Untitled");
   let chapters = $state(0);
   let tracks = $state(0);
+  let hasText = $state(true);
   let condition = $state<MismatchCondition>("count_off");
   let options = $state<MismatchResponse[]>(["cancel"]);
   let bucketPreview = $state<BucketPreview[] | null>(null);
@@ -147,6 +149,7 @@
       return;
     }
     const project = loaded.data;
+    hasText = project.sources.text.kind !== "missing";
     coverPath = project.cover_path ?? null;
     coverUse = project.cover_use ?? true;
     authors = project.authors ?? [];
@@ -774,9 +777,12 @@
                 {authors.join(", ")}
               </p>
             {/if}
-            <p class="mt-0.5 text-xs text-fg-muted tabular">
-              {chapters} → {tracks}
-            </p>
+            <SourceSummary
+              chapterCount={hasText ? mapping.chapters.length : 0}
+              buckets={mapping.buckets}
+              {audioPaths}
+              {hasText}
+            />
             <div class="mt-1 flex flex-col gap-1">
               <label
                 class="flex min-h-[24px] items-center gap-1.5 text-xs text-fg-muted"
@@ -900,8 +906,14 @@
         <ChapterInspector />
       </div>
     {:else}
-      <header>
+      <header class="space-y-1">
         <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
+        <SourceSummary
+          chapterCount={chapters}
+          buckets={mapping.buckets}
+          {audioPaths}
+          {hasText}
+        />
       </header>
 
       {#if hydrating}
@@ -964,7 +976,9 @@
           </div>
         {/if}
 
-        <MismatchEvidence {title} {chapters} {tracks} {condition} />
+        {#if chapters > 0 || tracks > 0}
+          <MismatchEvidence {title} {chapters} {tracks} {condition} />
+        {/if}
 
         {#if projectIdValue}
           <DetectionAssist
