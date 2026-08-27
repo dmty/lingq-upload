@@ -11,7 +11,7 @@ use crate::core::project::{filter_cover_chapter, Project};
 use crate::core::store::{ProjectStore, StoreError};
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
-use crate::ingest::TextSource;
+use crate::ingest::{audio_source_paths, TextSource};
 
 /// Picker-facing projection of [`Chapter`] without the body. Picker rows only
 /// need identity + label + kind; shipping the body over IPC would cost tens
@@ -123,8 +123,32 @@ pub fn project_chapters_impl(
                 kind: ChapterKind::default(),
             })
             .collect()),
-        TextSource::Missing => Ok(Vec::new()),
+        // Audio-only: the tracks are the selectable units, so the picker
+        // lists one row per track and `skipped_chapters` gates them by order.
+        TextSource::Missing => Ok(audio_track_chapters(&project)),
     }
+}
+
+/// One `ChapterMeta` per audio track, order-indexed so a `ChapterId` maps
+/// straight back to a track position. Used when the project has no text.
+fn audio_track_chapters(project: &Project) -> Vec<ChapterMeta> {
+    let Some(source) = project.sources.audio.as_ref() else {
+        return Vec::new();
+    };
+    let paths = audio_source_paths(source).unwrap_or_default();
+    paths
+        .iter()
+        .enumerate()
+        .map(|(i, p)| ChapterMeta {
+            id: ChapterId::from_order(i),
+            order: i,
+            title: p
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| format!("Track {}", i + 1)),
+            kind: ChapterKind::default(),
+        })
+        .collect()
 }
 
 /// Return one chapter's body on demand. The list projection (`ChapterMeta`) is
@@ -183,7 +207,9 @@ pub async fn chapter_text(
                 .ok_or_else(|| AppError::Other(format!("chapter index {idx} out of range")))?;
             read_text_for_upload(path).map_err(|e| AppError::Other(format!("read: {e}")))
         }
-        TextSource::Missing => Err(AppError::Other("project has no text source".into())),
+        // Audio-only: the body arrives from LingQ's transcription after
+        // upload, so there is nothing local to show.
+        TextSource::Missing => Ok(String::new()),
     }
 }
 

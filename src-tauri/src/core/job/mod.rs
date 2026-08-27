@@ -308,48 +308,54 @@ pub async fn run_project_job(
             continue;
         }
 
-        let track = &tracks[step.track_index];
-        let dst = staging
-            .path()
-            .join(format!("chapter_{:03}.mp3", step.chapter_index));
-        let transcode_fut = audio::transcode(&track.path, &dst, &enc, track.window);
-        let report = tokio::select! {
-            biased;
-            _ = cancel.cancelled() => {
-                tracing::info!(
-                    at = step_pos,
-                    dst = %dst.display(),
-                    "job: cancelled mid-transcode; transcode codec processing halted",
-                );
-                if let Err(e) = std::fs::remove_file(&dst) {
-                    if e.kind() != std::io::ErrorKind::NotFound {
-                        tracing::warn!(error = %e, dst = %dst.display(), "job: failed to unlink partial transcode output");
+        let carved = match step.track_index {
+            None => None,
+            Some(track_index) => {
+                let track = &tracks[track_index];
+                let dst = staging
+                    .path()
+                    .join(format!("chapter_{:03}.mp3", step.chapter_index));
+                let transcode_fut = audio::transcode(&track.path, &dst, &enc, track.window);
+                let report = tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => {
+                        tracing::info!(
+                            at = step_pos,
+                            dst = %dst.display(),
+                            "job: cancelled mid-transcode; transcode codec processing halted",
+                        );
+                        if let Err(e) = std::fs::remove_file(&dst) {
+                            if e.kind() != std::io::ErrorKind::NotFound {
+                                tracing::warn!(error = %e, dst = %dst.display(), "job: failed to unlink partial transcode output");
+                            }
+                        }
+                        persist_cursor(store.as_ref(), &project)?;
+                        sink.cancelled();
+                        return Ok(());
                     }
-                }
-                persist_cursor(store.as_ref(), &project)?;
-                sink.cancelled();
-                return Ok(());
-            }
-            r = transcode_fut => match r {
-                Ok(rep) => rep,
-                Err(e) => {
-                    let app = AppError::from(e);
-                    sink.result(false, serde_json::json!({"error": app.to_string()}));
-                    return Err(app);
-                }
+                    r = transcode_fut => match r {
+                        Ok(rep) => rep,
+                        Err(e) => {
+                            let app = AppError::from(e);
+                            sink.result(false, serde_json::json!({"error": app.to_string()}));
+                            return Err(app);
+                        }
+                    }
+                };
+                tracing::info!(
+                    chapter = step.chapter_index,
+                    delta = report.delta_sec,
+                    "job: transcoded chapter",
+                );
+                Some(dst)
             }
         };
-        tracing::info!(
-            chapter = step.chapter_index,
-            delta = report.delta_sec,
-            "job: transcoded chapter",
-        );
 
         let req = ImportLessonRequest {
             collection,
             title: &step.title,
-            text: &step.text,
-            audio: Some(&dst),
+            text: step.text.as_deref(),
+            audio: carved.as_deref(),
             level: project.settings.level,
             status: LessonStatus::Private,
             tags: &["books"],
@@ -374,7 +380,7 @@ pub async fn run_project_job(
         // existing slots via the atomic patch_chapter write.
         let receipt = ChapterReceipt {
             chapter_index: step.chapter_index,
-            track_index: Some(step.track_index),
+            track_index: step.track_index,
             lesson_id: Some(lesson_id),
             degraded: step.degraded,
             uploaded_at: Some(Utc::now()),
@@ -483,7 +489,7 @@ fn prepopulate_receipts(project: &mut Project, plan: &Plan) {
         }
         project.receipts.push(ChapterReceipt {
             chapter_index: step.chapter_index,
-            track_index: Some(step.track_index),
+            track_index: step.track_index,
             lesson_id: None,
             degraded: step.degraded,
             uploaded_at: None,
@@ -565,10 +571,12 @@ struct Step {
     /// index for `SplitProportional`, 0 for `SingleLesson`, and a synthetic
     /// index past every real order for `PairAccept` leftover tracks.
     chapter_index: usize,
-    track_index: usize,
+    /// `None` for a chapter with no audio — the lesson uploads as text only.
+    track_index: Option<usize>,
     degraded: bool,
     title: String,
-    text: String,
+    /// `None` for a track with no text — LingQ transcribes the audio instead.
+    text: Option<String>,
 }
 
 /// One planned upload step, projected for the UI.
@@ -614,10 +622,6 @@ pub async fn plan_preview(
         .get(project_id)
         .map_err(|e| AppError::Other(format!("store.get: {e}")))?
         .ok_or_else(|| AppError::Other("project not found".into()))?;
-    if project.sources.audio.is_none() {
-        return Ok(Vec::new());
-    }
-
     let tracks = resolve_audio_tracks(&project).await?;
     let chapters = project_chapters(&project)?;
 
@@ -644,13 +648,13 @@ pub async fn plan_preview(
     }
 }
 
-fn step_for_chapter(chapter: &Chapter, track_index: usize) -> Step {
+fn step_for_chapter(chapter: &Chapter, track_index: Option<usize>) -> Step {
     Step {
         chapter_index: chapter.order,
         track_index,
         degraded: false,
         title: chapter.title.clone(),
-        text: chapter.body.clone(),
+        text: Some(chapter.body.clone()),
     }
 }
 
@@ -1076,6 +1080,32 @@ fn build_plan(
     // The mapping is the source of truth once one exists (it is seeded on
     // resolve and then edited in the mapping screen). The decision is only a
     // fallback for projects that resolved to no mapping (Cancel / legacy).
+    // With one side of the pairing absent there is nothing to match: every
+    // chapter ships without audio, or every track ships without text.
+    if tracks.is_empty() {
+        return PlanOrPause::Plan(Plan {
+            steps: chapters.iter().map(|c| step_for_chapter(c, None)).collect(),
+        });
+    }
+    if chapters.is_empty() {
+        // Selection for an audio-only project is over tracks, keyed by track
+        // position — see `audio_track_chapters` in the project commands.
+        let skipped: HashSet<ChapterId> = project.skipped_chapters.iter().cloned().collect();
+        return PlanOrPause::Plan(Plan {
+            steps: tracks
+                .iter()
+                .enumerate()
+                .filter(|(k, _)| !skipped.contains(&ChapterId::from_order(*k)))
+                .map(|(k, track)| Step {
+                    chapter_index: leftover_base + k,
+                    track_index: Some(k),
+                    degraded: false,
+                    title: audio_only_title(track, k),
+                    text: None,
+                })
+                .collect(),
+        });
+    }
     if let Some(mapping) = &project.mapping {
         return plan_from_mapping(mapping, chapters, tracks, leftover_base);
     }
@@ -1086,7 +1116,7 @@ fn build_plan(
         MatchOutcome::Paired { pairs } => PlanOrPause::Plan(Plan {
             steps: pairs
                 .into_iter()
-                .map(|(c, t)| step_for_chapter(&chapters[c], t))
+                .map(|(c, t)| step_for_chapter(&chapters[c], Some(t)))
                 .collect(),
         }),
         MatchOutcome::Mismatch {
@@ -1168,14 +1198,14 @@ fn plan_from_mapping(
         let run = &chapters[run_start..i];
         used_tracks.insert(track_id.clone());
         if run.len() == 1 {
-            steps.push(step_for_chapter(&run[0], track_index));
+            steps.push(step_for_chapter(&run[0], Some(track_index)));
         } else {
             steps.push(Step {
                 chapter_index: run[0].order,
-                track_index,
+                track_index: Some(track_index),
                 degraded: false,
                 title: run[0].title.clone(),
-                text: single_lesson_concat(run),
+                text: Some(single_lesson_concat(run)),
             });
         }
     }
@@ -1194,10 +1224,10 @@ fn plan_from_mapping(
         }
         steps.push(Step {
             chapter_index: leftover_base + k,
-            track_index: k,
+            track_index: Some(k),
             degraded: true,
             title: audio_only_title(track, k),
-            text: " ".to_string(),
+            text: None,
         });
     }
     PlanOrPause::Plan(Plan { steps })
@@ -1253,10 +1283,10 @@ fn plan_from_decision(
             PlanOrPause::Plan(Plan {
                 steps: vec![Step {
                     chapter_index: 0,
-                    track_index: 0,
+                    track_index: Some(0),
                     degraded: true,
                     title,
-                    text,
+                    text: Some(text),
                 }],
             })
         }
@@ -1272,17 +1302,15 @@ fn plan_from_decision(
             let mut steps: Vec<Step> = chapters
                 .iter()
                 .enumerate()
-                .map(|(i, c)| step_for_chapter(c, i))
+                .map(|(i, c)| step_for_chapter(c, Some(i)))
                 .collect();
             for (k, track) in tracks.iter().enumerate().skip(chapters.len()) {
                 steps.push(Step {
                     chapter_index: leftover_base + (k - chapters.len()),
-                    track_index: k,
+                    track_index: Some(k),
                     degraded: true,
                     title: audio_only_title(track, k),
-                    // LingQ rejects empty `text`; a single space satisfies the
-                    // required field for an audio-only lesson.
-                    text: " ".to_string(),
+                    text: None,
                 });
             }
             PlanOrPause::Plan(Plan { steps })
@@ -1307,7 +1335,7 @@ fn plan_from_decision(
                 steps: chapters[..n]
                     .iter()
                     .enumerate()
-                    .map(|(i, c)| step_for_chapter(c, i))
+                    .map(|(i, c)| step_for_chapter(c, Some(i)))
                     .collect(),
             })
         }
@@ -1349,20 +1377,19 @@ fn plan_from_decision(
                             .unwrap_or_else(|| format!("Atom {}", bucket_index + 1));
                         Step {
                             chapter_index: bucket_index,
-                            track_index: bucket_index,
+                            track_index: Some(bucket_index),
                             degraded: true,
                             title,
-                            // LingQ rejects empty `text`; a single space satisfies the field.
-                            text: " ".to_string(),
+                            text: None,
                         }
                     } else {
                         let slice = &chapters[bucket.text_range.clone()];
                         Step {
                             chapter_index: bucket_index,
-                            track_index: bucket_index,
+                            track_index: Some(bucket_index),
                             degraded: false,
                             title: slice[0].title.clone(),
-                            text: single_lesson_concat(slice),
+                            text: Some(single_lesson_concat(slice)),
                         }
                     }
                 })
@@ -1416,7 +1443,9 @@ fn resolve_chapters(
             }
             Ok(out)
         }
-        TextSource::Missing => Err(AppError::Other("project has no text source".into())),
+        // An audio-only project legitimately has no text; it plans to zero
+        // chapters rather than failing.
+        TextSource::Missing => Ok(Vec::new()),
     }
 }
 
@@ -1440,8 +1469,10 @@ pub(crate) fn detection_chapters(project: &Project) -> Result<Vec<Chapter>, AppE
 }
 
 pub(crate) async fn resolve_audio_tracks(project: &Project) -> Result<Vec<AudioTrack>, AppError> {
+    // A text-only project legitimately has no audio; it plans to zero tracks
+    // rather than failing.
     let Some(source) = project.sources.audio.as_ref() else {
-        return Err(AppError::Other("project has no audio source".into()));
+        return Ok(Vec::new());
     };
     let paths = audio_source_paths(source)?;
     // Match is exhaustive on purpose: adding a fifth variant must force every
@@ -1648,7 +1679,7 @@ mod tests {
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
         assert_eq!(plan.steps.len(), 1);
-        let text = &plan.steps[0].text;
+        let text = plan.steps[0].text.as_deref().unwrap();
         assert!(
             text.contains("b0") && text.contains("b2"),
             "merged text: {text}"
@@ -1688,14 +1719,14 @@ mod tests {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
-        let got: Vec<(usize, usize)> = plan
+        let got: Vec<(usize, Option<usize>)> = plan
             .steps
             .iter()
             .map(|s| (s.chapter_index, s.track_index))
             .collect();
-        assert_eq!(got, vec![(0, 1), (2, 0)]);
-        assert_eq!(plan.steps[0].text, "b0");
-        assert_eq!(plan.steps[1].text, "b2");
+        assert_eq!(got, vec![(0, Some(1)), (2, Some(0))]);
+        assert_eq!(plan.steps[0].text.as_deref(), Some("b0"));
+        assert_eq!(plan.steps[1].text.as_deref(), Some("b2"));
     }
 
     #[test]
@@ -1743,10 +1774,16 @@ mod tests {
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
         assert_eq!(plan.steps.len(), 2, "two buckets -> two lessons");
-        assert_eq!(plan.steps[0].track_index, 0);
-        assert_eq!(plan.steps[0].text, single_lesson_concat(&chapters[0..3]));
-        assert_eq!(plan.steps[1].track_index, 1);
-        assert_eq!(plan.steps[1].text, single_lesson_concat(&chapters[3..5]));
+        assert_eq!(plan.steps[0].track_index, Some(0));
+        assert_eq!(
+            plan.steps[0].text.as_deref(),
+            Some(single_lesson_concat(&chapters[0..3]).as_str())
+        );
+        assert_eq!(plan.steps[1].track_index, Some(1));
+        assert_eq!(
+            plan.steps[1].text.as_deref(),
+            Some(single_lesson_concat(&chapters[3..5]).as_str())
+        );
     }
 
     #[test]
@@ -1773,11 +1810,49 @@ mod tests {
         // one real lesson (t0) + one audio-only degraded (t1). t2 parked -> absent.
         assert_eq!(plan.steps.len(), 2);
         assert!(!plan.steps[0].degraded);
-        assert_eq!(plan.steps[0].track_index, 0);
+        assert_eq!(plan.steps[0].track_index, Some(0));
         let audio_only = &plan.steps[1];
         assert!(audio_only.degraded);
-        assert_eq!(audio_only.track_index, 1);
-        assert_eq!(audio_only.text, " ");
+        assert_eq!(audio_only.track_index, Some(1));
+        assert_eq!(
+            audio_only.text, None,
+            "audio-only lesson omits text so LingQ transcribes it"
+        );
+    }
+
+    #[test]
+    fn build_plan_without_audio_ships_every_chapter_text_only() {
+        let chapters = vec![chapter(0, "c0", "b0"), chapter(1, "c1", "b1")];
+        let project = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
+        let plan = match build_plan(&project, &chapters, &[], chapters.len()) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        assert_eq!(plan.steps.len(), 2);
+        assert!(plan.steps.iter().all(|s| s.track_index.is_none()));
+        assert_eq!(plan.steps[0].text.as_deref(), Some("b0"));
+    }
+
+    #[test]
+    fn build_plan_without_text_ships_every_track_for_transcription() {
+        let tracks = vec![track(0, "/x/a.mp3"), track(1, "/x/b.mp3")];
+        let project = Project::new_test(
+            crate::core::identity::ProjectId::from_title_author("T", "A"),
+            "T",
+        );
+        let plan = match build_plan(&project, &[], &tracks, 0) {
+            PlanOrPause::Plan(p) => p,
+            other => panic!("expected Plan, got {}", plan_kind(&other)),
+        };
+        assert_eq!(plan.steps.len(), 2);
+        assert_eq!(plan.steps[0].track_index, Some(0));
+        assert!(
+            plan.steps.iter().all(|s| s.text.is_none()),
+            "no text means LingQ transcribes the audio"
+        );
     }
 
     #[test]
@@ -1802,14 +1877,14 @@ mod tests {
             PlanOrPause::Plan(p) => p,
             other => panic!("expected Plan, got {}", plan_kind(&other)),
         };
-        let got: Vec<(usize, usize)> = plan
+        let got: Vec<(usize, Option<usize>)> = plan
             .steps
             .iter()
             .map(|s| (s.chapter_index, s.track_index))
             .collect();
         assert_eq!(
             got,
-            vec![(0, 1), (1, 0)],
+            vec![(0, Some(1)), (1, Some(0))],
             "mapping pairing must win over index order"
         );
     }
@@ -2049,8 +2124,11 @@ mod tests {
         for (i, step) in plan.steps.iter().enumerate() {
             assert!(!step.degraded, "step {i} should not be degraded");
             assert_eq!(step.chapter_index, i);
-            assert_eq!(step.track_index, i);
-            assert!(!step.text.is_empty(), "step {i} body must be non-empty");
+            assert_eq!(step.track_index, Some(i));
+            assert!(
+                step.text.as_deref().is_some_and(|t| !t.is_empty()),
+                "step {i} body must be non-empty"
+            );
         }
         // First bucket starts at chapter 0, so its title is c0. The second
         // bucket starts wherever the packer split the run, so we only assert
@@ -2142,10 +2220,16 @@ mod tests {
         // Mapping wins: bucket t0={A}, t1={B,C}. Re-packing from the decision
         // would have produced a different boundary.
         assert_eq!(plan.steps.len(), 2);
-        assert_eq!(plan.steps[0].track_index, 0);
-        assert_eq!(plan.steps[0].text, single_lesson_concat(&chapters[0..1]));
-        assert_eq!(plan.steps[1].track_index, 1);
-        assert_eq!(plan.steps[1].text, single_lesson_concat(&chapters[1..3]));
+        assert_eq!(plan.steps[0].track_index, Some(0));
+        assert_eq!(
+            plan.steps[0].text.as_deref(),
+            Some(single_lesson_concat(&chapters[0..1]).as_str())
+        );
+        assert_eq!(plan.steps[1].track_index, Some(1));
+        assert_eq!(
+            plan.steps[1].text.as_deref(),
+            Some(single_lesson_concat(&chapters[1..3]).as_str())
+        );
     }
 
     #[test]

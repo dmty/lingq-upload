@@ -92,7 +92,7 @@ async fn import_lesson_v2_threads_ko_through_url_and_form_field() {
     let req = ImportLessonRequest {
         collection: CollectionId(11),
         title: "Ko Chapter",
-        text: "annyeong",
+        text: Some("annyeong"),
         audio: None,
         level: 1,
         status: LessonStatus::Private,

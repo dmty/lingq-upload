@@ -61,7 +61,7 @@ async fn plan_preview_lists_every_step_before_any_upload() {
 }
 
 #[tokio::test]
-async fn plan_preview_returns_empty_when_project_has_no_audio() {
+async fn plan_preview_plans_every_chapter_when_project_has_no_audio() {
     let text_dir = TempDir::new().unwrap();
     let audio_dir = TempDir::new().unwrap();
     let store = InMemoryProjectStore::default();
@@ -72,7 +72,12 @@ async fn plan_preview_returns_empty_when_project_has_no_audio() {
 
     let steps = plan_preview(&store, &project_id).await.unwrap();
 
-    assert!(steps.is_empty(), "no audio source means no plan to preview");
+    assert_eq!(
+        steps.len(),
+        3,
+        "a text-only project uploads every chapter without audio"
+    );
+    assert!(steps.iter().all(|s| !s.degraded));
 }
 
 #[tokio::test]

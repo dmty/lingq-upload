@@ -30,7 +30,10 @@ impl LessonStatus {
 pub struct ImportLessonRequest<'a> {
     pub collection: CollectionId,
     pub title: &'a str,
-    pub text: &'a str,
+    /// `None` uploads audio with no text, which makes LingQ transcribe the
+    /// audio server-side to produce the lesson body. That transcription is
+    /// Premium-metered — see `docs/specs/lingq-api.md`.
+    pub text: Option<&'a str>,
     pub audio: Option<&'a Path>,
     pub level: u8,
     pub status: LessonStatus,
@@ -107,12 +110,17 @@ impl LingqClient {
     ) -> Result<Form, LingqError> {
         let mut form = Form::new()
             .text("title", req.title.to_string())
-            .text("text", req.text.to_string())
             .text("collection", req.collection.0.to_string())
             .text("language", self.lang().to_string())
             .text("level", req.level.to_string())
             .text("status", req.status.as_form_str().to_string())
             .text("save", if req.save { "true" } else { "false" }.to_string());
+        form = match req.text {
+            Some(text) => form.text("text", text.to_string()),
+            // The transcribe-my-audio shape the web importer sends. `duration`
+            // is a placeholder; the server derives the real one from the file.
+            None => form.text("duration", "0").text("external_audio", ""),
+        };
         if !req.tags.is_empty() {
             form = form.text("tags", req.tags.join(","));
         }

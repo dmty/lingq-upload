@@ -32,6 +32,9 @@
 | Lesson bookmark | GET | `/api/v3/{lang}/lessons/{lid}/bookmark/` | `{wordIndex, completedWordIndex, audioPosition, client, timestamp}`. |
 | List cards | GET | `/api/v3/{lang}/cards/?lesson={lid}&page_size=N` | Paginated. Card fields: `pk, term, fragment, status, extended_status, hints, notes, srs_due_date, last_reviewed_correct, readings, transliteration, audio, tags, url`. Without `lesson` filter, returns every card in the language (huge). |
 | Import lesson | POST | `/api/v3/{lang}/lessons/import/` | multipart/form-data. Confirmed shape below. |
+| Speech to text | POST | `/api/v3/stt/` | multipart `{audio: file, language: <code>}`. **Not language-scoped in the URL** — the language rides in the body. Returns the transcript. Premium-gated with a monthly quota (see Transcription quota below). |
+| Generate lesson audio | POST | `/api/v3/{lang}/lessons/{lid}/genaudio/` | Server-side TTS over the lesson's text. Companion `gentts/` and `tts/` exist on the same lesson. |
+| Lesson timestamps | GET | `/api/v3/{lang}/lessons/{lid}/timestamps/` | Per-sentence audio alignment for a lesson that has audio. |
 
 ### `/api/v2/languages/` response (observed/permissive)
 
@@ -163,6 +166,37 @@ audio       file     audio/mpeg
 
 Returns `{id, …}` on success. Lesson ID is the integer to thread into subsequent calls.
 
+### Audio-only shape (confirmed)
+
+`text` is **not** unconditionally required. An audio-only import posts to the
+same URL and returns `201 Created`:
+
+```
+title           string   lesson title
+language        string   matches {lang} URL segment
+audio           file     the audio
+duration        string   "0" is accepted — the server derives the real duration
+external_audio  string   empty when the audio is uploaded rather than linked
+status          string   "private"
+save            string   "true"
+```
+
+No `text`, no `level`, no `tags`, and **no `collection`** — omitting the
+collection lands the lesson in the account's Default course. The server
+transcribes the audio to produce the lesson text, which is what makes the
+lesson readable. That transcription is Premium-metered (see below).
+
+The endpoint has a third, file-oriented shape used for ebook import —
+`{file, filename, status, save, collection_title}`, also with no `text`.
+
+## Transcription quota
+
+Audio transcription is a Premium feature metered per month. The account payload carries `transcriptionsBalance`, `transcriptionsLimit`, and `transcriptionsDate`; exhausting it (or being on a free plan) routes the user to an upgrade prompt rather than returning a transcript. Any client-side audio-only flow must treat a quota refusal as an expected outcome, not an error.
+
+## Provenance of the audio endpoints
+
+`stt/`, `genaudio/`, `gentts/`, `timestamps/`, and the `file`/`filename` import shape were read out of the LingQ web app's own JavaScript bundle (`static.lingq.com/static/webapp/main-<hash>.js`), where the URL map is a plain object literal. The URLs are therefore facts about what the client calls, but the request/response contracts are inferred from the call sites, not yet exercised against the live API. Confirm shapes by probe before depending on them.
+
 ## Confirmed dead-ends
 
 | URL | Behaviour |
@@ -191,15 +225,13 @@ Log status + body of each. Document the winning shape here when known.
 
 ### Audio replacement on existing lesson
 
-Order of candidates (from earlier probe scripts):
+No such endpoint appears in the web app's URL map, and the web UI offers no
+way to swap a lesson's audio — audio arrives with the lesson at import time.
+Earlier probe candidates (`PATCH`/`PUT` on `lessons/{id}/`, `lessons/{id}/audio/`,
+`lessons/{id}/upload-audio/`) are unsupported by any observed client call and
+are not worth probing. Re-import the lesson instead.
 
-1. `PATCH /api/v3/{lang}/lessons/{id}/` (multipart `audio`).
-2. `PUT /api/v3/{lang}/lessons/{id}/` (multipart `audio`).
-3. `PATCH /api/v3/{lang}/lessons/{id}/audio/`.
-4. `POST /api/v3/{lang}/lessons/{id}/audio/`.
-5. `POST /api/v3/{lang}/lessons/{id}/upload-audio/`.
-
-Document the winner here when probed.
+*(Audio-only import is confirmed — see the section above.)*
 
 ## Error shapes (observed)
 

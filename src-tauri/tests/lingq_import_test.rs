@@ -30,7 +30,7 @@ async fn import_lesson_v2_posts_multipart_and_parses_id() {
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter 1",
-        text: "Hello world",
+        text: Some("Hello world"),
         audio: Some(audio.path()),
         level: 2,
         status: LessonStatus::Private,
@@ -60,7 +60,7 @@ async fn import_lesson_v2_retries_on_5xx_then_succeeds() {
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",
-        text: "hi",
+        text: Some("hi"),
         audio: None,
         level: 1,
         status: LessonStatus::Private,
@@ -84,7 +84,7 @@ async fn import_lesson_v2_exhausts_three_attempts_on_5xx() {
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",
-        text: "hi",
+        text: Some("hi"),
         audio: None,
         level: 1,
         status: LessonStatus::Private,
@@ -112,7 +112,7 @@ async fn import_lesson_v2_4xx_fails_fast() {
     let req = ImportLessonRequest {
         collection: CollectionId(1),
         title: "Chapter",
-        text: "hi",
+        text: Some("hi"),
         audio: None,
         level: 1,
         status: LessonStatus::Private,
@@ -124,4 +124,40 @@ async fn import_lesson_v2_4xx_fails_fast() {
         matches!(err, lingq_upload_lib::lingq::LingqError::BadRequest(_)),
         "got {err:?}"
     );
+}
+
+/// `text: None` must produce the transcribe-my-audio shape LingQ's own web
+/// importer sends: no `text` part, plus `duration` and `external_audio`.
+#[tokio::test]
+async fn import_lesson_v2_omits_text_and_adds_duration_when_audio_only() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/api/v3/ja/lessons/import/")
+        .match_body(mockito::Matcher::AllOf(vec![
+            mockito::Matcher::Regex(r#"name="duration""#.into()),
+            mockito::Matcher::Regex(r#"name="external_audio""#.into()),
+        ]))
+        .with_status(201)
+        .with_body(r#"{"pk":7}"#)
+        .create_async()
+        .await;
+
+    let client = LingqClient::with_base_url(SecretString::new("k".into()), ja(), server.url());
+    let mut audio = tempfile::Builder::new().suffix(".mp3").tempfile().unwrap();
+    audio.write_all(b"fake mp3 bytes").unwrap();
+
+    let id = client
+        .import_lesson_v2(ImportLessonRequest {
+            collection: CollectionId(1),
+            title: "Track 1",
+            text: None,
+            audio: Some(audio.path()),
+            level: 1,
+            status: LessonStatus::Private,
+            tags: &[],
+            save: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(id, 7);
 }

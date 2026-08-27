@@ -285,15 +285,16 @@
     busy
       ? false
       : isManual
-        ? !!textPath && audioPaths.length > 0 && !!lang.trim() && !!title.trim()
+        ? (!!textPath || audioPaths.length > 0) &&
+          !!lang.trim() &&
+          !!title.trim()
         : pickedCandidate !== null,
   );
 
   const createLabel = $derived.by(() => {
     if (busy) return "Creating…";
     if (!isManual) return pickedCandidate ? "Create" : "Pick a book to continue";
-    if (!textPath) return "Add the book file";
-    if (audioPaths.length === 0) return "Add the audio";
+    if (!textPath && audioPaths.length === 0) return "Add a book file or audio";
     if (!lang.trim()) return "Choose a language";
     if (!title.trim()) return "Name the project";
     return "Create";
@@ -321,10 +322,12 @@
   }
 
   function toTextSource(path: string): TextSource {
+    if (!path) return { kind: "missing" } as TextSource;
     return { kind: "epub", value: path } as TextSource;
   }
 
-  function toAudioSource(paths: string[]): AudioSource {
+  function toAudioSource(paths: string[]): AudioSource | null {
+    if (paths.length === 0) return null;
     if (paths.length === 1) {
       return { kind: "single_file", value: paths[0] } as AudioSource;
     }
@@ -345,7 +348,7 @@
         title: c.title,
       };
     }
-    if (!textPath || audioPaths.length === 0) return null;
+    if (!textPath && audioPaths.length === 0) return null;
     const c: Candidate = {
       source_id: source,
       title,
