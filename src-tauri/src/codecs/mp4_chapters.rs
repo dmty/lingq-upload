@@ -169,8 +169,8 @@ fn read_qt_chapters<R: Read + Seek>(
         if let Some(tref) = find_child(r, trak, *b"tref")? {
             if let Some(chap) = find_child(r, &tref, *b"chap")? {
                 let body = read_body(r, &chap)?;
-                for chunk in body.chunks_exact(4) {
-                    audio_chap_refs.push(u32::from_be_bytes(chunk.try_into().expect("len ok")));
+                for chunk in body.as_chunks::<4>().0 {
+                    audio_chap_refs.push(u32::from_be_bytes(*chunk));
                 }
                 break;
             }
