@@ -6,11 +6,11 @@ use symphonia::core::codecs::{Decoder, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
+use symphonia::core::meta::{MetadataOptions, StandardVisualKey};
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 
-use super::{AudioDecoder, AudioMetadata, PcmFrame, StreamInfo};
+use super::{AudioDecoder, AudioMetadata, EmbeddedCover, PcmFrame, StreamInfo};
 use crate::core::audio::AudioError;
 
 pub struct SymphoniaDecoder {
@@ -222,6 +222,38 @@ impl AudioMetadata for SymphoniaMetadata {
     fn probe_duration(path: &Path) -> Result<f64, AudioError> {
         let dec = SymphoniaDecoder::open(path)?;
         Ok(dec.info.duration_sec)
+    }
+
+    fn probe_cover(path: &Path) -> Result<Option<EmbeddedCover>, AudioError> {
+        let file = File::open(path).map_err(|e| AudioError::Io(e.to_string()))?;
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        let mut hint = Hint::new();
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            hint.with_extension(ext);
+        }
+        let probed = symphonia::default::get_probe()
+            .format(
+                &hint,
+                mss,
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            )
+            .map_err(|e| AudioError::Decode(format!("probe: {e}")))?;
+        let mut reader = probed.format;
+        let Some(rev) = reader.metadata().current().map(|r| r.visuals().to_vec()) else {
+            return Ok(None);
+        };
+        // A file can embed several images (front, back, author photo). Prefer
+        // the one tagged as the front cover; fall back to the first image
+        // rather than nothing, since many taggers leave the usage field unset.
+        let pick = rev
+            .iter()
+            .find(|v| v.usage == Some(StandardVisualKey::FrontCover))
+            .or_else(|| rev.first());
+        Ok(pick.map(|v| EmbeddedCover {
+            data: v.data.to_vec(),
+            media_type: v.media_type.clone(),
+        }))
     }
 }
 

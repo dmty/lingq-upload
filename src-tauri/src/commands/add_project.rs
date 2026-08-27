@@ -11,7 +11,7 @@ use crate::core::library::{candidate_to_id, rebuild_from_store, write_atomic, IN
 use crate::core::project::{Project, ProjectSettings, ProjectSources, SCHEMA_V1};
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
-use crate::ingest::{Candidate, TextSource};
+use crate::ingest::{audio_source_paths, Candidate, TextSource};
 
 /// Upper bound on copy-name allocation attempts. A book with 100 colliding
 /// titles in the store is almost certainly a bug, not a legitimate user state.
@@ -105,6 +105,39 @@ fn try_extract_epub_cover(project: &mut Project, store: &dyn ProjectStore) {
     }
 }
 
+/// If the project still has no cover, try the audio file's embedded art.
+/// Runs after the EPUB attempt so a book's own cover always wins. Soft-fails
+/// the same way: a project without a cover is still a usable project.
+fn try_extract_audio_cover(project: &mut Project, store: &dyn ProjectStore) {
+    if project.cover_path.is_some() {
+        return;
+    }
+    let Some(source) = project.sources.audio.as_ref() else {
+        return;
+    };
+    // First track only: the cover is a property of the book, and every file
+    // in a multi-part audiobook carries the same one.
+    let Some(first) = audio_source_paths(source).ok().and_then(|p| p.into_iter().next()) else {
+        return;
+    };
+    let Some(dest_dir) = store.project_dir(&project.id) else {
+        tracing::debug!(id = %project.id.join_key(), "store has no project_dir; skipping audio cover extraction");
+        return;
+    };
+    match crate::core::audio::cover::extract_to_dir(&first, &dest_dir) {
+        Ok(Some(path)) => {
+            tracing::debug!(path = %path.display(), "extracted audio cover");
+            project.cover_path = Some(path);
+        }
+        Ok(None) => {
+            tracing::debug!(audio = %first.display(), "no cover art in audio file");
+        }
+        Err(e) => {
+            tracing::warn!(audio = %first.display(), error = %e, "audio cover extraction failed; continuing without cover");
+        }
+    }
+}
+
 /// Build, optionally enrich with an extracted EPUB cover, and persist a
 /// project. Returns the persisted `Project`. Exposed for integration tests.
 pub fn add_project_impl(
@@ -115,6 +148,7 @@ pub fn add_project_impl(
 ) -> Result<Project, AppError> {
     let mut project = build_project(candidate, language, collection_title);
     try_extract_epub_cover(&mut project, store);
+    try_extract_audio_cover(&mut project, store);
     store
         .put(&project)
         .map_err(|e| AppError::Other(format!("store.put: {e}")))?;
@@ -155,6 +189,7 @@ fn enrich_and_persist(
 ) -> Result<ProjectId, AppError> {
     let id = project.id.clone();
     try_extract_epub_cover(project, store.as_ref());
+    try_extract_audio_cover(project, store.as_ref());
     persist_and_reindex(app, store, project)?;
     Ok(id)
 }

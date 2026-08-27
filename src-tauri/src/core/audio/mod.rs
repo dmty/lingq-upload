@@ -6,6 +6,7 @@ use thiserror::Error;
 
 pub mod batch;
 pub mod carver;
+pub mod cover;
 pub mod probe;
 pub mod track;
 
