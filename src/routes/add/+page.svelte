@@ -130,6 +130,8 @@
     if (!additions.length) return;
     audioPaths = [...audioPaths, ...additions];
     audioOriginFolder = null;
+    // An audio-only project has no book filename to name itself after.
+    if (!title) title = filenameStem(additions[0]);
   }
 
   function assignToZone(zone: "text" | "audio", paths: string[]) {
@@ -431,7 +433,8 @@
     <StepIndicator current={1} />
     <h1 class="text-lg font-semibold text-fg">Add Project</h1>
     <p class="mt-1 text-sm text-fg-muted">
-      Pick a source, a book, and audio. Collection is created automatically.
+      Pick a source, then a book, audio, or both. Collection is created
+      automatically.
     </p>
   </header>
 
