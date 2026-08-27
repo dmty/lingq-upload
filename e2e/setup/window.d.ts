@@ -81,6 +81,8 @@ declare global {
     __collections__?: Collection[];
     __languages__?: Language[];
     __openedUrl__?: string;
+    // What the cover editor last handed to cmd_set_cover_bytes.
+    __savedCover__?: { ext: string; byteLength: number };
     __lingqKey__?: string | null;
 
     // Project fixtures.

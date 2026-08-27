@@ -126,6 +126,7 @@ pub fn candidate_to_project(c: &Candidate) -> Project {
         completed_lesson_ids: vec![],
         matcher_decision: None,
         cover_path: c.cover_path.clone(),
+        cover_original_path: None,
         authors: c.authors.clone(),
         series: c.series.clone(),
         lingq_collection_id: None,

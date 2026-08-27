@@ -254,6 +254,16 @@ export function tauriStub(workerIndex: number): void {
       return null;
     },
     cmd_set_cover: () => null,
+    // Records the encoded crop so specs can assert on what the editor
+    // produced, not merely that the command fired.
+    cmd_set_cover_bytes: (args) => {
+      const ext = (args && args.ext) || "jpg";
+      window.__savedCover__ = {
+        ext,
+        byteLength: ((args && args.bytes) || []).length,
+      };
+      return { cover: "/projects/stub/cover." + ext, original: null };
+    },
     "plugin:dialog|open": () => window.__dialogPickPath__ ?? null,
     // Records the URL passed to openUrl() so specs can assert on it
     // directly, rather than only checking that the trigger element exists.
@@ -707,6 +717,11 @@ export function tauriStub(workerIndex: number): void {
       callbacks["_" + id] = cb;
       return id;
     },
-    convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
+    // A fixture cover is a data: URL so the browser can actually decode it;
+    // pass those through, since asset:// would never load under Vite.
+    convertFileSrc: (p) =>
+      /^(data|blob|https?):/.test(p)
+        ? p
+        : "asset://localhost/" + encodeURIComponent(p),
   };
 }

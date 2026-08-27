@@ -53,6 +53,7 @@ fn make_project(id: ProjectId, title: &str) -> Project {
         completed_lesson_ids: vec![],
         matcher_decision: None,
         cover_path: None,
+        cover_original_path: None,
         authors: vec![],
         series: None,
         lingq_collection_id: None,

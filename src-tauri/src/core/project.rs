@@ -113,6 +113,10 @@ pub struct Project {
     pub matcher_decision: Option<MatcherDecision>,
     #[serde(default)]
     pub cover_path: Option<PathBuf>,
+    /// Pre-crop cover, kept so the crop editor always works from the full
+    /// image instead of re-cropping its own lossy output.
+    #[serde(default)]
+    pub cover_original_path: Option<PathBuf>,
     #[serde(default)]
     pub authors: Vec<String>,
     #[serde(default)]
@@ -194,6 +198,7 @@ impl Project {
             completed_lesson_ids: vec![],
             matcher_decision: None,
             cover_path: None,
+            cover_original_path: None,
             authors: vec![],
             series: None,
             lingq_collection_id: None,

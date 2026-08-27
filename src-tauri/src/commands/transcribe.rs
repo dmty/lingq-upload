@@ -346,6 +346,7 @@ fn detection_inputs_unchanged(resolved: &Project, current: &Project) -> bool {
         queue_cursor: _,
         completed_lesson_ids: _,
         cover_path: _,
+        cover_original_path: _,
         authors: _,
         series: _,
         lingq_collection_id: _,

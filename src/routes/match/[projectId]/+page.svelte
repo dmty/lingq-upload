@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
@@ -28,6 +29,7 @@
   import ProjectSettings from "$lib/components/ProjectSettings.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import { mapping } from "$lib/stores/mapping.svelte";
+  import CoverEditor from "$lib/components/CoverEditor.svelte";
   import CoverThumb from "$lib/components/CoverThumb.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
@@ -87,7 +89,26 @@
   let audioDropEl = $state<HTMLButtonElement | null>(null);
   let localHover = $state(false);
   let coverPath = $state<string | null>(null);
+  let coverOriginalPath = $state<string | null>(null);
   let coverUse = $state(true);
+  let coverEditorOpen = $state(false);
+  let coverButton = $state<HTMLElement | null>(null);
+  // The cover sidecar keeps its filename across edits, so the asset URL needs
+  // a version to defeat the webview's image cache after a crop.
+  let coverVersion = $state(0);
+  const coverDisplayUrl = $derived(
+    coverPath ? `${convertFileSrc(coverPath)}?v=${coverVersion}` : null,
+  );
+  // Crop the pre-crop image where one was kept, so repeated crops re-cut the
+  // full picture instead of the previous crop's output.
+  const coverEditUrl = $derived(
+    coverOriginalPath
+      ? `${convertFileSrc(coverOriginalPath)}?v=${coverVersion}`
+      : coverDisplayUrl,
+  );
+  const coverExt = $derived(
+    /\.([a-z0-9]+)$/i.exec(coverOriginalPath ?? coverPath ?? "")?.[1] ?? "jpg",
+  );
   let authors = $state<string[]>([]);
   let bookTitle = $state<string>("");
 
@@ -151,6 +172,7 @@
     const project = loaded.data;
     hasText = project.sources.text.kind !== "missing";
     coverPath = project.cover_path ?? null;
+    coverOriginalPath = project.cover_original_path ?? null;
     coverUse = project.cover_use ?? true;
     authors = project.authors ?? [];
     bookTitle = project.settings.collection_title;
@@ -254,6 +276,8 @@
     replaceError = null;
     localHover = false;
     coverPath = null;
+    coverOriginalPath = null;
+    coverEditorOpen = false;
     coverUse = true;
     authors = [];
     bookTitle = "";
@@ -637,11 +661,26 @@
         return;
       }
       coverPath = picked;
+      coverOriginalPath = null;
+      coverVersion += 1;
       coverUse = true;
       await commands.cmdSetCoverUse(projectIdValue, true);
     } finally {
       coverBusy = false;
     }
+  }
+
+  async function saveCroppedCover(blob: Blob, ext: string) {
+    if (!projectIdValue) return;
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    const res = await commands.cmdSetCoverBytes(projectIdValue, bytes, ext);
+    if (res.status === "error") {
+      throw new Error(appErrorMessage(res.error));
+    }
+    coverPath = res.data.cover;
+    coverOriginalPath = res.data.original;
+    coverVersion += 1;
+    coverEditorOpen = false;
   }
 
   async function onToggleCoverUse(evt: Event) {
@@ -658,6 +697,8 @@
       const res = await commands.cmdSetCover(projectIdValue, null);
       if (res.status === "ok") {
         coverPath = null;
+        coverOriginalPath = null;
+        coverVersion += 1;
         coverUse = false;
         await commands.cmdSetCoverUse(projectIdValue, false);
       }
@@ -756,7 +797,41 @@
       <header class="flex items-start justify-between gap-3">
         <div class="flex items-start gap-3">
           <div data-testid="match-cover">
-            <CoverThumb {coverPath} title={bookTitle} />
+            {#if coverPath}
+              <button
+                type="button"
+                bind:this={coverButton}
+                data-testid="cover-open-editor"
+                class="cover-open relative block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                aria-label="View the cover full size and crop it"
+                title="View and crop cover"
+                onclick={() => (coverEditorOpen = true)}
+              >
+                <CoverThumb
+                  {coverPath}
+                  imageUrl={coverDisplayUrl}
+                  title={bookTitle}
+                />
+                <span
+                  class="scrim absolute inset-0 grid place-items-center rounded-sm bg-black/45 opacity-0 transition-opacity duration-120 ease-snappy"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="#fff"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 2v15h15" />
+                    <path d="M2 7h15v15" />
+                  </svg>
+                </span>
+              </button>
+            {:else}
+              <CoverThumb {coverPath} title={bookTitle} />
+            {/if}
           </div>
           <div class="min-w-0">
             <StepIndicator current={2} />
@@ -1070,10 +1145,25 @@
   </section>
 </div>
 
+<CoverEditor
+  open={coverEditorOpen}
+  src={coverEditUrl}
+  title={bookTitle}
+  sourceExt={coverExt}
+  onCancel={() => (coverEditorOpen = false)}
+  onSave={saveCroppedCover}
+  returnFocusTo={coverButton}
+/>
+
 <style>
   .match-body {
     display: flex;
     align-items: flex-start;
     min-height: 0;
+  }
+
+  .cover-open:hover .scrim,
+  .cover-open:focus-visible .scrim {
+    opacity: 1;
   }
 </style>

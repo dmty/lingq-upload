@@ -251,6 +251,34 @@ pub async fn cmd_set_cover(
 
 const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
 
+/// Basename of the pre-crop cover kept beside `cover.{ext}`.
+const ORIGINAL_STEM: &str = "cover-original";
+
+fn checked_ext(path: &std::path::Path) -> Result<String, AppError> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| AppError::Unsupported("cover image path has no extension".into()))?
+        .to_ascii_lowercase();
+    if COVER_EXTS.contains(&ext.as_str()) {
+        Ok(ext)
+    } else {
+        Err(AppError::Unsupported(format!(
+            "unsupported cover image extension: {ext}"
+        )))
+    }
+}
+
+/// Delete every `{stem}.{ext}` sidecar except `keep`.
+fn purge_sidecars(dir: &std::path::Path, stem: &str, keep: Option<&std::path::Path>) {
+    for ext in COVER_EXTS {
+        let cand = dir.join(format!("{stem}.{ext}"));
+        if Some(cand.as_path()) != keep && cand.exists() {
+            let _ = std::fs::remove_file(&cand);
+        }
+    }
+}
+
 pub fn set_cover_impl(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
@@ -265,30 +293,9 @@ pub fn set_cover_impl(
     let new_path: Option<std::path::PathBuf> = match cover_path {
         Some(src_str) => {
             let src = std::path::PathBuf::from(&src_str);
-            let ext = match src.extension().and_then(|e| e.to_str()) {
-                Some(e) => e.to_ascii_lowercase(),
-                None => {
-                    return Err(AppError::Unsupported(
-                        "cover image path has no extension".into(),
-                    ))
-                }
-            };
-            let ext = match ext.as_str() {
-                "jpg" | "jpeg" | "png" | "webp" => ext,
-                other => {
-                    return Err(AppError::Unsupported(format!(
-                        "unsupported cover image extension: {other}"
-                    )))
-                }
-            };
+            let ext = checked_ext(&src)?;
             let dst = project_dir.join(format!("cover.{ext}"));
-            // Remove any prior sidecar at a different extension.
-            for prior in COVER_EXTS {
-                let cand = project_dir.join(format!("cover.{prior}"));
-                if cand != dst && cand.exists() {
-                    let _ = std::fs::remove_file(&cand);
-                }
-            }
+            purge_sidecars(&project_dir, "cover", Some(&dst));
             // Copy into project dir unless src is already that exact path.
             if src != dst {
                 std::fs::copy(&src, &dst)
@@ -297,19 +304,17 @@ pub fn set_cover_impl(
             Some(dst)
         }
         None => {
-            for prior in COVER_EXTS {
-                let cand = project_dir.join(format!("cover.{prior}"));
-                if cand.exists() {
-                    let _ = std::fs::remove_file(&cand);
-                }
-            }
+            purge_sidecars(&project_dir, "cover", None);
             None
         }
     };
+    // A freshly picked (or cleared) cover makes any kept original meaningless.
+    purge_sidecars(&project_dir, ORIGINAL_STEM, None);
 
     store
         .update(project_id, &mut |p| {
             p.cover_path = new_path.clone();
+            p.cover_original_path = None;
             p.cover_uploaded_to_lingq = false;
         })
         .map_err(|e| match e {
@@ -317,6 +322,106 @@ pub fn set_cover_impl(
             other => AppError::Other(format!("store.update: {other}")),
         })?;
     Ok(())
+}
+
+/// Where the cover lives after a crop: the visible image, plus the pre-crop
+/// original the next crop re-cuts from.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct CoverPaths {
+    pub cover: String,
+    pub original: Option<String>,
+}
+
+/// Write already-encoded image bytes as the project's cover — the crop
+/// editor's save path. The cover being replaced is promoted to
+/// `cover-original.{ext}` the first time, so later crops re-cut the full
+/// image rather than compounding the previous crop's re-encode loss.
+///
+/// Unlike `cmd_set_cover` this leaves `cover_use` alone: a crop edits the
+/// cover the user already chose, it does not choose a new one.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_set_cover_bytes(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    bytes: Vec<u8>,
+    ext: String,
+) -> Result<CoverPaths, AppError> {
+    set_cover_bytes_impl(store.inner().as_ref(), &project_id, bytes, &ext)
+}
+
+pub fn set_cover_bytes_impl(
+    store: &dyn ProjectStore,
+    project_id: &ProjectId,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> Result<CoverPaths, AppError> {
+    if bytes.is_empty() {
+        return Err(AppError::Unsupported("cover image is empty".into()));
+    }
+    let ext = ext.to_ascii_lowercase();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::Unsupported(format!(
+            "unsupported cover image extension: {ext}"
+        )));
+    }
+    let project_dir = store
+        .project_dir(project_id)
+        .ok_or_else(|| AppError::Other("store has no filesystem backing".into()))?;
+    std::fs::create_dir_all(&project_dir)
+        .map_err(|e| AppError::Other(format!("create project dir: {e}")))?;
+    let dst = project_dir.join(format!("cover.{ext}"));
+
+    // Promote-then-write inside the closure so it shares the store's
+    // per-project lock with the field update (no TOCTOU against a concurrent
+    // set_cover landing between the read and the write).
+    let mut io_err: Option<String> = None;
+    let mut original: Option<std::path::PathBuf> = None;
+    store
+        .update(project_id, &mut |p| {
+            let kept = match p.cover_original_path.clone() {
+                Some(o) if o.exists() => Some(o),
+                _ => match p.cover_path.clone() {
+                    Some(cur) if cur.exists() => match checked_ext(&cur) {
+                        Ok(cur_ext) => {
+                            let o = project_dir.join(format!("{ORIGINAL_STEM}.{cur_ext}"));
+                            purge_sidecars(&project_dir, ORIGINAL_STEM, Some(&o));
+                            match std::fs::rename(&cur, &o) {
+                                Ok(()) => Some(o),
+                                Err(e) => {
+                                    io_err = Some(format!("keep original cover: {e}"));
+                                    return;
+                                }
+                            }
+                        }
+                        // Cover with an extension we cannot name; crop still
+                        // saves, there is just nothing to re-crop from later.
+                        Err(_) => None,
+                    },
+                    _ => None,
+                },
+            };
+            purge_sidecars(&project_dir, "cover", None);
+            if let Err(e) = std::fs::write(&dst, &bytes) {
+                io_err = Some(format!("write cover: {e}"));
+                return;
+            }
+            p.cover_path = Some(dst.clone());
+            p.cover_original_path = kept.clone();
+            p.cover_uploaded_to_lingq = false;
+            original = kept;
+        })
+        .map_err(|e| match e {
+            StoreError::NotFound { key } => AppError::Other(format!("project not found: {key}")),
+            other => AppError::Other(format!("store.update: {other}")),
+        })?;
+    if let Some(msg) = io_err {
+        return Err(AppError::Other(msg));
+    }
+    Ok(CoverPaths {
+        cover: dst.to_string_lossy().into_owned(),
+        original: original.map(|p| p.to_string_lossy().into_owned()),
+    })
 }
 
 /// Toggle whether the project's cover should be pushed to LingQ on the

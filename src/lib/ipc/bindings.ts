@@ -495,6 +495,23 @@ async cmdSetCover(projectId: ProjectId, coverPath: string | null) : Promise<Resu
 }
 },
 /**
+ * Write already-encoded image bytes as the project's cover — the crop
+ * editor's save path. The cover being replaced is promoted to
+ * `cover-original.{ext}` the first time, so later crops re-cut the full
+ * image rather than compounding the previous crop's re-encode loss.
+ * 
+ * Unlike `cmd_set_cover` this leaves `cover_use` alone: a crop edits the
+ * cover the user already chose, it does not choose a new one.
+ */
+async cmdSetCoverBytes(projectId: ProjectId, bytes: number[], ext: string) : Promise<Result<CoverPaths, AppError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cmd_set_cover_bytes", { projectId, bytes, ext }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Toggle whether the project's cover should be pushed to LingQ on the
  * next lesson upload.
  */
@@ -662,6 +679,11 @@ export type Collection = { id: number; title: string }
 export type CollectionDetail = { id: number; title: string; description: string | null; level: string | null; duration: number | null; lessons_count: number | null; new_words_count: number | null; image_url: string | null; status: string | null; roses_count: number | null; views_count: number | null }
 export type ConflictResolution = "replace" | "skip" | "new_project"
 export type CourseView = { collection: CollectionDetail; lessons: LessonStat[] }
+/**
+ * Where the cover lives after a crop: the visible image, plus the pre-crop
+ * original the next crop re-cuts from.
+ */
+export type CoverPaths = { cover: string; original: string | null }
 export type CreateProjectResult = { status: "created"; id: ProjectId } | { status: "conflict"; existing: ProjectId; conflict_title: string }
 export type DetectStartResult = { kind: "detected"; preview: DetectionPreview } | { kind: "low_confidence"; transcript_head_preview: string | null; transcript_tail_preview: string | null; top_head: ChapterCandidate[]; top_tail: ChapterCandidate[] } | { kind: "no_transcript"; reason: NoTranscriptReason }
 export type DetectedRange = { start_chapter_id: ChapterId; end_chapter_id: ChapterId }
@@ -736,7 +758,12 @@ export type NoTranscriptReason = "empty" | "insufficient_audio" | "content_poor"
  */
 export type PlanStep = { chapter_index: number; title: string; degraded: boolean }
 export type PricingHintDto = { summary: string; estimated_usd_per_minute: number | null; free_tier_eligible: boolean; docs_url: string }
-export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
+export type Project = { schema_version?: number; id: ProjectId; sources: ProjectSources; settings: ProjectSettings; receipts?: ChapterReceipt[]; queue_cursor?: number; completed_lesson_ids?: number[]; matcher_decision?: MatcherDecision | null; cover_path?: string | null; 
+/**
+ * Pre-crop cover, kept so the crop editor always works from the full
+ * image instead of re-cropping its own lossy output.
+ */
+cover_original_path?: string | null; authors?: string[]; series?: SeriesRef | null; lingq_collection_id?: number | null; last_activity_at?: string | null; stage?: ProjectStage; last_transition_at?: string | null; 
 /**
  * Chapter ids the user opted out of uploading. Replaced wholesale
  * by `ProjectStore::set_selection`. A chapter already uploaded
