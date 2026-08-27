@@ -6,12 +6,12 @@ use specta::Type;
 use crate::core::audio::AbsorbPolicy;
 use crate::core::epub::{parse_epub, Chapter, ChapterId, ChapterKind};
 use crate::core::identity::ProjectId;
-use crate::core::job::{plan_preview, PlanStep};
+use crate::core::job::{plan_preview, resolve_audio_tracks, PlanStep};
 use crate::core::project::{filter_cover_chapter, Project};
 use crate::core::store::{ProjectStore, StoreError};
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
-use crate::ingest::{audio_source_paths, TextSource};
+use crate::ingest::TextSource;
 
 /// Picker-facing projection of [`Chapter`] without the body. Picker rows only
 /// need identity + label + kind; shipping the body over IPC would cost tens
@@ -91,11 +91,11 @@ pub async fn cmd_project_chapters(
     store: tauri::State<'_, Arc<dyn ProjectStore>>,
     project_id: ProjectId,
 ) -> Result<Vec<ChapterMeta>, AppError> {
-    project_chapters_impl(&**store, &project_id)
+    project_chapters_impl(&**store, &project_id).await
 }
 
 /// Tauri-agnostic core used by [`cmd_project_chapters`] and integration tests.
-pub fn project_chapters_impl(
+pub async fn project_chapters_impl(
     store: &dyn ProjectStore,
     project_id: &ProjectId,
 ) -> Result<Vec<ChapterMeta>, AppError> {
@@ -125,30 +125,37 @@ pub fn project_chapters_impl(
             .collect()),
         // Audio-only: the tracks are the selectable units, so the picker
         // lists one row per track and `skipped_chapters` gates them by order.
-        TextSource::Missing => Ok(audio_track_chapters(&project)),
+        TextSource::Missing => audio_track_chapters(&project).await,
     }
 }
 
 /// One `ChapterMeta` per audio track, order-indexed so a `ChapterId` maps
 /// straight back to a track position. Used when the project has no text.
-fn audio_track_chapters(project: &Project) -> Vec<ChapterMeta> {
-    let Some(source) = project.sources.audio.as_ref() else {
-        return Vec::new();
-    };
-    let paths = audio_source_paths(source).unwrap_or_default();
-    paths
+///
+/// Resolved through `resolve_audio_tracks` — the same function the upload plan
+/// uses — because one file can expand into many tracks (m4b chapter atoms).
+/// Listing raw file paths here would number the rows differently from the plan
+/// and make a skip land on the wrong track.
+async fn audio_track_chapters(project: &Project) -> Result<Vec<ChapterMeta>, AppError> {
+    let tracks = resolve_audio_tracks(project).await?;
+    Ok(tracks
         .iter()
         .enumerate()
-        .map(|(i, p)| ChapterMeta {
+        .map(|(i, t)| ChapterMeta {
             id: ChapterId::from_order(i),
             order: i,
-            title: p
-                .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
+            title: t
+                .title
+                .clone()
+                .or_else(|| {
+                    t.path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                })
                 .unwrap_or_else(|| format!("Track {}", i + 1)),
             kind: ChapterKind::default(),
         })
-        .collect()
+        .collect())
 }
 
 /// Return one chapter's body on demand. The list projection (`ChapterMeta`) is

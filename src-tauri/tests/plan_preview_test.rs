@@ -213,7 +213,7 @@ async fn plan_preview_leftover_index_survives_a_cover_filtered_chapter_set() {
     let project_id = project.id.clone();
     store.put(&project).unwrap();
 
-    let chapters = project_chapters_impl(&store, &project_id).unwrap();
+    let chapters = project_chapters_impl(&store, &project_id).await.unwrap();
     assert_eq!(chapters.len(), 1, "cover.xhtml must be filtered out");
     assert_eq!(
         chapters[0].order, 1,

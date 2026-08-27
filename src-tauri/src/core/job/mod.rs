@@ -648,6 +648,13 @@ pub async fn plan_preview(
     }
 }
 
+/// Body for a degraded lesson carved out of a track that no chapter claimed.
+/// A single space, not `None`: omitting the text would make LingQ transcribe
+/// the track and bill the account's Premium transcription quota, which is not
+/// what a leftover track inside a text+audio project asked for. Only a project
+/// with no text at all opts into transcription.
+const FILLER_TEXT: &str = " ";
+
 fn step_for_chapter(chapter: &Chapter, track_index: Option<usize>) -> Step {
     Step {
         chapter_index: chapter.order,
@@ -1227,7 +1234,7 @@ fn plan_from_mapping(
             track_index: Some(k),
             degraded: true,
             title: audio_only_title(track, k),
-            text: None,
+            text: Some(FILLER_TEXT.to_string()),
         });
     }
     PlanOrPause::Plan(Plan { steps })
@@ -1310,7 +1317,7 @@ fn plan_from_decision(
                     track_index: Some(k),
                     degraded: true,
                     title: audio_only_title(track, k),
-                    text: None,
+                    text: Some(FILLER_TEXT.to_string()),
                 });
             }
             PlanOrPause::Plan(Plan { steps })
@@ -1380,7 +1387,7 @@ fn plan_from_decision(
                             track_index: Some(bucket_index),
                             degraded: true,
                             title,
-                            text: None,
+                            text: Some(FILLER_TEXT.to_string()),
                         }
                     } else {
                         let slice = &chapters[bucket.text_range.clone()];
@@ -1815,8 +1822,9 @@ mod tests {
         assert!(audio_only.degraded);
         assert_eq!(audio_only.track_index, Some(1));
         assert_eq!(
-            audio_only.text, None,
-            "audio-only lesson omits text so LingQ transcribes it"
+            audio_only.text.as_deref(),
+            Some(FILLER_TEXT),
+            "a leftover track in a text project must not spend transcription quota"
         );
     }
 

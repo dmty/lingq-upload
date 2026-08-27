@@ -51,14 +51,14 @@ fn make_epub_project(cover_source_href: Option<&str>) -> Project {
 
 /// When `cover_source_href` is set, the cover XHTML must not appear in the
 /// chapter list returned to the UI picker.
-#[test]
-fn project_chapters_suppresses_cover_xhtml() {
+#[tokio::test]
+async fn project_chapters_suppresses_cover_xhtml() {
     let store = InMemoryProjectStore::default();
     let project = make_epub_project(Some("cover.xhtml"));
     let id = project.id.clone();
     store.put(&project).unwrap();
 
-    let chapters = project_chapters_impl(&store, &id).unwrap();
+    let chapters = project_chapters_impl(&store, &id).await.unwrap();
     let has_cover = chapters
         .iter()
         .any(|c| c.title.to_lowercase().contains("cover"));
@@ -70,14 +70,14 @@ fn project_chapters_suppresses_cover_xhtml() {
 }
 
 /// Without `cover_source_href` the chapter list is unfiltered (control case).
-#[test]
-fn project_chapters_unfiltered_when_no_cover_href() {
+#[tokio::test]
+async fn project_chapters_unfiltered_when_no_cover_href() {
     let store = InMemoryProjectStore::default();
     let project = make_epub_project(None);
     let id = project.id.clone();
     store.put(&project).unwrap();
 
-    let chapters = project_chapters_impl(&store, &id).unwrap();
+    let chapters = project_chapters_impl(&store, &id).await.unwrap();
     // guide-xhtml-img.epub has cover.xhtml + chapter1.xhtml in spine — expect ≥2
     assert!(
         chapters.len() >= 2,
@@ -96,7 +96,7 @@ async fn chapter_text_suppresses_cover_chapter() {
     let project_no_filter = make_epub_project(None);
     let id_no_filter = project_no_filter.id.clone();
     store.put(&project_no_filter).unwrap();
-    let chapters_all = project_chapters_impl(&store, &id_no_filter).unwrap();
+    let chapters_all = project_chapters_impl(&store, &id_no_filter).await.unwrap();
     assert!(
         chapters_all.len() >= 2,
         "fixture must have at least 2 chapters (cover + body)"
