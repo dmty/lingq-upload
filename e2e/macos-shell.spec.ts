@@ -229,11 +229,14 @@ test.describe("source list sidebar", () => {
 });
 
 test.describe("toolbar history controls", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+  });
+
   test("Back and Forward start disabled on a fresh visit", async ({
     page,
   }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
     const toolbar = page.getByTestId("app-toolbar");
     await expect(toolbar.getByRole("button", { name: "Back" })).toBeDisabled();
     await expect(
@@ -242,8 +245,6 @@ test.describe("toolbar history controls", () => {
   });
 
   test("Back and Forward traverse toolbar navigation", async ({ page }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
     const toolbar = page.getByTestId("app-toolbar");
     const back = toolbar.getByRole("button", { name: "Back" });
     const forward = toolbar.getByRole("button", { name: "Forward" });
@@ -265,8 +266,6 @@ test.describe("toolbar history controls", () => {
   test("Back, Forward, title and trailing actions keep a stable left-to-right order", async ({
     page,
   }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
     const toolbar = page.getByTestId("app-toolbar");
     await toolbar.getByRole("link", { name: "Add project" }).click();
     await expect(page).toHaveURL(/\/add$/);
@@ -287,8 +286,6 @@ test.describe("toolbar history controls", () => {
   test("a long title truncates without moving the trailing actions", async ({
     page,
   }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
     const toolbar = page.getByTestId("app-toolbar");
     const addBefore = await toolbar
       .getByRole("link", { name: "Add project" })
@@ -317,8 +314,6 @@ test.describe("toolbar history controls", () => {
   test("collapsing the sidebar clears the traffic lights and floating toggle for the leading controls", async ({
     page,
   }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
     const toolbar = page.getByTestId("app-toolbar");
     const floatingToggle = page.getByTestId("sidebar-floating-toggle");
     const back = toolbar.getByRole("button", { name: "Back" });
