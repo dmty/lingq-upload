@@ -20,7 +20,14 @@ function canGoBack(): boolean {
 }
 
 function canGoForward(): boolean {
-  return index >= 0 && index < entries.length - 1;
+  return index < entries.length - 1;
+}
+
+async function travel(next: number): Promise<void> {
+  index = next;
+  suppressedUrl = entries[next];
+  await goto(entries[next], { replaceState: true });
+  suppressedUrl = null;
 }
 
 export const navigationHistory = {
@@ -40,17 +47,9 @@ export const navigationHistory = {
     index = entries.length - 1;
   },
   async goBack(): Promise<void> {
-    if (!canGoBack()) return;
-    index -= 1;
-    suppressedUrl = entries[index];
-    await goto(entries[index], { replaceState: true });
-    suppressedUrl = null;
+    if (canGoBack()) await travel(index - 1);
   },
   async goForward(): Promise<void> {
-    if (!canGoForward()) return;
-    index += 1;
-    suppressedUrl = entries[index];
-    await goto(entries[index], { replaceState: true });
-    suppressedUrl = null;
+    if (canGoForward()) await travel(index + 1);
   },
 };
