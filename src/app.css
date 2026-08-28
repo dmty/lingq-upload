@@ -287,11 +287,11 @@
   transition: background-color 120ms var(--ease-snappy);
 }
 
-.toolbar-action:hover {
+.toolbar-action:not(:disabled):hover {
   background: color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 
-.toolbar-action:active {
+.toolbar-action:not(:disabled):active {
   background: color-mix(in srgb, var(--color-fg) 12%, transparent);
 }
 
@@ -300,15 +300,15 @@
   outline-offset: -2px;
 }
 
-:root[data-window-inactive] .toolbar-action {
+:root[data-window-inactive] .toolbar-action:not(:disabled) {
   color: var(--color-fg-muted);
 }
 
 /* A connected NSSegmentedControl-style pair: shared border around both
    buttons, a hairline divider between them, radius only on the outer
    corners. Hover/pressed/focus/inactive-window colour all come from
-   .toolbar-action above — this only adds the pair geometry and disabled
-   contrast, which .toolbar-action has no notion of (it's only ever an <a>). */
+   .toolbar-action above, which skips its interactive states while disabled —
+   this only adds the pair geometry and the disabled contrast. */
 .toolbar-history {
   display: flex;
   flex: none;
@@ -336,10 +336,6 @@
 .toolbar-history-btn:disabled {
   color: var(--color-fg-subtle);
   cursor: not-allowed;
-}
-
-.toolbar-history-btn:disabled:hover {
-  background: transparent;
 }
 
 /* With the sidebar collapsed the content column spans the full window and
