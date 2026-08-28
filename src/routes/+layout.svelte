@@ -16,19 +16,11 @@
 
   const isActive = (path: string) => page.url.pathname.startsWith(path);
 
-  const librarySection = {
-    href: "/library",
-    label: "Library",
-    icon: "M3 4h10v8H3z M3 7h10 M3 10h10",
-  };
-  const settingsSection = {
-    href: "/settings",
-    label: "Settings",
-    icon:
-      "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
-      " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
-      " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99",
-  };
+  const libraryIcon = "M3 4h10v8H3z M3 7h10 M3 10h10";
+  const settingsIcon =
+    "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
+    " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
+    " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99";
 
   // Static per-route fallback until a route publishes its own title via
   // toolbarTitle.set — routes with no fallback (course/match/run) render an
@@ -194,6 +186,22 @@
   </svg>
 {/snippet}
 
+{#snippet icon(d: string, linejoin?: "round")}
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.3"
+    stroke-linecap="round"
+    stroke-linejoin={linejoin}
+    aria-hidden="true"
+  >
+    <path {d} />
+  </svg>
+{/snippet}
+
 <div
   class="app-shell"
   class:dragging={isDragging}
@@ -227,42 +235,20 @@
     </div>
     <nav aria-label="Sections" class="flex flex-1 flex-col gap-[2px]">
       <a
-        href={librarySection.href}
+        href="/library"
         class="source-row"
-        aria-current={isActive(librarySection.href) ? "page" : undefined}
+        aria-current={isActive("/library") ? "page" : undefined}
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d={librarySection.icon} />
-        </svg>
-        {librarySection.label}
+        {@render icon(libraryIcon)}
+        Library
       </a>
       <a
-        href={settingsSection.href}
+        href="/settings"
         class="source-row mt-auto"
-        aria-current={isActive(settingsSection.href) ? "page" : undefined}
+        aria-current={isActive("/settings") ? "page" : undefined}
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d={settingsSection.icon} />
-        </svg>
-        {settingsSection.label}
+        {@render icon(settingsIcon)}
+        Settings
       </a>
     </nav>
   </div>
@@ -293,19 +279,7 @@
           disabled={!navigationHistory.canGoBack}
           onclick={() => navigationHistory.goBack()}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M10 3L6 8l4 5" />
-          </svg>
+          {@render icon("M10 3L6 8l4 5", "round")}
         </button>
         <button
           type="button"
@@ -315,19 +289,7 @@
           disabled={!navigationHistory.canGoForward}
           onclick={() => navigationHistory.goForward()}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M6 3l4 5-4 5" />
-          </svg>
+          {@render icon("M6 3l4 5-4 5", "round")}
         </button>
       </div>
       <h1 class="toolbar-title" title={resolvedTitle}>{resolvedTitle}</h1>
@@ -337,18 +299,7 @@
         aria-label="Add project"
         title="Add project (⌘N)"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d="M8 3v10 M3 8h10" />
-        </svg>
+        {@render icon("M8 3v10 M3 8h10")}
       </a>
       <a
         href="/upload"
@@ -356,18 +307,7 @@
         aria-label="Quick upload"
         title="Quick upload (⌘⇧U)"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d="M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5" />
-        </svg>
+        {@render icon("M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5")}
       </a>
     </div>
 
