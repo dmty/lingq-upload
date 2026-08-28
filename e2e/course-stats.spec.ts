@@ -117,10 +117,11 @@ test.describe("course screen", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Kafka on the Shore",
-      }),
+      page.getByTestId("toolbar-title"),
     ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText(
+      "Kafka on the Shore",
+    );
     await expect(page.getByTestId("course-header")).toContainText(
       "Haruki Murakami",
     );

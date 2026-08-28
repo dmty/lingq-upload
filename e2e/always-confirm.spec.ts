@@ -73,10 +73,9 @@ test.describe("always-confirm flow", () => {
     await page.goto("/run/proj-guard");
     await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
     await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Guard Book",
-      }),
+      page.getByTestId("toolbar-title"),
     ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Guard Book");
     await expect(
       page.getByRole("link", { name: "← Library" }),
     ).toHaveCount(0);
@@ -136,10 +135,9 @@ test.describe("always-confirm flow", () => {
     await expect(page.getByTestId("match-title")).toBeVisible();
     await expect(page.getByText("Resolve mismatch")).toHaveCount(0);
     await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Seeded Book",
-      }),
+      page.getByTestId("toolbar-title"),
     ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Seeded Book");
     await expect(
       page.getByRole("link", { name: "← Library" }),
     ).toHaveCount(0);

@@ -292,7 +292,15 @@
           {@render icon("M6 3l4 5-4 5", "round")}
         </button>
       </div>
-      <h1 class="toolbar-title" title={resolvedTitle}>{resolvedTitle}</h1>
+      <!-- Not a heading: each route body owns its single semantic h1. Also
+           kept non-interactive so it stays part of the window drag region. -->
+      <div
+        class="toolbar-title"
+        data-testid="toolbar-title"
+        title={resolvedTitle}
+      >
+        {resolvedTitle}
+      </div>
       <a
         href="/add"
         class="toolbar-action"

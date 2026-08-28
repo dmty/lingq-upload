@@ -272,6 +272,8 @@
   margin-inline-end: auto;
   font-size: var(--text-base);
   font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .toolbar-action {

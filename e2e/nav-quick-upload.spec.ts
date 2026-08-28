@@ -6,9 +6,10 @@ test.describe("quick upload promotion", () => {
     const toolbar = page.getByTestId("app-toolbar");
     await toolbar.getByRole("link", { name: "Quick upload" }).click();
     await expect(page).toHaveURL(/\/upload$/);
-    await expect(
-      toolbar.getByRole("heading", { name: "Quick upload" }),
-    ).toBeVisible();
+    await expect(toolbar.getByTestId("toolbar-title")).toBeVisible();
+    await expect(toolbar.getByTestId("toolbar-title")).toHaveText(
+      "Quick upload",
+    );
   });
 
   test("settings no longer buries the link", async ({ page }) => {

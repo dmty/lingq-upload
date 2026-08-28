@@ -225,11 +225,10 @@ test.describe("course screen failures", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-not-found")).toBeVisible();
-    await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Course unavailable",
-      }),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText(
+      "Course unavailable",
+    );
     await expect(
       page.getByTestId("course-not-found").getByRole("link", {
         name: "Back to Library",
@@ -251,10 +250,9 @@ test.describe("course screen failures", () => {
 
     await expect(page.getByTestId("course-loading")).toBeVisible();
     await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Loading…",
-      }),
+      page.getByTestId("toolbar-title"),
     ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Loading…");
 
     await page.evaluate(() => window.__releaseLibrary__?.());
   });
@@ -268,11 +266,10 @@ test.describe("course screen failures", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-library-error")).toBeVisible();
-    await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Course unavailable",
-      }),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText(
+      "Course unavailable",
+    );
     await expect(
       page.getByTestId("course-library-error").getByRole("link", {
         name: "Back to Library",

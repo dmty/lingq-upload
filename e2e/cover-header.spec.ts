@@ -76,9 +76,8 @@ test.describe("match cover header", () => {
     // The toolbar owns the only visible title; the body heading survives for
     // document semantics but is clipped to a degenerate box, not just absent
     // from a `not.toBeVisible()` check (sr-only still reports visible).
-    await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", { name: "Botchan" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Botchan");
     const bodyHeading = page.getByTestId("match-title");
     const headingBox = await bodyHeading.boundingBox();
     expect(headingBox).not.toBeNull();

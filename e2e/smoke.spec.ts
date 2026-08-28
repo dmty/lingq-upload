@@ -7,10 +7,9 @@ test.describe("smoke", () => {
   test("app boots and Library route mounts", async ({ page }) => {
     await page.goto("/library");
     await expect(page.locator("body")).toBeVisible();
-    await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", { name: "Library" }),
-    ).toBeVisible({
+    await expect(page.getByTestId("toolbar-title")).toBeVisible({
       timeout: 5_000,
     });
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Library");
   });
 });

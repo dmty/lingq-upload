@@ -46,9 +46,8 @@ test.describe("course navigation", () => {
 
     await expect(page).toHaveURL(new RegExp(`/course/${ROUTE_KEY}`));
     await expect(
-      page.getByTestId("app-toolbar").getByRole("heading", {
-        name: "Finished Book",
-      }),
+      page.getByTestId("toolbar-title"),
     ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toHaveText("Finished Book");
   });
 });

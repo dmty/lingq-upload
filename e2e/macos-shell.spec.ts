@@ -106,7 +106,7 @@ test.describe("source list sidebar", () => {
 
     const toolbar = page.getByTestId("app-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.getByRole("heading", { name: "Library" })).toBeVisible();
+    await expect(toolbar.getByTestId("toolbar-title")).toHaveText("Library");
     await expect(toolbar.getByRole("link", { name: "Add project" })).toHaveAttribute(
       "title",
       "Add project (⌘N)",
@@ -273,7 +273,7 @@ test.describe("toolbar history controls", () => {
     const [back, forward, title, add, upload] = await Promise.all([
       toolbar.getByRole("button", { name: "Back" }).boundingBox(),
       toolbar.getByRole("button", { name: "Forward" }).boundingBox(),
-      toolbar.getByRole("heading").boundingBox(),
+      toolbar.getByTestId("toolbar-title").boundingBox(),
       toolbar.getByRole("link", { name: "Add project" }).boundingBox(),
       toolbar.getByRole("link", { name: "Quick upload" }).boundingBox(),
     ]);
@@ -452,7 +452,9 @@ test.describe("route title ownership", () => {
       await page.waitForLoadState("networkidle");
 
       const toolbar = page.getByTestId("app-toolbar");
-      await expect(toolbar.getByRole("heading", { name: title })).toBeVisible();
+      const toolbarTitle = toolbar.getByTestId("toolbar-title");
+      await expect(toolbarTitle).toBeVisible();
+      await expect(toolbarTitle).toHaveText(title);
 
       // Querying through the role engine (not a bare `h1` selector) proves
       // the heading stays exposed to the accessibility tree, not merely
@@ -461,6 +463,8 @@ test.describe("route title ownership", () => {
       const bodyHeading = page.locator("main").getByRole("heading", { name: title });
       await expect(bodyHeading).toHaveCount(1);
       await expect(page.locator("main h1")).toHaveCount(1);
+      // The visible toolbar title is not a second heading: one route, one h1.
+      await expect(page.locator("h1")).toHaveCount(1);
       // A sr-only heading still reports a non-null bounding box (Tailwind
       // clips it to 1x1), so visibility can't be asserted with
       // not.toBeVisible() — assert the box is degenerate instead.
@@ -490,7 +494,7 @@ test.describe("text selection", () => {
       document.body.append(alert);
       const out = {
         body: read(document.body),
-        heading: read(document.querySelector("h1")!),
+        heading: read(document.querySelector(".toolbar-title")!),
         nav: read(document.querySelector('a[href="/library"]')!),
         input: read(document.querySelector('input[type="search"]')!),
         alert: read(alert),
