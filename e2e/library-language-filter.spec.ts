@@ -134,6 +134,18 @@ test.describe("library navigation history", () => {
     await expect(page).toHaveURL("/library?language=ja&q=Book");
   });
 
+  test("All drops the language and keeps the search", async ({ page }) => {
+    await page.goto("/library?language=ja&q=Book");
+    await expect(page.locator('li[role="option"]')).toHaveCount(1);
+
+    await page.getByRole("link", { name: "All", exact: true }).click();
+    await expect(page).toHaveURL("/library?q=Book");
+    await expect(page.locator('li[role="option"]')).toHaveCount(4);
+    await expect(
+      page.getByRole("link", { name: "All", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
   test("Back and Forward restore route, language and search", async ({
     page,
   }) => {
