@@ -49,7 +49,14 @@
       target instanceof HTMLElement &&
       (target.matches("input, textarea, select") || target.isContentEditable);
     const modalOpen = document.querySelector("dialog[open]") !== null;
-    if (editable || modalOpen || !event.metaKey || event.ctrlKey || event.altKey)
+    if (
+      editable ||
+      modalOpen ||
+      event.repeat ||
+      !event.metaKey ||
+      event.ctrlKey ||
+      event.altKey
+    )
       return;
 
     const key = event.key.toLowerCase();

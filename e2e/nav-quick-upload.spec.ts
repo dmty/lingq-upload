@@ -35,6 +35,27 @@ test.describe("global toolbar shortcuts", () => {
     await expect(page).toHaveURL(/\/upload$/);
   });
 
+  // Holding the chord fires keydown continuously; only the first should
+  // navigate. `keyboard.press` can't set `repeat`, so dispatch it directly.
+  test("a held shortcut does not navigate again while the key repeats", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "n",
+          metaKey: true,
+          repeat: true,
+          bubbles: true,
+        }),
+      ),
+    );
+    await page.waitForTimeout(300);
+    await expect(page).toHaveURL(/\/library$/);
+  });
+
   test("shortcuts are ignored while an editable control owns the event", async ({
     page,
   }) => {
