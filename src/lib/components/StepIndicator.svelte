@@ -3,7 +3,9 @@
   const steps = ["Add", "Match", "Upload"];
 </script>
 
-<ol data-testid="step-indicator" class="flex items-center gap-1.5 text-xs">
+<!-- The route heading that used to sit under the indicator is sr-only, and
+     sr-only is out of flow, so the gap below belongs to the indicator now. -->
+<ol data-testid="step-indicator" class="mb-2 flex items-center gap-1.5 text-xs">
   {#each steps as label, i}
     {#if i > 0}
       <li aria-hidden="true" class="text-fg-subtle">›</li>

@@ -46,4 +46,29 @@ test.describe("pipeline step indicator", () => {
       "Match",
     );
   });
+
+  // The route heading that used to separate the indicator from the copy below
+  // it is sr-only now, and sr-only is out of flow — without a gap of its own
+  // the indicator collides with the next line.
+  test("the indicator keeps a gap above the copy beneath it", async ({
+    page,
+  }) => {
+    for (const route of ["/add", `/match/${PROJECT_KEY}`]) {
+      await page.goto(route);
+      await page.waitForLoadState("networkidle");
+      const gap = await page
+        .getByTestId("step-indicator")
+        .evaluate((el) => {
+          let next = el.nextElementSibling;
+          while (next && getComputedStyle(next).position === "absolute") {
+            next = next.nextElementSibling;
+          }
+          return (
+            next!.getBoundingClientRect().top -
+            el.getBoundingClientRect().bottom
+          );
+        });
+      expect(gap).toBeGreaterThanOrEqual(8);
+    }
+  });
 });
