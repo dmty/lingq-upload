@@ -10,6 +10,7 @@
   import Button from "$lib/components/Button.svelte";
   import { commands } from "$lib/ipc/bindings";
   import { library } from "$lib/stores/library.svelte";
+  import { libraryUrl } from "$lib/library-url";
   import { sidebar } from "$lib/stores/sidebar.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import { navigationHistory } from "$lib/stores/navigation.svelte";
@@ -33,14 +34,6 @@
     } catch {
       return code;
     }
-  }
-
-  function libraryHref(language: string, query = ""): string {
-    const params = new URLSearchParams();
-    if (language) params.set("language", language);
-    if (query) params.set("q", query);
-    const suffix = params.toString();
-    return suffix ? `/library?${suffix}` : "/library";
   }
 
   const languages = $derived.by(() =>
@@ -292,7 +285,7 @@
         aria-labelledby="library-heading"
       >
         <a
-          href={libraryHref("", currentQuery)}
+          href={libraryUrl("", currentQuery)}
           class="source-row"
           aria-current={onLibrary && !currentLanguage ? "page" : undefined}
         >
@@ -300,7 +293,7 @@
         </a>
         {#each languages as language (language.code)}
           <a
-            href={libraryHref(language.code, currentQuery)}
+            href={libraryUrl(language.code, currentQuery)}
             class="source-row"
             aria-current={currentLanguage === language.code
               ? "page"
@@ -313,7 +306,7 @@
       </div>
       <a
         href="/settings"
-        class="source-row source-settings"
+        class="source-row shrink-0"
         aria-current={isActive("/settings") ? "page" : undefined}
       >
         {@render icon(settingsIcon)}

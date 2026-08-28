@@ -15,6 +15,11 @@ let index = $state(-1);
 // or superseded goto) so a stale suppression can't eat a later navigation.
 let suppressedUrl: string | null = null;
 
+// Set by replace() for the navigation it starts. Deliberately not $state: it
+// is assigned from inside a caller's effect, and reactive bookkeeping there
+// would feed back into the same flush.
+let replacedUrl: string | null = null;
+
 function canGoBack(): boolean {
   return index > 0;
 }
@@ -43,8 +48,21 @@ export const navigationHistory = {
       return;
     }
     if (entries[index] === url) return;
+    if (replacedUrl === url && index >= 0) {
+      replacedUrl = null;
+      entries = [...entries.slice(0, index), url, ...entries.slice(index + 1)];
+      return;
+    }
     entries = [...entries.slice(0, index + 1), url];
     index = entries.length - 1;
+  },
+  // Navigates without deepening the stack: the destination takes the current
+  // entry's place, so Back still leads out of the route rather than back
+  // through every intermediate URL a live filter wrote.
+  async replace(url: string): Promise<void> {
+    replacedUrl = url;
+    await goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+    replacedUrl = null;
   },
   async goBack(): Promise<void> {
     if (canGoBack()) await travel(index - 1);

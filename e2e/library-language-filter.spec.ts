@@ -134,6 +134,32 @@ test.describe("library navigation history", () => {
     await expect(page).toHaveURL("/library?language=ja&q=Book");
   });
 
+  test("the toolbar's Back leaves Library rather than retracing a search", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    await page.getByRole("link", { name: "All", exact: true }).click();
+    await expect(page).toHaveURL("/library");
+
+    const input = page.locator('input[type="search"]');
+    await input.fill("B");
+    await input.fill("Bo");
+    await input.fill("Book");
+    await expect(page).toHaveURL("/library?q=Book");
+
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page).toHaveURL("/settings");
+  });
+
+  test("a search alone gives the toolbar nothing to go back to", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.locator('input[type="search"]').fill("Book");
+    await expect(page).toHaveURL("/library?q=Book");
+    await expect(page.getByRole("button", { name: "Back" })).toBeDisabled();
+  });
+
   test("All drops the language and keeps the search", async ({ page }) => {
     await page.goto("/library?language=ja&q=Book");
     await expect(page.locator('li[role="option"]')).toHaveCount(1);

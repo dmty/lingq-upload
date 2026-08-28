@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { navigationHistory } from "$lib/stores/navigation.svelte";
+  import { libraryUrl } from "$lib/library-url";
   import LibraryList from "$lib/components/LibraryList.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { library } from "$lib/stores/library.svelte";
@@ -43,24 +44,12 @@
   const selectedLanguage = $derived(page.url.searchParams.get("language") ?? "");
   const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
 
-  function libraryUrl(language: string, query: string): string {
-    const params = new URLSearchParams();
-    if (language) params.set("language", language);
-    if (query) params.set("q", query);
-    const suffix = params.toString();
-    return suffix ? `/library?${suffix}` : "/library";
-  }
-
-  // goto, not replaceState: shallow routing moves the address bar without
-  // updating page.url, and the sidebar reads its language and query from
-  // there. Live typing replaces the current history entry so a search costs
-  // one Back, not one per keystroke.
+  // A real navigation, not shallow routing: $app/navigation's replaceState
+  // moves the address bar without updating page.url, and the sidebar reads
+  // its language and query from there. Replacing rather than pushing keeps a
+  // search worth one Back instead of one per keystroke.
   function replaceLibraryUrl(language: string, query: string) {
-    void goto(libraryUrl(language, query), {
-      replaceState: true,
-      keepFocus: true,
-      noScroll: true,
-    });
+    void navigationHistory.replace(libraryUrl(language, query));
   }
 
   function setSearch(next: string) {

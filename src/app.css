@@ -399,11 +399,6 @@
   overflow-y: auto;
 }
 
-.source-settings {
-  flex: none;
-  margin-top: auto;
-}
-
 .source-label {
   min-width: 0;
   overflow: hidden;
