@@ -475,6 +475,99 @@ test.describe("route title ownership", () => {
   });
 });
 
+// Tauri owns the real attribute; outside it the shell always resolves to
+// active, so these drive `data-window-inactive` directly to exercise the
+// styling contract the focus handler switches on.
+test.describe("inactive window chrome", () => {
+  const deactivate = (page: import("@playwright/test").Page) =>
+    page.evaluate(() =>
+      document.documentElement.setAttribute("data-window-inactive", ""),
+    );
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+  });
+
+  test("hover feedback is suppressed while the window is inactive", async ({
+    page,
+  }) => {
+    await deactivate(page);
+    const targets = [
+      page.getByTestId("app-toolbar").getByRole("link", { name: "Add project" }),
+      page.locator("#app-sidebar").getByRole("link", { name: "Settings" }),
+      page.getByTestId("sidebar-toggle"),
+    ];
+    for (const target of targets) {
+      const rest = await target.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.backgroundColor, style.color];
+      });
+      await target.hover();
+      await page.waitForTimeout(150); // let the 120ms background transition settle
+      const hovered = await target.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.backgroundColor, style.color];
+      });
+      expect(hovered).toEqual(rest);
+    }
+  });
+
+  test("the floating toggle also stops responding to hover", async ({
+    page,
+  }) => {
+    await page.getByTestId("sidebar-toggle").click();
+    await deactivate(page);
+    const floating = page.getByTestId("sidebar-floating-toggle");
+    const rest = await floating.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return [style.backgroundColor, style.color];
+    });
+    await floating.hover();
+    await page.waitForTimeout(150); // let the 120ms background transition settle
+    const hovered = await floating.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return [style.backgroundColor, style.color];
+    });
+    expect(hovered).toEqual(rest);
+  });
+
+  test("the current sidebar destination falls back to a neutral selection", async ({
+    page,
+  }) => {
+    const current = page.locator('.source-row[aria-current="page"]');
+    await expect(current).toHaveText("Library");
+    const active = await current.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return [style.backgroundColor, style.color];
+    });
+
+    await deactivate(page);
+    await page.waitForTimeout(150); // let the 120ms background transition settle
+    const inactive = await current.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return [style.backgroundColor, style.color];
+    });
+    expect(inactive[0]).not.toBe(active[0]);
+    expect(inactive[1]).not.toBe(active[1]);
+
+    // Neutral means the sunken surface, not a desaturated accent: the row has
+    // to land on the same fill the inactive popup badge uses.
+    const sunken = await current.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue("--color-surface-sunken").trim(),
+    );
+    const resolved = await page.evaluate((value) => {
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = value;
+      document.body.append(probe);
+      const out = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return out;
+    }, sunken);
+    expect(inactive[0]).toBe(resolved);
+  });
+});
+
 test.describe("text selection", () => {
   test.beforeEach(async ({ page }) => {
     // Without entries the library renders its empty state, which has no

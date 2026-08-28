@@ -733,6 +733,32 @@ dialog::backdrop {
   background: color-mix(in srgb, var(--color-canvas) 95%, transparent);
 }
 
+/* A background window stops giving pointer feedback and drops accent fills for
+   neutral gray; the muted .toolbar-action colour above is the third part of
+   the same treatment. Every hover here has to fall back to its own rest
+   values, so the toggles restore colour as well as background, and the row
+   hover excludes the selected row to keep the neutral fill from being
+   overwritten by an equal-specificity rule. */
+:root[data-window-inactive] .toolbar-action:not(:disabled):hover,
+:root[data-window-inactive] .source-row:not([aria-current="page"]):hover,
+:root[data-window-inactive] .sidebar-toggle:hover {
+  background: transparent;
+}
+
+:root[data-window-inactive] .sidebar-floating-toggle:hover {
+  background: color-mix(in srgb, var(--color-canvas) 80%, transparent);
+}
+
+:root[data-window-inactive] .sidebar-toggle:hover,
+:root[data-window-inactive] .sidebar-floating-toggle:hover {
+  color: var(--color-fg-muted);
+}
+
+:root[data-window-inactive] .source-row[aria-current="page"] {
+  background: var(--color-surface-sunken);
+  color: var(--color-fg);
+}
+
 .sidebar-toggle:focus-visible,
 .sidebar-floating-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
