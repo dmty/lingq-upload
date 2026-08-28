@@ -133,17 +133,38 @@ test.describe("course screen", () => {
       }),
     ).toHaveCount(0);
 
+    // Exactly one h1 survives for document semantics, and it stays exposed
+    // to the accessibility tree (not just present with a degenerate box) —
+    // querying through the role engine, rather than a bare `h1` selector,
+    // proves that, since it would fail equally for aria-hidden or hidden.
+    const bodyHeading = page
+      .locator("main")
+      .getByRole("heading", { name: "Kafka on the Shore" });
+    await expect(bodyHeading).toHaveCount(1);
+    const headingBox = await bodyHeading.boundingBox();
+    expect(headingBox).not.toBeNull();
+    expect(headingBox!.height).toBeLessThanOrEqual(1);
+
     const cover = page.getByTestId("course-header").locator(".cover-placeholder, img");
     const coverBox = await cover.boundingBox();
     expect(coverBox!.width).toBe(64);
     expect(coverBox!.height).toBe(64);
 
+    const identity = page.getByTestId("course-identity");
+    const identityBox = await identity.boundingBox();
+    expect(identityBox!.x).toBeGreaterThanOrEqual(coverBox!.x + coverBox!.width);
+
     const openInLingq = page.getByTestId("course-header").getByRole("button", {
       name: "Open in LingQ",
     });
     await expect(openInLingq).toBeVisible();
+    // getByRole's `name` matches a substring, so it would still pass against
+    // the old "Open in LingQ ↗" text — toHaveAccessibleName checks the full
+    // computed name, which is the actual regression the SVG swap prevents.
+    await expect(openInLingq).toHaveAccessibleName("Open in LingQ");
     const openBox = await openInLingq.boundingBox();
     expect(openBox!.height).toBe(28);
+    expect(openBox!.x).toBeGreaterThanOrEqual(identityBox!.x + identityBox!.width);
 
     // Exact match, not toContainText: the fixture's lessons_count (2) must
     // agree with its two-lesson array, or CourseStats logs a mismatch

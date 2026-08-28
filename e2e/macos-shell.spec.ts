@@ -459,12 +459,17 @@ test.describe("route title ownership", () => {
       const toolbar = page.getByTestId("app-toolbar");
       await expect(toolbar.getByRole("heading", { name: title })).toBeVisible();
 
-      const bodyHeadings = page.locator("main h1");
-      await expect(bodyHeadings).toHaveCount(1);
+      // Querying through the role engine (not a bare `h1` selector) proves
+      // the heading stays exposed to the accessibility tree, not merely
+      // present in the DOM — a `hidden` or `aria-hidden` heading would fail
+      // this count while still passing a plain `main h1` count check.
+      const bodyHeading = page.locator("main").getByRole("heading", { name: title });
+      await expect(bodyHeading).toHaveCount(1);
+      await expect(page.locator("main h1")).toHaveCount(1);
       // A sr-only heading still reports a non-null bounding box (Tailwind
       // clips it to 1x1), so visibility can't be asserted with
       // not.toBeVisible() — assert the box is degenerate instead.
-      const box = await bodyHeadings.first().boundingBox();
+      const box = await bodyHeading.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.height).toBeLessThanOrEqual(1);
     }

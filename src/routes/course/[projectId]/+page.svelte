@@ -91,7 +91,7 @@
   <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
 {:else if entry == null && library.status === "error"}
   <p data-testid="course-library-error">
-    {appErrorMessage(library.error!)}
+    {appErrorMessage(library.error!)} <a href="/library">Back to Library</a>
   </p>
 {:else if entry == null}
   <p data-testid="course-not-found">
@@ -105,7 +105,7 @@
       imageUrl={cached?.view?.collection.image_url ?? null}
       title={entry.title}
     />
-    <div class="flex-1">
+    <div data-testid="course-identity" class="flex-1">
       {#if authorLine}<p class="text-fg-muted">{authorLine}</p>{/if}
       <p class="text-sm text-fg-subtle">
         {entry.language}{cached?.view?.collection.level

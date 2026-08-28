@@ -273,5 +273,10 @@ test.describe("course screen failures", () => {
         name: "Course unavailable",
       }),
     ).toBeVisible();
+    await expect(
+      page.getByTestId("course-library-error").getByRole("link", {
+        name: "Back to Library",
+      }),
+    ).toBeVisible();
   });
 });
