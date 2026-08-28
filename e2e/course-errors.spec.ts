@@ -225,5 +225,53 @@ test.describe("course screen failures", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-not-found")).toBeVisible();
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Course unavailable",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("course-not-found").getByRole("link", {
+        name: "Back to Library",
+      }),
+    ).toBeVisible();
+  });
+
+  test("the toolbar shows a loading title until the library resolves", async ({
+    page,
+  }) => {
+    // A pending promise and its resolver aren't serializable, so this stays
+    // a plain init script rather than a seed() call.
+    await page.addInitScript(() => {
+      window.__libraryGate__ = new Promise((resolve) => {
+        window.__releaseLibrary__ = resolve;
+      });
+    });
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    await expect(page.getByTestId("course-loading")).toBeVisible();
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Loading…",
+      }),
+    ).toBeVisible();
+
+    await page.evaluate(() => window.__releaseLibrary__?.());
+  });
+
+  test("a library read failure also shows the unavailable title", async ({
+    page,
+  }) => {
+    await seed(page, {
+      __libraryError__: { kind: "Io", message: "disk unreadable" },
+    });
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    await expect(page.getByTestId("course-library-error")).toBeVisible();
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Course unavailable",
+      }),
+    ).toBeVisible();
   });
 });

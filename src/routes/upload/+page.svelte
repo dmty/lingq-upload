@@ -386,13 +386,13 @@
 </script>
 
 <section class="col-form">
-  <h1 class="text-xl font-semibold text-fg">Quick upload</h1>
-  <p class="mt-2 text-base text-fg-muted">
+  <h1 class="sr-only">Quick upload</h1>
+  <p class="text-base text-fg-muted">
     Pick a destination, then drop in your text and audio.
   </p>
 
   <div
-    class="mt-8 rounded-md border border-border bg-surface shadow-card"
+    class="mt-6 rounded-md border border-border bg-surface shadow-card"
   >
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />

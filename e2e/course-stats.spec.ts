@@ -116,12 +116,34 @@ test.describe("course screen", () => {
   }) => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
-    await expect(page.getByTestId("course-header")).toContainText(
-      "Kafka on the Shore",
-    );
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Kafka on the Shore",
+      }),
+    ).toBeVisible();
     await expect(page.getByTestId("course-header")).toContainText(
       "Haruki Murakami",
     );
+    await expect(page.getByTestId("course-header")).not.toContainText(
+      "Kafka on the Shore",
+    );
+    await expect(
+      page.getByTestId("course-header").getByRole("link", {
+        name: "Back to Library",
+      }),
+    ).toHaveCount(0);
+
+    const cover = page.getByTestId("course-header").locator(".cover-placeholder, img");
+    const coverBox = await cover.boundingBox();
+    expect(coverBox!.width).toBe(64);
+    expect(coverBox!.height).toBe(64);
+
+    const openInLingq = page.getByTestId("course-header").getByRole("button", {
+      name: "Open in LingQ",
+    });
+    await expect(openInLingq).toBeVisible();
+    const openBox = await openInLingq.boundingBox();
+    expect(openBox!.height).toBe(28);
 
     // Exact match, not toContainText: the fixture's lessons_count (2) must
     // agree with its two-lesson array, or CourseStats logs a mismatch

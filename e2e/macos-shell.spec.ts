@@ -441,6 +441,36 @@ test.describe("overlay titlebar", () => {
   });
 });
 
+test.describe("route title ownership", () => {
+  const staticTitles: Record<string, string> = {
+    "/library": "Library",
+    "/add": "Add project",
+    "/upload": "Quick upload",
+    "/settings": "Settings",
+  };
+
+  test("the toolbar owns the only visible title on each static route", async ({
+    page,
+  }) => {
+    for (const [route, title] of Object.entries(staticTitles)) {
+      await page.goto(route);
+      await page.waitForLoadState("networkidle");
+
+      const toolbar = page.getByTestId("app-toolbar");
+      await expect(toolbar.getByRole("heading", { name: title })).toBeVisible();
+
+      const bodyHeadings = page.locator("main h1");
+      await expect(bodyHeadings).toHaveCount(1);
+      // A sr-only heading still reports a non-null bounding box (Tailwind
+      // clips it to 1x1), so visibility can't be asserted with
+      // not.toBeVisible() — assert the box is degenerate instead.
+      const box = await bodyHeadings.first().boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 test.describe("text selection", () => {
   test.beforeEach(async ({ page }) => {
     // Without entries the library renders its empty state, which has no

@@ -200,7 +200,7 @@
 <section class="col-wide">
   <header class="mb-4 flex items-center justify-between">
     <div>
-      <h1 class="text-lg font-semibold text-fg">Library</h1>
+      <h1 class="sr-only">Library</h1>
       {#if totalCount > 0}
         <p class="mt-0.5 flex items-center gap-1 text-xs text-fg-muted">
           <span>

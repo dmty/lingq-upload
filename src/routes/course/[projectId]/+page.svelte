@@ -5,6 +5,7 @@
   import { course } from "$lib/stores/course.svelte";
   import { joinKey } from "$lib/identity";
   import { lingqCollectionUrl } from "$lib/lingq";
+  import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import CoverThumb from "$lib/components/CoverThumb.svelte";
   import CourseStats from "$lib/components/CourseStats.svelte";
   import LessonStatRow from "$lib/components/LessonStatRow.svelte";
@@ -37,6 +38,18 @@
     refresh();
   });
 
+  const toolbarLabel = $derived(
+    entry == null
+      ? library.status === "idle" || library.status === "loading"
+        ? "Loading…"
+        : "Course unavailable"
+      : entry.title,
+  );
+
+  $effect(() => {
+    toolbarTitle.set(page.url.pathname, toolbarLabel);
+  });
+
   const alert = $derived.by(() => {
     const err = cached?.error;
     if (!err || cached?.view != null) return null;
@@ -57,6 +70,23 @@
   });
 </script>
 
+{#snippet externalLinkIcon()}
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M6.5 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9.5" />
+    <path d="M9 3h4v4 M13 3 7 9" />
+  </svg>
+{/snippet}
+
 {#if entry == null && (library.status === "idle" || library.status === "loading")}
   <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
 {:else if entry == null && library.status === "error"}
@@ -68,14 +98,14 @@
     That course isn't in your library. <a href="/library">Back to Library</a>
   </p>
 {:else}
-  <header data-testid="course-header" class="flex items-start gap-4">
+  <h1 class="sr-only">{entry.title}</h1>
+  <header data-testid="course-header" class="flex items-center gap-4">
     <CoverThumb
       coverPath={entry.cover_path ?? null}
       imageUrl={cached?.view?.collection.image_url ?? null}
       title={entry.title}
     />
     <div class="flex-1">
-      <h1>{entry.title}</h1>
       {#if authorLine}<p class="text-fg-muted">{authorLine}</p>{/if}
       <p class="text-sm text-fg-subtle">
         {entry.language}{cached?.view?.collection.level
@@ -83,18 +113,17 @@
           : ""}
       </p>
     </div>
-    <span class="flex items-center gap-3">
-      {#if collectionId != null}
-        <Button
-          size="sm"
-          data-testid="open-in-lingq"
-          onclick={() => void openUrl(lingqCollectionUrl(entry.language, collectionId))}
-        >
-          Open in LingQ ↗
-        </Button>
-      {/if}
-      <a href="/library" class="text-fg-muted hover:text-fg">Back to Library</a>
-    </span>
+    {#if collectionId != null}
+      <Button
+        variant="secondary"
+        size="lg"
+        data-testid="open-in-lingq"
+        onclick={() => void openUrl(lingqCollectionUrl(entry.language, collectionId))}
+      >
+        {@render externalLinkIcon()}
+        Open in LingQ
+      </Button>
+    {/if}
   </header>
 
   {#if collectionId == null}

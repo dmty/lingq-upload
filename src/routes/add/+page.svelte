@@ -431,7 +431,7 @@
 <section class="col-form space-y-6">
   <header>
     <StepIndicator current={1} />
-    <h1 class="text-lg font-semibold text-fg">Add Project</h1>
+    <h1 class="sr-only">Add project</h1>
     <p class="mt-1 text-sm text-fg-muted">
       Pick a source, then a book, audio, or both. Collection is created
       automatically.

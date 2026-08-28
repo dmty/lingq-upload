@@ -57,7 +57,10 @@ const fetchCount = (
 // course route would be a full document load, which reloads the store module
 // and empties the cache — the suppression under test would never be exercised.
 async function leaveAndReturn(page: import("@playwright/test").Page) {
-  await page.getByRole("link", { name: "Back to Library" }).click();
+  await page
+    .getByRole("navigation", { name: "Sections" })
+    .getByRole("link", { name: "Library", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/library/);
   await page.goBack();
 }

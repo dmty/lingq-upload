@@ -45,8 +45,10 @@ test.describe("course navigation", () => {
     await page.getByRole("button", { name: "Open" }).first().click();
 
     await expect(page).toHaveURL(new RegExp(`/course/${ROUTE_KEY}`));
-    await expect(page.getByTestId("course-header")).toContainText(
-      "Finished Book",
-    );
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Finished Book",
+      }),
+    ).toBeVisible();
   });
 });

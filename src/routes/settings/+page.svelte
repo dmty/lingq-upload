@@ -328,12 +328,12 @@
 </script>
 
 <section class="col-form">
-  <h1 class="text-xl font-semibold text-fg">Settings</h1>
-  <p class="mt-2 text-base text-fg-muted">
+  <h1 class="sr-only">Settings</h1>
+  <p class="text-base text-fg-muted">
     Where this app keeps your keys and preferences.
   </p>
 
-  <div class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card">
+  <div class="mt-6 rounded-md border border-border bg-surface p-6 shadow-card">
     <h2 class="text-md font-semibold text-fg">LingQ API key</h2>
     <p class="mt-1 text-sm text-fg-subtle">
       Find it at <a
