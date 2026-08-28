@@ -135,6 +135,16 @@
     focusIndex = null;
   });
 
+  // A language nothing is written in — a stale link, a deletion, a refresh
+  // that dropped the last book — falls back to All. Only once the library is
+  // readable: while it is loading or unreadable the represented languages
+  // aren't known, and the requested destination has to survive.
+  $effect(() => {
+    if (library.status !== "ready" || !selectedLanguage) return;
+    if (entries.some((e) => e.language === selectedLanguage)) return;
+    replaceLibraryUrl("", urlSearch);
+  });
+
   function isFormField(el: EventTarget | null): boolean {
     if (!(el instanceof HTMLElement)) return false;
     const tag = el.tagName;
