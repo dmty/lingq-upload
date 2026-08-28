@@ -72,6 +72,20 @@ test.describe("match cover header", () => {
     await expect(page.getByTestId("match-cover")).toBeVisible();
     // cover_path is null → no real <img>, fallback tile, button reads "Add cover".
     await expect(page.getByTestId("cover-replace")).toHaveText("Add cover");
+
+    // The toolbar owns the only visible title; the body heading survives for
+    // document semantics but is clipped to a degenerate box, not just absent
+    // from a `not.toBeVisible()` check (sr-only still reports visible).
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", { name: "Botchan" }),
+    ).toBeVisible();
+    const bodyHeading = page.getByTestId("match-title");
+    const headingBox = await bodyHeading.boundingBox();
+    expect(headingBox).not.toBeNull();
+    expect(headingBox!.height).toBeLessThanOrEqual(1);
+    await expect(
+      page.getByRole("link", { name: "← Library" }),
+    ).toHaveCount(0);
   });
 
   test("replace picks a file and flips the control to Replace cover", async ({

@@ -23,6 +23,14 @@ test.describe("run completion and cancel states", () => {
 
   test("chapter counter, completion banner, course link", async ({ page }) => {
     await page.goto(`/run/${KEY}`);
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", {
+        name: "Run Fixture",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "← Library" }),
+    ).toHaveCount(0);
     await page.getByRole("button", { name: "Resume" }).click();
 
     await page.evaluate(() =>

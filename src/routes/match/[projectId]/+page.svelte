@@ -21,6 +21,7 @@
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { basename, extOf } from "$lib/paths";
+  import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
   import SourceSummary from "$lib/components/SourceSummary.svelte";
   import ResponseCard from "$lib/components/ResponseCard.svelte";
@@ -158,6 +159,14 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  const toolbarLabel = $derived(
+    bookTitle || (mapping.mappingState ? "Confirm pairing" : "Resolve mismatch"),
+  );
+
+  $effect(() => {
+    toolbarTitle.set(page.url.pathname, toolbarLabel);
   });
 
   async function refreshAudioState(key: string) {
@@ -835,15 +844,7 @@
           </div>
           <div class="min-w-0">
             <StepIndicator current={2} />
-            <p class="text-xs text-fg-muted">
-              <a href="/library" class="hover:text-fg">← Library</a> · Confirm pairing
-            </p>
-            <h1
-              data-testid="match-title"
-              class="truncate text-lg font-semibold text-fg"
-            >
-              {bookTitle}
-            </h1>
+            <h1 data-testid="match-title" class="sr-only">{bookTitle}</h1>
             {#if authors.length > 0}
               <p
                 data-testid="match-author"
@@ -984,7 +985,7 @@
       </div>
     {:else}
       <header class="space-y-1">
-        <h1 class="text-lg font-semibold text-fg">Resolve mismatch</h1>
+        <h1 class="sr-only">Resolve mismatch</h1>
         {#if hasText !== null}
           <SourceSummary
             chapterCount={chapters}

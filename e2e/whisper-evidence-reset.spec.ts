@@ -260,8 +260,10 @@ test.describe("confirmed detection evidence and reset", () => {
     await trigger.click();
     await page.getByRole("button", { name: "Confirm reset" }).click();
 
+    // Scoped to `main` — the toolbar's own heading tracks bookTitle once it
+    // loads, so an unscoped query would collide with it once hydration settles.
     await expect(
-      page.getByRole("heading", { name: "Resolve mismatch" }),
+      page.locator("main").getByRole("heading", { name: "Resolve mismatch" }),
     ).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/match/${TRANSCRIPT_KEY}$`));
     await expect(panel(page)).toHaveCount(0);

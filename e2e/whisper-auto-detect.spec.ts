@@ -259,8 +259,10 @@ async function seedRun(
 async function autoStarted(page: Page): Promise<string> {
   // The resolver shell renders while hydrating, so waiting on it absorbs the
   // dev server's first-navigation route compile before the start poll.
+  // Scoped to `main` — the toolbar's own heading tracks bookTitle once it
+  // loads, so an unscoped query would collide with it once hydration settles.
   await expect(
-    page.getByRole("heading", { name: "Resolve mismatch" }),
+    page.locator("main").getByRole("heading", { name: "Resolve mismatch" }),
   ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => detectionCalls(page)).toBe(1);
   const jobId = await page.evaluate(

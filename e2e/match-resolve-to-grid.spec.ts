@@ -40,9 +40,10 @@ test.describe("match resolve transitions to mapping grid", () => {
   }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
 
-    // Resolver UI is up.
+    // Resolver UI is up. Scoped to `main`: the toolbar's own heading tracks
+    // bookTitle once it loads and would otherwise collide with this query.
     await expect(
-      page.getByRole("heading", { name: "Resolve mismatch" }),
+      page.locator("main").getByRole("heading", { name: "Resolve mismatch" }),
     ).toBeVisible();
 
     // SplitProportional is the preselect for ManyToFew. Confirm it.

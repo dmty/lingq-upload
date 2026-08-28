@@ -86,10 +86,15 @@ test.describe("match navigation", () => {
   }) => {
     await page.goto(`/match/${PROJECT_A}`);
 
-    // Project A: title, counts, and Proposed split all visible.
+    // Project A: title, counts, and Proposed split all visible. Scoped to
+    // `main` — the toolbar's own heading tracks bookTitle once it loads, so
+    // an unscoped query would collide with it once hydration settles.
     await expect(
-      page.getByRole("heading", { name: "Resolve mismatch" }),
+      page.locator("main").getByRole("heading", { name: "Resolve mismatch" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "← Library" }),
+    ).toHaveCount(0);
     await expect(page.getByText("Book A — Toki")).toBeVisible();
     await expect(page.getByText("Proposed split")).toBeVisible();
     await expect(page.getByText("A Atom 1")).toBeVisible();

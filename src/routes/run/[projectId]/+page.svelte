@@ -16,6 +16,7 @@
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
   import StepIndicator from "$lib/components/StepIndicator.svelte";
+  import { toolbarTitle } from "$lib/stores/toolbar.svelte";
 
   type Row = {
     index: number;
@@ -224,6 +225,12 @@
       : undefined,
   );
 
+  const toolbarLabel = $derived(project?.settings.collection_title ?? "Upload");
+
+  $effect(() => {
+    toolbarTitle.set(page.url.pathname, toolbarLabel);
+  });
+
   onMount(async () => {
     await reloadProject();
 
@@ -276,10 +283,7 @@
   <header class="flex items-center justify-between">
     <div>
       <StepIndicator current={3} />
-      <a href="/library" class="text-xs text-fg-muted hover:text-fg">← Library</a>
-      <h1 class="text-lg font-semibold text-fg">
-        {project?.settings.collection_title ?? "Run"}
-      </h1>
+      <h1 class="sr-only">{toolbarLabel}</h1>
       <p class="mt-1 text-xs text-fg-muted tabular">
         {project?.settings.language ?? projectKey}
       </p>
