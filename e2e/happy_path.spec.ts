@@ -23,7 +23,9 @@ test.describe("library happy path", () => {
 
     // Empty-state copy lives in src/routes/library/+page.svelte; assert
     // both the header and the Add link are reachable.
-    await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+    await expect(
+      page.getByTestId("app-toolbar").getByRole("heading", { name: "Library" }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: /\+ Add/ })).toBeVisible();
   });
 });

@@ -8,24 +8,41 @@
   import Button from "$lib/components/Button.svelte";
   import { commands } from "$lib/ipc/bindings";
   import { sidebar } from "$lib/stores/sidebar.svelte";
+  import { toolbarTitle } from "$lib/stores/toolbar.svelte";
 
   let { children } = $props();
 
   const isActive = (path: string) => page.url.pathname.startsWith(path);
 
-  const sections = [
-    { href: "/library", label: "Library", icon: "M3 4h10v8H3z M3 7h10 M3 10h10" },
-    { href: "/add", label: "Add", icon: "M8 3v10 M3 8h10" },
-    { href: "/upload", label: "Quick upload", icon: "M8 12V4 M5 7l3-3 3 3 M3 13h10" },
-    {
-      href: "/settings",
-      label: "Settings",
-      icon:
-        "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
-        " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
-        " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99",
-    },
-  ];
+  const librarySection = {
+    href: "/library",
+    label: "Library",
+    icon: "M3 4h10v8H3z M3 7h10 M3 10h10",
+  };
+  const settingsSection = {
+    href: "/settings",
+    label: "Settings",
+    icon:
+      "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
+      " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
+      " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99",
+  };
+
+  // Static per-route fallback until a route publishes its own title via
+  // toolbarTitle.set — routes with no fallback (course/match/run) render an
+  // empty toolbar title until they do.
+  const staticTitles: Record<string, string> = {
+    "/library": "Library",
+    "/add": "Add project",
+    "/upload": "Quick upload",
+    "/settings": "Settings",
+  };
+
+  const resolvedTitle = $derived(
+    toolbarTitle.forPath(page.url.pathname) ??
+      staticTitles[page.url.pathname] ??
+      "",
+  );
 
   let dialog = $state<HTMLDialogElement | null>(null);
   let pending = $state<Awaited<ReturnType<typeof check>>>(null);
@@ -151,7 +168,7 @@
 >
   <div
     id="app-sidebar"
-    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px]"
+    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px] pb-[8px]"
   >
     <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
       <div
@@ -174,28 +191,45 @@
         {@render toggleIcon()}
       </button>
     </div>
-    <nav aria-label="Sections" class="flex flex-col gap-[2px]">
-      {#each sections as section (section.href)}
-        <a
-          href={section.href}
-          class="source-row"
-          aria-current={isActive(section.href) ? "page" : undefined}
+    <nav aria-label="Sections" class="flex flex-1 flex-col gap-[2px]">
+      <a
+        href={librarySection.href}
+        class="source-row"
+        aria-current={isActive(librarySection.href) ? "page" : undefined}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          aria-hidden="true"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.3"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <path d={section.icon} />
-          </svg>
-          {section.label}
-        </a>
-      {/each}
+          <path d={librarySection.icon} />
+        </svg>
+        {librarySection.label}
+      </a>
+      <a
+        href={settingsSection.href}
+        class="source-row mt-auto"
+        aria-current={isActive(settingsSection.href) ? "page" : undefined}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d={settingsSection.icon} />
+        </svg>
+        {settingsSection.label}
+      </a>
     </nav>
   </div>
 
@@ -209,20 +243,61 @@
     onpointerdown={startResize}
   ></div>
 
-  <main
-    class="border-t px-8 pt-[55px] pb-8 transition-colors duration-120 {scrolled
-      ? 'border-sidebar-border'
-      : 'border-transparent'}"
-    onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
-  >
-    {@render children?.()}
-  </main>
+  <div class="content-column">
+    <div
+      class="app-toolbar"
+      class:scrolled
+      data-testid="app-toolbar"
+      data-tauri-drag-region="deep"
+    >
+      <h1 class="toolbar-title" title={resolvedTitle}>{resolvedTitle}</h1>
+      <a
+        href="/add"
+        class="toolbar-action"
+        aria-label="Add project"
+        title="Add project (⌘N)"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M8 3v10 M3 8h10" />
+        </svg>
+      </a>
+      <a
+        href="/upload"
+        class="toolbar-action"
+        aria-label="Quick upload"
+        title="Quick upload (⌘⇧U)"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M8 12V4 M5 7l3-3 3 3 M3 13h10" />
+        </svg>
+      </a>
+    </div>
 
-  <!-- Last in the shell so the sidebar strip stays the first drag region:
-       it spans only main's 32px top padding, which no content occupies until
-       the page scrolls — and scrolled-under content is inert in a titlebar
-       on macOS anyway. -->
-  <div data-tauri-drag-region="deep" class="titlebar-drag"></div>
+    <main
+      class="px-8 pt-6 pb-8"
+      onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
+    >
+      {@render children?.()}
+    </main>
+  </div>
 
   {#if sidebar.collapsed}
     <button

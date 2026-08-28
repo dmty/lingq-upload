@@ -240,18 +240,71 @@
   initial-value: 220px;
 }
 
-/* 32px is the AppKit titlebar height. main's top padding clears it with the
-   page inset to spare, so this strip never overlaps a heading. */
-.titlebar-drag {
-  position: absolute;
-  top: 0;
-  inset-inline-start: var(--sidebar-width, 220px);
-  inset-inline-end: 0;
-  height: 32px;
-  z-index: 1;
+.content-column {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 52px minmax(0, 1fr);
+  background: var(--color-canvas);
 }
 
-.app-shell > main {
+.app-toolbar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 52px;
+  padding-inline: 8px 12px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 120ms var(--ease-snappy);
+}
+
+.app-toolbar.scrolled {
+  border-bottom-color: var(--color-sidebar-border);
+}
+
+.toolbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-inline-end: auto;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.toolbar-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg);
+  text-decoration: none;
+  transition: background-color 120ms var(--ease-snappy);
+}
+
+.toolbar-action:hover {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.toolbar-action:active {
+  background: color-mix(in srgb, var(--color-fg) 12%, transparent);
+}
+
+.toolbar-action:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+:root[data-window-inactive] .toolbar-action {
+  color: var(--color-fg-muted);
+}
+
+.content-column > main {
   overflow-y: auto;
   /* Opts back into the bounce the blanket rule above kills — AppKit scroll
      views rubber-band at their ends. `contain`, not `auto`: the bounce stays

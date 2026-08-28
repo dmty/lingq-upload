@@ -85,13 +85,86 @@ test.describe("macOS shell tokens", () => {
 });
 
 test.describe("source list sidebar", () => {
-  test("all four sections live in a labelled sidebar nav", async ({ page }) => {
+  test("Library and Settings live in the sidebar; Add and Quick upload live in the toolbar", async ({
+    page,
+  }) => {
     await page.goto("/library");
-    const nav = page.getByRole("navigation", { name: "Sections" });
-    await expect(nav).toBeVisible();
-    for (const name of ["Library", "Add", "Quick upload", "Settings"]) {
-      await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+
+    const sidebar = page.getByRole("navigation", { name: "Sections" });
+    await expect(
+      sidebar.getByRole("link", { name: "Library", exact: true }),
+    ).toBeVisible();
+    await expect(
+      sidebar.getByRole("link", { name: "Settings", exact: true }),
+    ).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Add project" })).toHaveCount(
+      0,
+    );
+    await expect(
+      sidebar.getByRole("link", { name: "Quick upload" }),
+    ).toHaveCount(0);
+
+    const toolbar = page.getByTestId("app-toolbar");
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar.getByRole("heading", { name: "Library" })).toBeVisible();
+    await expect(toolbar.getByRole("link", { name: "Add project" })).toHaveAttribute(
+      "title",
+      "Add project (⌘N)",
+    );
+    await expect(
+      toolbar.getByRole("link", { name: "Quick upload" }),
+    ).toHaveAttribute("title", "Quick upload (⌘⇧U)");
+  });
+
+  test("toolbar actions are 28px icon buttons with no visible label text", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    const toolbar = page.getByTestId("app-toolbar");
+    for (const name of ["Add project", "Quick upload"]) {
+      const action = toolbar.getByRole("link", { name });
+      const box = await action.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBe(28);
+      expect(box!.height).toBe(28);
+      expect((await action.innerText()).trim()).toBe("");
     }
+  });
+
+  test("the toolbar is 52px tall and content starts 24px below it", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbarBox = await page.getByTestId("app-toolbar").boundingBox();
+    expect(toolbarBox).not.toBeNull();
+    expect(toolbarBox!.height).toBe(52);
+
+    const firstChild = await page.locator("main > *").first().boundingBox();
+    expect(firstChild).not.toBeNull();
+    expect(firstChild!.y).toBe(toolbarBox!.y + toolbarBox!.height + 24);
+  });
+
+  test("Settings sits below Library, inside the sidebar's bottom inset", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    const sidebar = page.getByRole("navigation", { name: "Sections" });
+    const library = await sidebar
+      .getByRole("link", { name: "Library", exact: true })
+      .boundingBox();
+    const settings = await sidebar
+      .getByRole("link", { name: "Settings", exact: true })
+      .boundingBox();
+    const sidebarBox = await page.locator("#app-sidebar").boundingBox();
+    expect(library).not.toBeNull();
+    expect(settings).not.toBeNull();
+    expect(sidebarBox).not.toBeNull();
+    expect(settings!.y).toBeGreaterThan(library!.y);
+    const bottomGap =
+      sidebarBox!.y + sidebarBox!.height - (settings!.y + settings!.height);
+    expect(bottomGap).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(bottomGap - 8)).toBeLessThanOrEqual(1);
   });
 
   test("the sidebar sits beside the content, not above it", async ({
@@ -139,18 +212,18 @@ test.describe("source list sidebar", () => {
   }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
-    const main = page.locator("main");
+    const toolbar = page.getByTestId("app-toolbar");
     expect(
-      await main.evaluate((el) => getComputedStyle(el).borderTopColor),
+      await toolbar.evaluate((el) => getComputedStyle(el).borderBottomColor),
     ).toBe("rgba(0, 0, 0, 0)");
-    await main.evaluate((el) => {
+    await page.locator("main").evaluate((el) => {
       el.style.height = "200px";
       el.scrollTop = 400;
       el.dispatchEvent(new Event("scroll"));
     });
     await page.waitForTimeout(150); // let the 120ms border-color transition settle
     expect(
-      await main.evaluate((el) => getComputedStyle(el).borderTopColor),
+      await toolbar.evaluate((el) => getComputedStyle(el).borderBottomColor),
     ).not.toBe("rgba(0, 0, 0, 0)");
   });
 });
@@ -190,33 +263,20 @@ test.describe("overlay titlebar", () => {
   });
 
   // The sidebar strip alone left the band above the content pane undraggable,
-  // which is the half of the titlebar the pointer actually lands on.
-  test("the content pane's top band is draggable too", async ({ page }) => {
+  // which is the half of the titlebar the pointer actually lands on. The
+  // toolbar itself is that drag region now, in place of the removed absolute
+  // overlay.
+  test("the content column's toolbar is draggable too", async ({ page }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
     const strips = page.locator("[data-tauri-drag-region]");
     await expect(strips).toHaveCount(2);
     const main = await page.locator("main").boundingBox();
-    const strip = await page.locator(".titlebar-drag").boundingBox();
-    expect(strip).not.toBeNull();
-    expect(strip!.y).toBe(0);
-    expect(strip!.x).toBe(main!.x);
-    expect(strip!.width).toBe(main!.width);
-  });
-
-  // 32px is the AppKit titlebar height: shorter leaves a dead band that won't
-  // drag the window, taller starts swallowing clicks on content.
-  test("the content drag strip covers the titlebar and no content", async ({
-    page,
-  }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
-    const strip = await page.locator(".titlebar-drag").boundingBox();
-    expect(strip!.height).toBe(32);
-    const heading = await page
-      .getByRole("heading", { name: "Library" })
-      .boundingBox();
-    expect(heading!.y).toBeGreaterThanOrEqual(strip!.height);
+    const toolbar = await page.getByTestId("app-toolbar").boundingBox();
+    expect(toolbar).not.toBeNull();
+    expect(toolbar!.y).toBe(0);
+    expect(toolbar!.x).toBe(main!.x);
+    expect(toolbar!.width).toBe(main!.width);
   });
 
   // main owns the top inset so no route can drift its own; every page has to
