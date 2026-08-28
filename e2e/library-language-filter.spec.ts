@@ -37,3 +37,38 @@ test.describe("library filter language names + badge casing", () => {
     await expect(page.getByText(/Done/).first()).toBeVisible();
   });
 });
+
+test.describe("sidebar language destinations", () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, {
+      __libraryEntries__: [
+        entry(1, "ja", "done"),
+        entry(2, "de", "idle"),
+        entry(3, "fr", "idle"),
+        entry(4, "de", "done"),
+      ],
+    });
+  });
+
+  test("languages appear once, in display-name order, without icons", async ({
+    page,
+  }) => {
+    // Opened away from Library: the shell owns the load, so destinations are
+    // populated wherever the app starts.
+    await page.goto("/settings");
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    await expect(
+      nav.getByRole("link", { name: "All", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".source-destinations .source-label")).toHaveText([
+      "All",
+      "French",
+      "German",
+      "Japanese",
+    ]);
+    await expect(page.locator(".source-destinations svg")).toHaveCount(0);
+    await expect(
+      nav.getByRole("link", { name: "German", exact: true }),
+    ).toHaveAttribute("href", "/library?language=de");
+  });
+});

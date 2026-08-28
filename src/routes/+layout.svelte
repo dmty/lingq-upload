@@ -2,12 +2,14 @@
   import "../app.css";
   import "@fontsource-variable/literata";
   import "@fontsource-variable/nunito/wght.css";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { afterNavigate, goto } from "$app/navigation";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import Button from "$lib/components/Button.svelte";
   import { commands } from "$lib/ipc/bindings";
+  import { library } from "$lib/stores/library.svelte";
   import { sidebar } from "$lib/stores/sidebar.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import { navigationHistory } from "$lib/stores/navigation.svelte";
@@ -16,7 +18,49 @@
 
   const isActive = (path: string) => page.url.pathname.startsWith(path);
 
-  const libraryIcon = "M3 4h10v8H3z M3 7h10 M3 10h10";
+  // Library routes load on mount; anywhere else the shell has to, or the
+  // sidebar would have no languages to offer until Library is visited.
+  onMount(() => {
+    if (library.status === "idle") void library.load();
+  });
+
+  const languageDisplay = new Intl.DisplayNames(["en"], { type: "language" });
+  const languageCollator = new Intl.Collator("en");
+
+  function languageLabel(code: string): string {
+    try {
+      return languageDisplay.of(code) ?? code;
+    } catch {
+      return code;
+    }
+  }
+
+  function libraryHref(language: string, query = ""): string {
+    const params = new URLSearchParams();
+    if (language) params.set("language", language);
+    if (query) params.set("q", query);
+    const suffix = params.toString();
+    return suffix ? `/library?${suffix}` : "/library";
+  }
+
+  const languages = $derived.by(() =>
+    [...new Set((library.index?.entries ?? []).map((e) => e.language))]
+      .map((code) => ({ code, label: languageLabel(code) }))
+      .sort(
+        (a, b) =>
+          languageCollator.compare(a.label, b.label) ||
+          a.code.localeCompare(b.code),
+      ),
+  );
+
+  const onLibrary = $derived(page.url.pathname === "/library");
+  const currentLanguage = $derived(
+    onLibrary ? (page.url.searchParams.get("language") ?? "") : "",
+  );
+  const currentQuery = $derived(
+    onLibrary ? (page.url.searchParams.get("q") ?? "") : "",
+  );
+
   const settingsIcon =
     "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
     " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
@@ -240,18 +284,36 @@
         {@render toggleIcon()}
       </button>
     </div>
-    <nav aria-label="Sections" class="flex flex-1 flex-col gap-[2px]">
-      <a
-        href="/library"
-        class="source-row"
-        aria-current={isActive("/library") ? "page" : undefined}
+    <nav aria-label="Sections" class="flex min-h-0 flex-1 flex-col">
+      <div id="library-heading" class="source-heading">Library</div>
+      <div
+        class="source-destinations flex flex-col gap-[2px]"
+        role="group"
+        aria-labelledby="library-heading"
       >
-        {@render icon(libraryIcon)}
-        Library
-      </a>
+        <a
+          href={libraryHref("", currentQuery)}
+          class="source-row"
+          aria-current={onLibrary && !currentLanguage ? "page" : undefined}
+        >
+          <span class="source-label">All</span>
+        </a>
+        {#each languages as language (language.code)}
+          <a
+            href={libraryHref(language.code, currentQuery)}
+            class="source-row"
+            aria-current={currentLanguage === language.code
+              ? "page"
+              : undefined}
+            title={language.label}
+          >
+            <span class="source-label">{language.label}</span>
+          </a>
+        {/each}
+      </div>
       <a
         href="/settings"
-        class="source-row mt-auto"
+        class="source-row source-settings"
         aria-current={isActive("/settings") ? "page" : undefined}
       >
         {@render icon(settingsIcon)}

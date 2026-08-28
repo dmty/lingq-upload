@@ -85,14 +85,23 @@ test.describe("macOS shell tokens", () => {
 });
 
 test.describe("source list sidebar", () => {
-  test("Library and Settings live in the sidebar; Add and Quick upload live in the toolbar", async ({
+  test("Library heads a destination list; Add and Quick upload live in the toolbar", async ({
     page,
   }) => {
     await page.goto("/library");
 
     const sidebar = page.getByRole("navigation", { name: "Sections" });
+    await expect(sidebar.locator(".source-heading")).toHaveText("Library");
+    // The heading names the list rather than duplicating All as a second
+    // link to the same unfiltered state.
     await expect(
       sidebar.getByRole("link", { name: "Library", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("group", { name: "Library" }).getByRole("link", {
+        name: "All",
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       sidebar.getByRole("link", { name: "Settings", exact: true }),
@@ -145,13 +154,13 @@ test.describe("source list sidebar", () => {
     expect(firstChild!.y).toBe(toolbarBox!.y + toolbarBox!.height + 24);
   });
 
-  test("Settings sits below Library, inside the sidebar's bottom inset", async ({
+  test("Settings sits below the destinations, inside the sidebar's bottom inset", async ({
     page,
   }) => {
     await page.goto("/library");
     const sidebar = page.getByRole("navigation", { name: "Sections" });
     const library = await sidebar
-      .getByRole("link", { name: "Library", exact: true })
+      .getByRole("link", { name: "All", exact: true })
       .boundingBox();
     const settings = await sidebar
       .getByRole("link", { name: "Settings", exact: true })
@@ -187,7 +196,7 @@ test.describe("source list sidebar", () => {
       nav.getByRole("link", { name: "Settings", exact: true }),
     ).toHaveAttribute("aria-current", "page");
     await expect(
-      nav.getByRole("link", { name: "Library", exact: true }),
+      nav.getByRole("link", { name: "All", exact: true }),
     ).not.toHaveAttribute("aria-current", "page");
   });
 
@@ -388,7 +397,7 @@ test.describe("overlay titlebar", () => {
     await page.goto("/library");
     const first = page
       .getByRole("navigation", { name: "Sections" })
-      .getByRole("link", { name: "Library", exact: true });
+      .locator(".source-heading");
     const box = await first.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y).toBeGreaterThanOrEqual(44);
