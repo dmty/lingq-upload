@@ -59,7 +59,7 @@ const fetchCount = (
 async function leaveAndReturn(page: import("@playwright/test").Page) {
   await page
     .getByRole("navigation", { name: "Sections" })
-    .getByRole("link", { name: "Library", exact: true })
+    .getByRole("link", { name: "All", exact: true })
     .click();
   await expect(page).toHaveURL(/\/library/);
   await page.goBack();
