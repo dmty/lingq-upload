@@ -176,6 +176,63 @@ test.describe("source list sidebar", () => {
     expect(Math.abs(bottomGap - 8)).toBeLessThanOrEqual(1);
   });
 
+  test("the source-list heading is a quiet 11px label above its rows", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    const heading = page.locator(".source-heading");
+    await expect(heading).toHaveText("Library");
+    await expect(heading).toHaveCSS("font-size", "11px");
+    await expect(heading).toHaveCSS("font-weight", /500|600/);
+
+    // Same inline padding as a destination row, so the label column lines up.
+    const headingPad = await heading.evaluate(
+      (el) => getComputedStyle(el).paddingLeft,
+    );
+    const rowPad = await page
+      .locator(".source-destinations a")
+      .first()
+      .evaluate((el) => getComputedStyle(el).paddingLeft);
+    expect(headingPad).toBe(rowPad);
+  });
+
+  test("overflowing languages scroll on their own", async ({ page }) => {
+    const codes = [
+      "en", "ja", "de", "fr", "es", "it", "pt", "nl", "sv", "no",
+      "da", "fi", "pl", "cs", "hu", "ro", "tr", "el", "he", "ar",
+    ];
+    await seed(page, {
+      __libraryEntries__: codes.map((language, i) =>
+        libraryEntry(`book-${i}`, { title: `Book ${i}`, language }),
+      ),
+    });
+    await page.setViewportSize({ width: 1000, height: 420 });
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+
+    const destinations = page.locator(".source-destinations");
+    const settings = page.getByRole("link", { name: "Settings", exact: true });
+    expect(
+      await destinations.evaluate((el) => el.scrollHeight > el.clientHeight),
+    ).toBe(true);
+
+    const headingBefore = await page.locator(".source-heading").boundingBox();
+    const settingsBefore = await settings.boundingBox();
+    await destinations.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+
+    await expect(settings).toBeVisible();
+    const headingAfter = await page.locator(".source-heading").boundingBox();
+    const settingsAfter = await settings.boundingBox();
+    expect(headingAfter!.y).toBe(headingBefore!.y);
+    expect(settingsAfter!.y).toBe(settingsBefore!.y);
+    // The scroller keeps to its own column: no sideways drift.
+    expect(
+      await destinations.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+  });
+
   test("the sidebar sits beside the content, not above it", async ({
     page,
   }) => {
@@ -550,6 +607,10 @@ test.describe("inactive window chrome", () => {
       const style = getComputedStyle(el);
       return [style.backgroundColor, style.color];
     });
+    expect(active).toEqual([
+      await resolveToken(page, "--color-accent"),
+      await resolveToken(page, "--color-accent-fg"),
+    ]);
 
     await deactivate(page);
     await page.waitForTimeout(150); // let the 120ms background transition settle
@@ -562,20 +623,28 @@ test.describe("inactive window chrome", () => {
 
     // Neutral means the sunken surface, not a desaturated accent: the row has
     // to land on the same fill the inactive popup badge uses.
-    const sunken = await current.evaluate((el) =>
-      getComputedStyle(el).getPropertyValue("--color-surface-sunken").trim(),
-    );
-    const resolved = await page.evaluate((value) => {
-      const probe = document.createElement("div");
-      probe.style.backgroundColor = value;
-      document.body.append(probe);
-      const out = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return out;
-    }, sunken);
-    expect(inactive[0]).toBe(resolved);
+    expect(inactive).toEqual([
+      await resolveToken(page, "--color-surface-sunken"),
+      await resolveToken(page, "--color-fg"),
+    ]);
   });
 });
+
+// Token values are authored as hex/oklch; computed styles come back as rgb,
+// so compare through a probe element that resolves the token the same way.
+async function resolveToken(page: Page, token: string): Promise<string> {
+  return page.evaluate((name) => {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    const probe = document.createElement("div");
+    probe.style.color = value;
+    document.body.append(probe);
+    const out = getComputedStyle(probe).color;
+    probe.remove();
+    return out;
+  }, token);
+}
 
 test.describe("text selection", () => {
   test.beforeEach(async ({ page }) => {

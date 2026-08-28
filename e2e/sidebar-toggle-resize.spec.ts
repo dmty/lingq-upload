@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "./setup/test";
+import { expect, seed, test } from "./setup/test";
+import { libraryEntry } from "./setup/library-fixture";
 
 const readSidebarWidth = (page: Page) =>
   page.evaluate(() => {
@@ -105,5 +106,51 @@ test.describe("sidebar toggle + resize", () => {
       "true",
     );
     await expect(page.locator("#app-sidebar")).toBeHidden();
+  });
+
+  test("a long language name truncates at the minimum width and keeps its tooltip", async ({
+    page,
+  }) => {
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry("book-1", { title: "Book 1", language: "zh-Hant-HK" }),
+      ],
+    });
+    await page.goto("/library?language=zh-Hant-HK");
+    await page.waitForLoadState("networkidle");
+
+    const row = page.locator(".source-destinations a").nth(1);
+    const label = row.locator(".source-label");
+    // Read the display name rather than hard-coding it: ICU wording drifts
+    // between platforms, the truncation contract does not.
+    const name = (await label.textContent())!;
+    expect(name.length).toBeGreaterThan(20);
+    await expect(row).toHaveAttribute("title", name);
+    await expect(row).toHaveAccessibleName(name);
+
+    const handle = page.getByTestId("sidebar-resize-handle");
+    const box = await handle.boundingBox();
+    if (!box) throw new Error("resize handle has no bounding box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(20, box.y + box.height / 2, { steps: 10 });
+    await page.mouse.up();
+    expect(await readSidebarWidth(page)).toBe(180);
+
+    expect(
+      await label.evaluate((el) => el.scrollWidth > el.clientWidth),
+    ).toBe(true);
+    const rowBox = await row.boundingBox();
+    expect(rowBox!.height).toBe(28);
+    const handleBox = await handle.boundingBox();
+    expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(handleBox!.x + 1);
+    await expect(row.locator("svg")).toHaveCount(0);
+
+    // Collapsing hides the whole source list; expanding brings back the same
+    // selected destination.
+    await page.getByTestId("sidebar-toggle").click();
+    await expect(page.locator("#app-sidebar")).toBeHidden();
+    await page.getByTestId("sidebar-floating-toggle").click();
+    await expect(row).toHaveAttribute("aria-current", "page");
   });
 });
