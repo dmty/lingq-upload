@@ -286,7 +286,7 @@
           stroke-linecap="round"
           aria-hidden="true"
         >
-          <path d="M8 12V4 M5 7l3-3 3 3 M3 13h10" />
+          <path d="M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5" />
         </svg>
       </a>
     </div>
