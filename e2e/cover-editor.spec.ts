@@ -25,6 +25,12 @@ async function coverBox(page: Page) {
   return box;
 }
 
+async function cropRatio(page: Page) {
+  const text = (await page.getByTestId("cover-crop-size").textContent()) ?? "";
+  const [w, h] = text.split("×").map((n) => Number(n.trim()));
+  return w / h;
+}
+
 const projectChapters = chapters(4, 50);
 
 const buckets: BucketMeta[] = [
@@ -172,6 +178,103 @@ test.describe("cover editor", () => {
     // Moving must not resize.
     await expect(page.getByTestId("cover-crop-size")).toHaveText(
       `${COVER_W / 2} × ${COVER_H / 2}`,
+    );
+  });
+
+  test("square selects the biggest centred square", async ({ page }) => {
+    await page.getByTestId("cover-open-editor").click();
+    await coverBox(page);
+
+    await page.getByTestId("cover-crop-square").click();
+
+    // The short side of a 200x300 cover.
+    await expect(page.getByTestId("cover-crop-size")).toHaveText(
+      `${COVER_W} × ${COVER_W}`,
+    );
+    // The readout is computed from the source pixels, so check the drawn
+    // selection is square too — that is what the user is looking at.
+    const drawn = await page.getByTestId("cover-crop-rect").boundingBox();
+    expect(drawn?.width).toBeCloseTo(drawn?.height ?? 0, 0);
+  });
+
+  test("shift keeps the shape while dragging a handle", async ({ page }) => {
+    await page.getByTestId("cover-open-editor").click();
+    const box = await coverBox(page);
+    await page.getByTestId("cover-crop-square").click();
+
+    const grip = await page.locator('[data-grip="se"]').boundingBox();
+    if (!grip) throw new Error("no south-east grip");
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.keyboard.down("Shift");
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.4, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+
+    // Smaller, but still square — without Shift this drag gives 120 x 70.
+    await expect(page.getByTestId("cover-crop-size")).toHaveText("120 × 120");
+  });
+
+  test("shift on a side handle resizes the other axis too", async ({
+    page,
+  }) => {
+    await page.getByTestId("cover-open-editor").click();
+    const box = await coverBox(page);
+    await page.getByTestId("cover-crop-square").click();
+
+    const grip = await page.locator('[data-grip="e"]').boundingBox();
+    if (!grip) throw new Error("no east grip");
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.keyboard.down("Shift");
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.5, grip.y + grip.height / 2, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+
+    // Only the east edge moved, but the height follows so the square holds.
+    await expect(page.getByTestId("cover-crop-size")).toHaveText("100 × 100");
+  });
+
+  test("shift-drag slides a cornered selection back into frame", async ({
+    page,
+  }) => {
+    await page.getByTestId("cover-open-editor").click();
+    const box = await coverBox(page);
+
+    // A small selection near the top-left: growing it about its own centre
+    // would push it off the left edge. Started clear of the full-frame
+    // selection's own corner grip, which would resize instead of draw.
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.19, {
+      steps: 4,
+    });
+    await page.mouse.up();
+    const ratio = await cropRatio(page);
+    const small = await page.getByTestId("cover-crop-rect").boundingBox();
+
+    const grip = await page.locator('[data-grip="s"]').boundingBox();
+    if (!grip) throw new Error("no south grip");
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.keyboard.down("Shift");
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2, box.y + box.height * 0.6, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+
+    const grown = await page.getByTestId("cover-crop-rect").boundingBox();
+    expect(grown?.width ?? 0).toBeGreaterThan(small?.width ?? 0);
+    expect(await cropRatio(page)).toBeCloseTo(ratio, 1);
+    // Slid right rather than hanging off the left edge of the image.
+    expect(grown?.x ?? 0).toBeGreaterThanOrEqual(box.x - 1);
+    expect((grown?.x ?? 0) + (grown?.width ?? 0)).toBeLessThanOrEqual(
+      box.x + box.width + 1,
     );
   });
 

@@ -46,6 +46,14 @@
   let start: Rect = { ...FULL };
 
   const outExt = $derived(sourceExt.toLowerCase() === "png" ? "png" : "jpg");
+  // The image is never letterboxed, so the displayed box carries the image's
+  // aspect ratio and a rect kept square in source pixels also looks square.
+  const squareRect: Rect = $derived.by(() => {
+    if (!natural) return { ...FULL };
+    const w = Math.min(1, natural.h / natural.w);
+    const h = Math.min(1, natural.w / natural.h);
+    return { x: (1 - w) / 2, y: (1 - h) / 2, w, h };
+  });
   const cropW = $derived(natural ? Math.round(rect.w * natural.w) : 0);
   const cropH = $derived(natural ? Math.round(rect.h * natural.h) : 0);
   // A full-frame "crop" would re-encode the image for nothing.
@@ -118,6 +126,49 @@
     };
   }
 
+  /**
+   * Resize from `start` keeping its width-to-height ratio. The edges under the
+   * grip stay anchored; an axis the grip does not touch keeps its centre.
+   */
+  function keepShape(
+    edge: Grip,
+    p: { x: number; y: number },
+    minW: number,
+    minH: number,
+  ): Rect {
+    const west = edge.includes("w");
+    const north = edge.includes("n");
+    const horiz = west || edge.includes("e");
+    const vert = north || edge.includes("s");
+    const aspect = start.w / start.h;
+    const ax = west ? start.x + start.w : start.x;
+    const ay = north ? start.y + start.h : start.y;
+
+    // Whichever dragged edge reaches further sets the size; the ratio does the
+    // rest. Only anchored edges cap it — a free axis slides back into frame
+    // below rather than freezing the drag against it.
+    const w = Math.min(
+      Math.max(
+        horiz ? Math.abs(p.x - ax) : 0,
+        vert ? Math.abs(p.y - ay) * aspect : 0,
+        minW,
+        minH * aspect,
+      ),
+      horiz ? (west ? ax : 1 - ax) : 1,
+      vert ? (north ? ay : 1 - ay) * aspect : aspect,
+      1,
+    );
+    const h = w / aspect;
+    const x = horiz ? (west ? ax - w : ax) : start.x + (start.w - w) / 2;
+    const y = vert ? (north ? ay - h : ay) : start.y + (start.h - h) / 2;
+    return {
+      x: Math.min(Math.max(0, x), 1 - w),
+      y: Math.min(Math.max(0, y), 1 - h),
+      w,
+      h,
+    };
+  }
+
   function onPointerDown(event: PointerEvent) {
     const b = box();
     if (!b || busy) return;
@@ -152,6 +203,10 @@
         x: Math.min(Math.max(0, start.x + (p.x - origin.x)), 1 - start.w),
         y: Math.min(Math.max(0, start.y + (p.y - origin.y)), 1 - start.h),
       };
+      return;
+    }
+    if (event.shiftKey) {
+      rect = keepShape(grip, p, minW, minH);
       return;
     }
     // Each dragged edge stops at the minimum rather than crossing its opposite.
@@ -337,7 +392,7 @@
                 type="button"
                 data-grip="move"
                 data-testid="cover-crop-rect"
-                aria-label="Crop area. Arrow keys move it, Alt with arrow keys resizes it."
+                aria-label="Crop area. Arrow keys move it, Alt with arrow keys resizes it. Hold Shift while dragging a handle to keep its shape."
                 class="crop absolute cursor-move focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 style="left:{rect.x * 100}%;top:{rect.y * 100}%;width:{rect.w *
                   100}%;height:{rect.h * 100}%"
@@ -374,11 +429,21 @@
     <footer class="flex items-center gap-3">
       <p class="min-w-0 flex-1 text-xs text-fg-subtle">
         {#if natural}
-          Drag to select an area · original {natural.w} × {natural.h}
+          Drag to select an area · Shift keeps its shape · original {natural.w} ×
+          {natural.h}
         {:else}
           Loading cover…
         {/if}
       </p>
+      <button
+        type="button"
+        data-testid="cover-crop-square"
+        class="rounded-sm px-2 py-1 text-xs text-fg-muted transition-colors duration-120 ease-snappy hover:text-fg disabled:opacity-40"
+        disabled={busy || natural === null}
+        onclick={() => (rect = { ...squareRect })}
+      >
+        Square
+      </button>
       <button
         type="button"
         data-testid="cover-crop-reset"
