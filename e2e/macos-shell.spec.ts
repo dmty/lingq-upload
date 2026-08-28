@@ -228,6 +228,154 @@ test.describe("source list sidebar", () => {
   });
 });
 
+test.describe("toolbar history controls", () => {
+  test("Back and Forward start disabled on a fresh visit", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbar = page.getByTestId("app-toolbar");
+    await expect(toolbar.getByRole("button", { name: "Back" })).toBeDisabled();
+    await expect(
+      toolbar.getByRole("button", { name: "Forward" }),
+    ).toBeDisabled();
+  });
+
+  test("Back and Forward traverse toolbar navigation", async ({ page }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbar = page.getByTestId("app-toolbar");
+    const back = toolbar.getByRole("button", { name: "Back" });
+    const forward = toolbar.getByRole("button", { name: "Forward" });
+
+    await toolbar.getByRole("link", { name: "Add project" }).click();
+    await expect(page).toHaveURL(/\/add$/);
+    await expect(back).toBeEnabled();
+    await expect(forward).toBeDisabled();
+
+    await back.click();
+    await expect(page).toHaveURL(/\/library$/);
+    await expect(back).toBeDisabled();
+    await expect(forward).toBeEnabled();
+
+    await forward.click();
+    await expect(page).toHaveURL(/\/add$/);
+  });
+
+  test("Back, Forward, title and trailing actions keep a stable left-to-right order", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbar = page.getByTestId("app-toolbar");
+    await toolbar.getByRole("link", { name: "Add project" }).click();
+    await expect(page).toHaveURL(/\/add$/);
+
+    const [back, forward, title, add, upload] = await Promise.all([
+      toolbar.getByRole("button", { name: "Back" }).boundingBox(),
+      toolbar.getByRole("button", { name: "Forward" }).boundingBox(),
+      toolbar.getByRole("heading").boundingBox(),
+      toolbar.getByRole("link", { name: "Add project" }).boundingBox(),
+      toolbar.getByRole("link", { name: "Quick upload" }).boundingBox(),
+    ]);
+    const xs = [back, forward, title, add, upload].map((box) => box!.x);
+    for (let i = 1; i < xs.length; i += 1) {
+      expect(xs[i]).toBeGreaterThan(xs[i - 1]);
+    }
+  });
+
+  test("a long title truncates without moving the trailing actions", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbar = page.getByTestId("app-toolbar");
+    const addBefore = await toolbar
+      .getByRole("link", { name: "Add project" })
+      .boundingBox();
+    const uploadBefore = await toolbar
+      .getByRole("link", { name: "Quick upload" })
+      .boundingBox();
+
+    await toolbar.locator(".toolbar-title").evaluate((el) => {
+      el.textContent = "A very long injected toolbar title ".repeat(20);
+    });
+
+    const titleBox = await toolbar.locator(".toolbar-title").boundingBox();
+    const addAfter = await toolbar
+      .getByRole("link", { name: "Add project" })
+      .boundingBox();
+    const uploadAfter = await toolbar
+      .getByRole("link", { name: "Quick upload" })
+      .boundingBox();
+
+    expect(addAfter!.x).toBe(addBefore!.x);
+    expect(uploadAfter!.x).toBe(uploadBefore!.x);
+    expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(addAfter!.x);
+  });
+
+  test("collapsing the sidebar clears the traffic lights and floating toggle for the leading controls", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const toolbar = page.getByTestId("app-toolbar");
+    const floatingToggle = page.getByTestId("sidebar-floating-toggle");
+    const back = toolbar.getByRole("button", { name: "Back" });
+    const forward = toolbar.getByRole("button", { name: "Forward" });
+    const add = toolbar.getByRole("link", { name: "Add project" });
+    const upload = toolbar.getByRole("link", { name: "Quick upload" });
+
+    const backBeforeCollapse = await back.boundingBox();
+
+    await page.getByTestId("sidebar-toggle").click();
+    await expect(page.locator(".app-shell")).toHaveAttribute(
+      "data-sidebar-collapsed",
+      "true",
+    );
+
+    for (const control of [floatingToggle, back, forward, add, upload]) {
+      await expect(control).toBeVisible();
+    }
+
+    const [toggleBox, backBox, forwardBox, addBox, uploadBox] =
+      await Promise.all([
+        floatingToggle.boundingBox(),
+        back.boundingBox(),
+        forward.boundingBox(),
+        add.boundingBox(),
+        upload.boundingBox(),
+      ]);
+
+    // Clears the traffic lights (leftmost 64px) ...
+    expect(backBox!.x).toBeGreaterThanOrEqual(64);
+    // ... and the floating toggle, independently — the two gutters happen
+    // to share a number today, but each is its own constraint.
+    expect(backBox!.x).toBeGreaterThanOrEqual(
+      toggleBox!.x + toggleBox!.width,
+    );
+    expect(forwardBox!.x).toBeGreaterThan(backBox!.x);
+    expect(addBox!.x).toBeGreaterThan(forwardBox!.x);
+    expect(uploadBox!.x).toBeGreaterThan(addBox!.x);
+
+    await add.click();
+    await expect(page).toHaveURL(/\/add$/);
+    await expect(back).toBeEnabled();
+    await back.click();
+    await expect(page).toHaveURL(/\/library$/);
+
+    await floatingToggle.click();
+    await expect(page.locator(".app-shell")).toHaveAttribute(
+      "data-sidebar-collapsed",
+      "false",
+    );
+    await page.waitForTimeout(300); // let the 200ms sidebar-width transition settle
+    // No control moved in the expanded state because of the collapsed-only
+    // inset rule.
+    expect((await back.boundingBox())!.x).toBe(backBeforeCollapse!.x);
+  });
+});
+
 test.describe("overlay titlebar", () => {
   test("a drag strip reserves room above the sidebar sections", async ({
     page,

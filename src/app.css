@@ -304,6 +304,53 @@
   color: var(--color-fg-muted);
 }
 
+/* A connected NSSegmentedControl-style pair: shared border around both
+   buttons, a hairline divider between them, radius only on the outer
+   corners. Hover/pressed/focus/inactive-window colour all come from
+   .toolbar-action above — this only adds the pair geometry and disabled
+   contrast, which .toolbar-action has no notion of (it's only ever an <a>). */
+.toolbar-history {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-inline-end: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.toolbar-history-btn {
+  border-radius: 0;
+}
+
+.toolbar-history-btn:first-child {
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+}
+
+.toolbar-history-btn:last-child {
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.toolbar-history-btn:disabled {
+  color: var(--color-fg-subtle);
+  cursor: not-allowed;
+}
+
+.toolbar-history-btn:disabled:hover {
+  background: transparent;
+}
+
+/* With the sidebar collapsed the content column spans the full window and
+   the toolbar's leading edge slides under the traffic lights (64px, as on
+   the sidebar header) and the floating sidebar toggle (76px + its 28px
+   width). Only the leading inset changes — order and the expanded-state
+   metrics stay untouched. */
+.app-shell[data-sidebar-collapsed="true"] .app-toolbar {
+  padding-inline-start: 112px;
+}
+
 .content-column > main {
   overflow-y: auto;
   /* Opts back into the bounce the blanket rule above kills — AppKit scroll

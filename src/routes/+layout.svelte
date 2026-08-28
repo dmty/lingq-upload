@@ -3,12 +3,14 @@
   import "@fontsource-variable/literata";
   import "@fontsource-variable/nunito/wght.css";
   import { page } from "$app/state";
+  import { afterNavigate, goto } from "$app/navigation";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import Button from "$lib/components/Button.svelte";
   import { commands } from "$lib/ipc/bindings";
   import { sidebar } from "$lib/stores/sidebar.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
+  import { navigationHistory } from "$lib/stores/navigation.svelte";
 
   let { children } = $props();
 
@@ -43,6 +45,36 @@
       staticTitles[page.url.pathname] ??
       "",
   );
+
+  afterNavigate(({ to }) => {
+    if (!to) return;
+    navigationHistory.record(to.url.pathname + to.url.search + to.url.hash);
+  });
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    const target = event.target;
+    const editable =
+      target instanceof HTMLElement &&
+      (target.matches("input, textarea, select") || target.isContentEditable);
+    const modalOpen = document.querySelector("dialog[open]") !== null;
+    if (editable || modalOpen || !event.metaKey || event.ctrlKey || event.altKey)
+      return;
+
+    const key = event.key.toLowerCase();
+    if (key === "[" && navigationHistory.canGoBack) {
+      event.preventDefault();
+      void navigationHistory.goBack();
+    } else if (key === "]" && navigationHistory.canGoForward) {
+      event.preventDefault();
+      void navigationHistory.goForward();
+    } else if (key === "n" && !event.shiftKey) {
+      event.preventDefault();
+      void goto("/add");
+    } else if (key === "u" && event.shiftKey) {
+      event.preventDefault();
+      void goto("/upload");
+    }
+  }
 
   let dialog = $state<HTMLDialogElement | null>(null);
   let pending = $state<Awaited<ReturnType<typeof check>>>(null);
@@ -142,6 +174,8 @@
     window.addEventListener("pointercancel", stop);
   }
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 {#snippet toggleIcon()}
   <svg
@@ -250,6 +284,52 @@
       data-testid="app-toolbar"
       data-tauri-drag-region="deep"
     >
+      <div class="toolbar-history">
+        <button
+          type="button"
+          class="toolbar-action toolbar-history-btn"
+          aria-label="Back"
+          title="Back (⌘[)"
+          disabled={!navigationHistory.canGoBack}
+          onclick={() => navigationHistory.goBack()}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 3L6 8l4 5" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="toolbar-action toolbar-history-btn"
+          aria-label="Forward"
+          title="Forward (⌘])"
+          disabled={!navigationHistory.canGoForward}
+          onclick={() => navigationHistory.goForward()}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 3l4 5-4 5" />
+          </svg>
+        </button>
+      </div>
       <h1 class="toolbar-title" title={resolvedTitle}>{resolvedTitle}</h1>
       <a
         href="/add"
