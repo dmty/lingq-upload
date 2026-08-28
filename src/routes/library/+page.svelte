@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import LibraryList from "$lib/components/LibraryList.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { library } from "$lib/stores/library.svelte";
@@ -14,7 +16,6 @@
   } from "$lib/ipc/bindings";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
-  import Select from "$lib/components/Select.svelte";
 
   onMount(() => {
     library.load();
@@ -25,7 +26,6 @@
   });
 
   let search = $state("");
-  let languageFilter = $state("");
   let lingqKeyMissing = $state(false);
   let searchEl = $state<HTMLInputElement | null>(null);
   let focusIndex = $state<number | null>(null);
@@ -40,19 +40,40 @@
     return s.normalize("NFC").toLowerCase();
   }
 
-  const languageDisplay = new Intl.DisplayNames(["en"], { type: "language" });
-  function languageLabel(code: string): string {
-    try {
-      return languageDisplay.of(code) ?? code;
-    } catch {
-      return code;
-    }
+  const selectedLanguage = $derived(page.url.searchParams.get("language") ?? "");
+  const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
+
+  function libraryUrl(language: string, query: string): string {
+    const params = new URLSearchParams();
+    if (language) params.set("language", language);
+    if (query) params.set("q", query);
+    const suffix = params.toString();
+    return suffix ? `/library?${suffix}` : "/library";
   }
 
+  // goto, not replaceState: shallow routing moves the address bar without
+  // updating page.url, and the sidebar reads its language and query from
+  // there. Live typing replaces the current history entry so a search costs
+  // one Back, not one per keystroke.
+  function replaceLibraryUrl(language: string, query: string) {
+    void goto(libraryUrl(language, query), {
+      replaceState: true,
+      keepFocus: true,
+      noScroll: true,
+    });
+  }
+
+  function setSearch(next: string) {
+    search = next;
+    replaceLibraryUrl(selectedLanguage, next);
+  }
+
+  // Back/Forward move the query without going through the field.
+  $effect(() => {
+    search = urlSearch;
+  });
+
   const entries = $derived(library.index?.entries ?? []);
-  const languages = $derived(
-    [...new Set(entries.map((e) => e.language))].sort(),
-  );
 
   const STATUS_ORDER: Record<NonNullable<LibraryEntry["status"]>, number> = {
     running: 0,
@@ -86,7 +107,7 @@
   const filtered = $derived.by(() => {
     const q = nfc(search.trim());
     return sorted.filter((e) => {
-      if (languageFilter && e.language !== languageFilter) return false;
+      if (selectedLanguage && e.language !== selectedLanguage) return false;
       if (q) {
         const hay = `${nfc(e.title)} ${nfc((e.authors ?? []).join(" "))}`;
         if (!hay.includes(q)) return false;
@@ -100,22 +121,17 @@
     entries.filter((e) => (e.status ?? "idle") === "running").length,
   );
 
-  function clearSearch() {
-    search = "";
-    languageFilter = "";
-  }
-
-  // The field's own ⊗ clears just the query — the language filter is a
-  // separate control and AppKit never resets it from here.
+  // Clears just the query — the language is the sidebar's, and nothing here
+  // reaches over to reset it.
   function clearSearchText() {
-    search = "";
+    setSearch("");
     searchEl?.focus();
   }
 
   // A focusIndex that survives re-filtering targets the wrong row.
   $effect(() => {
-    search;
-    languageFilter;
+    urlSearch;
+    selectedLanguage;
     focusIndex = null;
   });
 
@@ -159,7 +175,7 @@
       }
 
       if (e.key === "Escape" && searchFocused) {
-        search = "";
+        setSearch("");
         searchEl?.blur();
         return;
       }
@@ -269,54 +285,47 @@
       <Button href="/add" class="mt-4">+ Add a book</Button>
     </div>
   {:else}
-    <div class="mb-3 flex gap-2">
-      <div class="relative flex-1">
-        <svg
-          class="pointer-events-none absolute top-1/2 left-[8px] -translate-y-1/2 text-fg-subtle"
-          width="13"
-          height="13"
-          viewBox="0 0 13 13"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.4"
-          stroke-linecap="round"
-          aria-hidden="true"
+    <div class="relative mb-3">
+      <svg
+        class="pointer-events-none absolute top-1/2 left-[8px] -translate-y-1/2 text-fg-subtle"
+        width="13"
+        height="13"
+        viewBox="0 0 13 13"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.4"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="5.4" cy="5.4" r="3.9" />
+        <path d="M8.4 8.4 11.6 11.6" />
+      </svg>
+      <input
+        type="search"
+        placeholder="Search titles or authors…"
+        value={search}
+        oninput={(event) => setSearch(event.currentTarget.value)}
+        bind:this={searchEl}
+        class="field field-lg pr-[26px] pl-[26px] placeholder:text-fg-muted"
+      />
+      {#if search}
+        <button
+          type="button"
+          aria-label="Clear search"
+          class="absolute top-1/2 right-[2px] -translate-y-1/2 p-[5px] text-fg-subtle hover:text-fg-muted"
+          onclick={clearSearchText}
         >
-          <circle cx="5.4" cy="5.4" r="3.9" />
-          <path d="M8.4 8.4 11.6 11.6" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Search titles or authors…"
-          bind:value={search}
-          bind:this={searchEl}
-          class="field field-lg pr-[26px] pl-[26px] placeholder:text-fg-muted"
-        />
-        {#if search}
-          <button
-            type="button"
-            aria-label="Clear search"
-            class="absolute top-1/2 right-[2px] -translate-y-1/2 p-[5px] text-fg-subtle hover:text-fg-muted"
-            onclick={clearSearchText}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-              <circle cx="7" cy="7" r="5.8" fill="currentColor" />
-              <path
-                d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
-                class="stroke-surface"
-                stroke-width="1.4"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        {/if}
-      </div>
-      <Select bind:value={languageFilter} class="w-auto flex-none">
-        <option value="">All languages</option>
-        {#each languages as lang (lang)}
-          <option value={lang}>{languageLabel(lang)}</option>
-        {/each}
-      </Select>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <circle cx="7" cy="7" r="5.8" fill="currentColor" />
+            <path
+              d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
+              class="stroke-surface"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      {/if}
     </div>
 
     {#if filtered.length === 0}
@@ -328,7 +337,7 @@
         <button
           type="button"
           class="mt-2 text-xs font-medium text-accent hover:underline"
-          onclick={clearSearch}
+          onclick={clearSearchText}
         >
           Clear search
         </button>

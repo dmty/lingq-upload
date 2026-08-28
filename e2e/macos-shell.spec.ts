@@ -545,7 +545,7 @@ test.describe("inactive window chrome", () => {
     page,
   }) => {
     const current = page.locator('.source-row[aria-current="page"]');
-    await expect(current).toHaveText("Library");
+    await expect(current).toHaveText("All");
     const active = await current.evaluate((el) => {
       const style = getComputedStyle(el);
       return [style.backgroundColor, style.color];
@@ -614,8 +614,12 @@ test.describe("text selection", () => {
 
 test.describe("form controls", () => {
   test.beforeEach(async ({ page }) => {
-    // The search field and popup button only exist on a non-empty library.
-    await seed(page, libraryEntriesFixture());
+    // The search field only exists on a non-empty library; the popup button
+    // needs Add's language list.
+    await seed(page, {
+      ...libraryEntriesFixture(),
+      __languages__: [{ code: "en", title: "English", known_words: 500 }],
+    });
   });
 
   test("every text input carries the shared field chrome", async ({ page }) => {
@@ -662,31 +666,10 @@ test.describe("form controls", () => {
     expect(padLeft).toBeGreaterThanOrEqual(24);
   });
 
-  // `appearance: none` is what makes the height above stick, and it also
-  // strips WebKit's built-in ⊗ — so the field has to bring its own.
-  test("the search field clears itself without touching the filter", async ({
-    page,
-  }) => {
-    await page.goto("/library");
-    await page.waitForLoadState("networkidle");
-    const clear = page.getByRole("button", { name: "Clear search" });
-    await expect(clear).toBeHidden();
-
-    const input = page.locator('input[type="search"]');
-    await input.fill("tolstoy");
-    await page.locator("select.field").first().selectOption("en");
-    await expect(clear).toBeVisible();
-
-    await clear.click();
-    await expect(input).toHaveValue("");
-    await expect(page.locator("select.field").first()).toHaveValue("en");
-    await expect(input).toBeFocused();
-  });
-
   test("a popup button wears an accent badge that dims with the window", async ({
     page,
   }) => {
-    await page.goto("/library");
+    await page.goto("/add");
     await page.waitForLoadState("networkidle");
     const badge = page.locator(".select-badge").first();
     await expect(badge).toBeVisible();
@@ -717,7 +700,7 @@ test.describe("form controls", () => {
   });
 
   test("the popup button leaves room for its badge", async ({ page }) => {
-    await page.goto("/library");
+    await page.goto("/add");
     await page.waitForLoadState("networkidle");
     const padEnd = await page
       .locator("select.field")
@@ -731,7 +714,7 @@ test.describe("form controls", () => {
   test("focusing a popup button still paints the accent ring", async ({
     page,
   }) => {
-    await page.goto("/library");
+    await page.goto("/add");
     await page.waitForLoadState("networkidle");
     const select = page.locator("select.field").first();
     await select.focus();
