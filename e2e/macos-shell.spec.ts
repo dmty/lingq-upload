@@ -10,11 +10,11 @@ test.describe("macOS shell tokens", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("body sits on the macOS 13px base size", async ({ page }) => {
+  test("body uses a comfortable 14px system-font base", async ({ page }) => {
     const size = await page.evaluate(
       () => getComputedStyle(document.body).fontSize,
     );
-    expect(size).toBe("13px");
+    expect(size).toBe("14px");
   });
 
   // html must stay at the browser default so 1rem is 16px for Tailwind's
@@ -125,7 +125,7 @@ test.describe("source list sidebar", () => {
     ).toHaveAttribute("title", "Quick upload (⌘⇧U)");
   });
 
-  test("toolbar actions are 28px icon buttons with no visible label text", async ({
+  test("toolbar actions are 32px icon buttons with no visible label text", async ({
     page,
   }) => {
     await page.goto("/library");
@@ -134,10 +134,42 @@ test.describe("source list sidebar", () => {
       const action = toolbar.getByRole("link", { name });
       const box = await action.boundingBox();
       expect(box).not.toBeNull();
-      expect(box!.width).toBe(28);
-      expect(box!.height).toBe(28);
+      expect(box!.width).toBe(34);
+      expect(box!.height).toBe(32);
       expect((await action.innerText()).trim()).toBe("");
     }
+  });
+
+  test("history and trailing actions are capsules with space before the title", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    const toolbar = page.getByTestId("app-toolbar");
+    const history = toolbar.locator(".toolbar-history");
+    const actions = toolbar.getByTestId("toolbar-actions");
+    const title = toolbar.getByTestId("toolbar-title");
+
+    const capsuleRadius = async (el: typeof history) =>
+      el.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return Math.min(
+          parseFloat(style.borderTopLeftRadius),
+          parseFloat(style.borderTopRightRadius),
+        );
+      });
+
+    // Half of the 32px control height — anything smaller reads as a rounded
+    // rect, not the NSSegmentedControl capsule Finder draws.
+    expect(await capsuleRadius(history)).toBeGreaterThanOrEqual(16);
+    expect(await capsuleRadius(actions)).toBeGreaterThanOrEqual(16);
+
+    const historyBox = await history.boundingBox();
+    const titleBox = await title.boundingBox();
+    expect(historyBox).not.toBeNull();
+    expect(titleBox).not.toBeNull();
+    expect(titleBox!.x - (historyBox!.x + historyBox!.width)).toBeGreaterThanOrEqual(
+      8,
+    );
   });
 
   test("the toolbar is 52px tall and content starts 24px below it", async ({
@@ -485,7 +517,27 @@ test.describe("overlay titlebar", () => {
     expect(toolbar).not.toBeNull();
     expect(toolbar!.y).toBe(0);
     expect(toolbar!.x).toBe(main!.x);
-    expect(toolbar!.width).toBe(main!.width);
+    // Content well is inset from the trailing window edge so its corners can
+    // round into the chrome; the toolbar still spans the full column.
+    expect(toolbar!.width).toBeGreaterThan(main!.width);
+  });
+
+  test("the content pane is a rounded well against the window chrome", async ({
+    page,
+  }) => {
+    await page.goto("/library");
+    await page.waitForLoadState("networkidle");
+    const main = page.locator("main");
+    const radius = await main.evaluate((el) =>
+      parseFloat(getComputedStyle(el).borderTopLeftRadius),
+    );
+    expect(radius).toBeGreaterThanOrEqual(10);
+
+    const columnBg = await page
+      .locator(".content-column")
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    const mainBg = await main.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(mainBg).not.toBe(columnBg);
   });
 
   // main owns the top inset so no route can drift its own; every page has to
@@ -555,12 +607,11 @@ test.describe("inactive window chrome", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("hover feedback is suppressed while the window is inactive", async ({
+  test("sidebar hover feedback is suppressed while the window is inactive", async ({
     page,
   }) => {
     await deactivate(page);
     const targets = [
-      page.getByTestId("app-toolbar").getByRole("link", { name: "Add project" }),
       page.locator("#app-sidebar").getByRole("link", { name: "Settings" }),
       page.getByTestId("sidebar-toggle"),
     ];
@@ -577,6 +628,25 @@ test.describe("inactive window chrome", () => {
       });
       expect(hovered).toEqual(rest);
     }
+  });
+
+  test("toolbar actions still respond to hover while the window is inactive", async ({
+    page,
+  }) => {
+    await deactivate(page);
+    const action = page
+      .getByTestId("app-toolbar")
+      .getByRole("link", { name: "Add project" });
+    const rest = await action.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+
+    await action.hover();
+    await page.waitForTimeout(150);
+    const hovered = await action.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(hovered).not.toBe(rest);
   });
 
   test("the floating toggle also stops responding to hover", async ({
@@ -625,8 +695,56 @@ test.describe("inactive window chrome", () => {
     // to land on the same fill the inactive popup badge uses.
     expect(inactive).toEqual([
       await resolveToken(page, "--color-surface-sunken"),
-      await resolveToken(page, "--color-fg"),
+      await resolveToken(page, "--color-fg-muted"),
     ]);
+  });
+
+  test("titles and toolbar capsules soften with the inactive window", async ({
+    page,
+  }) => {
+    const title = page.getByTestId("toolbar-title");
+    const brand = page.locator(".brand-wordmark");
+    const cluster = page.locator(".toolbar-cluster").first();
+    const activeFill = await cluster.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+
+    await deactivate(page);
+    await expect(title).toHaveCSS(
+      "color",
+      await resolveToken(page, "--color-fg-muted"),
+    );
+    await expect(brand).toHaveCSS(
+      "color",
+      await resolveToken(page, "--color-fg-muted"),
+    );
+    await page.waitForTimeout(150);
+    const inactiveFill = await cluster.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(inactiveFill).not.toBe("rgba(0, 0, 0, 0)");
+    expect(inactiveFill).not.toBe(activeFill);
+    await expect(cluster).not.toHaveCSS("box-shadow", "none");
+    await expect(
+      cluster.locator(".toolbar-action").nth(1),
+    ).not.toHaveCSS("border-inline-start-color", "rgba(0, 0, 0, 0)");
+  });
+
+  test("primary buttons lose their accent in the inactive window", async ({
+    page,
+  }) => {
+    const primary = page.locator(".btn.bg-accent").first();
+    await expect(primary).toBeVisible();
+
+    await deactivate(page);
+    await expect(primary).toHaveCSS(
+      "background-color",
+      await resolveToken(page, "--color-surface-sunken"),
+    );
+    await expect(primary).toHaveCSS(
+      "color",
+      await resolveToken(page, "--color-fg-muted"),
+    );
   });
 });
 

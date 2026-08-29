@@ -254,7 +254,7 @@
 >
   <div
     id="app-sidebar"
-    class="app-sidebar flex flex-col gap-[4px] border-r border-sidebar-border px-[8px] pb-[8px]"
+    class="app-sidebar flex flex-col gap-[4px] px-[8px] pb-[8px]"
   >
     <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
       <div
@@ -332,7 +332,7 @@
       data-testid="app-toolbar"
       data-tauri-drag-region="deep"
     >
-      <div class="toolbar-history">
+      <div class="toolbar-cluster toolbar-history">
         <button
           type="button"
           class="toolbar-action toolbar-history-btn"
@@ -363,22 +363,24 @@
       >
         {resolvedTitle}
       </div>
-      <a
-        href="/add"
-        class="toolbar-action"
-        aria-label="Add project"
-        title="Add project (⌘N)"
-      >
-        {@render icon("M8 3v10 M3 8h10")}
-      </a>
-      <a
-        href="/upload"
-        class="toolbar-action"
-        aria-label="Quick upload"
-        title="Quick upload (⌘⇧U)"
-      >
-        {@render icon("M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5")}
-      </a>
+      <div class="toolbar-cluster" data-testid="toolbar-actions">
+        <a
+          href="/add"
+          class="toolbar-action"
+          aria-label="Add project"
+          title="Add project (⌘N)"
+        >
+          {@render icon("M8 3v10 M3 8h10")}
+        </a>
+        <a
+          href="/upload"
+          class="toolbar-action"
+          aria-label="Quick upload"
+          title="Quick upload (⌘⇧U)"
+        >
+          {@render icon("M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5")}
+        </a>
+      </div>
     </div>
 
     <main
