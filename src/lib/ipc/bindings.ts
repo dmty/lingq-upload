@@ -226,6 +226,10 @@ async cmdListCollections(lang: string) : Promise<Result<Collection[], AppError>>
  * 
  * Two requests, never a per-lesson fetch. `lang` comes from the project entry —
  * cross-language calls 404 (AD-017).
+ * 
+ * When the matching project has no local cover and LingQ returned `imageUrl`,
+ * the bytes are copied into the project dir. Soft-fails: a missing cover
+ * must not blank the course screen.
  */
 async cmdLingqCourse(lang: string, collectionId: number) : Promise<Result<CourseView, AppError>> {
     try {

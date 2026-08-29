@@ -8,6 +8,7 @@
   import CoverThumb from "./CoverThumb.svelte";
   import StatusBadge from "./StatusBadge.svelte";
   import Button from "$lib/components/Button.svelte";
+  import { course } from "$lib/stores/course.svelte";
 
   let {
     entry,
@@ -77,6 +78,15 @@
   });
 
   const statusHumanLabel = $derived(statusLabel(status));
+
+  const remoteCover = $derived.by(() => {
+    if (entry.cover_path) return null;
+    const cid = entry.lingq_collection_id;
+    if (cid == null) return null;
+    return (
+      course.entry(entry.language, cid).view?.collection.image_url ?? null
+    );
+  });
 
   const action = $derived(primaryActionFor(entry));
   const rowDisabled = $derived(action.disabled);
@@ -204,7 +214,11 @@
     title={rowDisabled ? "No LingQ collection id" : undefined}
     onclick={handleRow}
   >
-    <CoverThumb coverPath={entry.cover_path ?? null} title={entry.title} />
+    <CoverThumb
+      coverPath={entry.cover_path ?? null}
+      imageUrl={remoteCover}
+      title={entry.title}
+    />
 
     <div class="min-w-0">
       <div

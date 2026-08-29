@@ -6,6 +6,7 @@
   import LibraryList from "$lib/components/LibraryList.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { library } from "$lib/stores/library.svelte";
+  import { course } from "$lib/stores/course.svelte";
   import { libraryBanner } from "$lib/stores/library-banner.svelte";
   import { appErrorMessage } from "$lib/errors";
   import { joinKey } from "$lib/identity";
@@ -63,6 +64,14 @@
   });
 
   const entries = $derived(library.index?.entries ?? []);
+
+  $effect(() => {
+    for (const e of entries) {
+      if (e.lingq_collection_id != null && !e.cover_path) {
+        void course.ensure(e.language, e.lingq_collection_id);
+      }
+    }
+  });
 
   const STATUS_ORDER: Record<NonNullable<LibraryEntry["status"]>, number> = {
     running: 0,
