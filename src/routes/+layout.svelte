@@ -11,6 +11,7 @@
   import { commands } from "$lib/ipc/bindings";
   import { library } from "$lib/stores/library.svelte";
   import { libraryUrl } from "$lib/library-url";
+  import { joinKey } from "$lib/identity";
   import { sidebar } from "$lib/stores/sidebar.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import { navigationHistory } from "$lib/stores/navigation.svelte";
@@ -53,6 +54,25 @@
   const currentQuery = $derived(
     onLibrary ? (page.url.searchParams.get("q") ?? "") : "",
   );
+
+  // Quick upload starts blank unless the current route already names a
+  // destination: a project route pins both language and collection, the
+  // Library's language filter pins only the language.
+  const uploadHref = $derived.by(() => {
+    const projectKey = page.params.projectId ?? "";
+    const entry = projectKey
+      ? (library.index?.entries.find((e) => joinKey(e.id) === projectKey) ??
+        null)
+      : null;
+    const params = new URLSearchParams();
+    const language = entry?.language ?? currentLanguage;
+    if (language) params.set("language", language);
+    if (entry?.lingq_collection_id != null) {
+      params.set("collection", String(entry.lingq_collection_id));
+    }
+    const suffix = params.toString();
+    return suffix ? `/upload?${suffix}` : "/upload";
+  });
 
   const settingsIcon =
     "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
@@ -108,7 +128,7 @@
       void goto("/add");
     } else if (key === "u" && event.shiftKey) {
       event.preventDefault();
-      void goto("/upload");
+      void goto(uploadHref);
     }
   }
 
@@ -373,7 +393,7 @@
           {@render icon("M8 3v10 M3 8h10")}
         </a>
         <a
-          href="/upload"
+          href={uploadHref}
           class="toolbar-action"
           aria-label="Quick upload"
           title="Quick upload (⌘⇧U)"

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/state";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
   import Select from "$lib/components/Select.svelte";
@@ -275,6 +276,29 @@
     void loadCollections(lang);
   }
 
+  // The shell hands the destination over in the query string when the route
+  // it was invoked from knows one.
+  async function applyDestinationFromUrl() {
+    const wantedLang = page.url.searchParams.get("language") ?? "";
+    const wantedCollection = page.url.searchParams.get("collection") ?? "";
+    if (!wantedLang) {
+      void languagesStore.ensureLoaded();
+      return;
+    }
+    lang = wantedLang;
+    const pending = loadCollections(wantedLang);
+    await languagesStore.ensureLoaded();
+    // A language with no known words is filtered out of the picker, which
+    // would drop the very selection we were handed.
+    if (!languages.some((l) => l.code === wantedLang && l.known_words > 0)) {
+      showAllLanguages = true;
+    }
+    await pending;
+    if (collections.some((c) => String(c.id) === wantedCollection)) {
+      collectionIdRaw = wantedCollection;
+    }
+  }
+
   onMount(() => {
     (async () => {
       unlisten = await listen<JobEvent>("job", (event) => {
@@ -295,7 +319,7 @@
           hoverZone = null;
         }
       });
-      void languagesStore.ensureLoaded();
+      await applyDestinationFromUrl();
     })();
     return () => {
       unlisten?.();
@@ -391,9 +415,7 @@
     Pick a destination, then drop in your text and audio.
   </p>
 
-  <div
-    class="mt-6 rounded-md border border-border bg-surface shadow-card"
-  >
+  <div class="mt-6 rounded-md border border-border bg-surface shadow-card">
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />
     {:else if !error && (busy || progress.length > 0)}
@@ -530,7 +552,9 @@
           <Alert class="mt-4">
             {error}
             {#if errorNeedsKey}
-              <a href="/settings" class="ml-1 font-medium underline">Open Settings</a>
+              <a href="/settings" class="ml-1 font-medium underline"
+                >Open Settings</a
+              >
             {/if}
           </Alert>
         {/if}
