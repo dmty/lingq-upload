@@ -43,6 +43,29 @@ export function formatAge(iso: string, now: number = Date.now()): string {
   return formatRelative(iso);
 }
 
+// CJK characters and the fullwidth punctuation that travels with them.
+// Deliberately excludes U+3000 (ideographic space), which is a separator.
+const CJK_SOURCE =
+  "[\\u3001-\\u303f\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\uff01-\\uff60\\uff66-\\uff9f]";
+const CJK = new RegExp(CJK_SOURCE);
+const CJK_GAP = new RegExp(`(${CJK_SOURCE})[ \\u3000]+(?=${CJK_SOURCE})`, "g");
+
+/**
+ * LingQ returns lesson titles as its tokenizer left them: the lesson number
+ * fused to the front and a space between every CJK token. The row carries its
+ * own index, so the number goes, and the spaces were never in the book.
+ */
+export function normalizeLessonTitle(title: string): string {
+  let out = title.trim();
+  // Only a number running straight into CJK text is the fused lesson number —
+  // a title that is genuinely numeric ("1984") is left alone.
+  const fused = out.match(/^\d+(?::\d+)?(?=\S)/);
+  if (fused && CJK.test(out.charAt(fused[0].length))) {
+    out = out.slice(fused[0].length);
+  }
+  return out.replace(CJK_GAP, "$1").trim();
+}
+
 // Clock duration for a single track or position: m:ss under an hour,
 // h:mm:ss at or above it. Anything longer written as m:ss ("116:00") reads
 // as a bug rather than a duration.

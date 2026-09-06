@@ -34,7 +34,9 @@ test.describe("settings key clear confirm", () => {
     const field = page.getByLabel("Key", { exact: true });
     await expect(field).toHaveValue("");
     await expect(field).not.toHaveAttribute("readonly", "");
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Save", exact: true }),
+    ).toBeDisabled();
 
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(field).toHaveValue(/1234$/);

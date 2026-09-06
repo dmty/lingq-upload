@@ -82,9 +82,7 @@ test.describe("match cover header", () => {
     const headingBox = await bodyHeading.boundingBox();
     expect(headingBox).not.toBeNull();
     expect(headingBox!.height).toBeLessThanOrEqual(1);
-    await expect(
-      page.getByRole("link", { name: "← Library" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "← Library" })).toHaveCount(0);
   });
 
   test("replace picks a file and flips the control to Change…", async ({

@@ -7,13 +7,9 @@ async function startUpload(page: Page) {
   await page.locator("select").first().selectOption("en");
   await page.locator("select").nth(1).selectOption("7");
   await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
-  await page
-    .getByRole("button", { name: "Choose book file" })
-    .click();
+  await page.getByRole("button", { name: "Choose book file" }).click();
   await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
-  await page
-    .getByRole("button", { name: "Choose audio" })
-    .click();
+  await page.getByRole("button", { name: "Choose audio" }).click();
   await page.evaluate(() => {
     window.__uploadOneShotGate__ = new Promise((resolve) => {
       window.__releaseUpload__ = resolve;

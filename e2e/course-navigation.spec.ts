@@ -42,12 +42,13 @@ test.describe("course navigation", () => {
   }) => {
     await page.goto("/library");
 
-    await page.getByRole("button", { name: /^Open "/ }).first().click();
+    await page
+      .getByRole("button", { name: /^Open "/ })
+      .first()
+      .click();
 
     await expect(page).toHaveURL(new RegExp(`/course/${ROUTE_KEY}`));
-    await expect(
-      page.getByTestId("toolbar-title"),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
     await expect(page.getByTestId("toolbar-title")).toHaveText("Finished Book");
   });
 });

@@ -249,9 +249,7 @@ test.describe("course screen failures", () => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
     await expect(page.getByTestId("course-loading")).toBeVisible();
-    await expect(
-      page.getByTestId("toolbar-title"),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
     await expect(page.getByTestId("toolbar-title")).toHaveText("Loading…");
 
     await page.evaluate(() => window.__releaseLibrary__?.());

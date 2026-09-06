@@ -27,10 +27,25 @@
   const collectionId = $derived(entry?.lingq_collection_id ?? null);
   const authorLine = $derived((entry?.authors ?? []).join(" · "));
 
+  const languageDisplay = new Intl.DisplayNames(["en"], { type: "language" });
+  const languageName = (code: string) => {
+    try {
+      return languageDisplay.of(code) ?? code;
+    } catch {
+      return code;
+    }
+  };
+
   const cached = $derived(
     entry && collectionId != null
       ? course.entry(entry.language, collectionId)
       : null,
+  );
+
+  // A column that is zero on every row carries no information; LingQ reports
+  // no new words once a course has been read through.
+  const showNewWords = $derived(
+    (cached?.view?.lessons ?? []).some((l) => (l.new_words_count ?? 0) > 0),
   );
 
   function refresh(force = false) {
@@ -121,10 +136,10 @@
     />
     <div data-testid="course-identity" class="flex-1">
       {#if authorLine}<p class="text-fg-muted">{authorLine}</p>{/if}
-      <p class="text-sm text-fg-subtle">
-        {entry.language}{cached?.view?.collection.level
+      <p class="text-xs text-fg-subtle">
+        {languageName(entry.language)}{cached?.view?.collection.level
           ? ` · ${cached.view.collection.level}`
-          : ""}
+          : ""}{collectionId != null ? ` · LingQ course ${collectionId}` : ""}
       </p>
     </div>
     {#if collectionId != null}
@@ -184,17 +199,20 @@
   {#if cached?.view && cached.view.lessons.length > 0}
     <section data-testid="course-lessons" class="mt-6">
       <div
-        class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 text-xs text-fg-subtle"
+        class="grid items-center gap-3 pb-1 text-xs text-fg-subtle"
+        style="grid-template-columns: 2.5rem 1fr 5rem {showNewWords
+          ? '4rem '
+          : ''}4rem 5rem"
       >
         <span></span>
         <span></span>
         <span class="text-right">Words</span>
-        <span class="text-right">New</span>
+        {#if showNewWords}<span class="text-right">New</span>{/if}
         <span class="text-right">Time</span>
         <span class="text-right">Progress</span>
       </div>
       {#each cached.view.lessons as lesson, i (lesson.id)}
-        <LessonStatRow index={i} {lesson} />
+        <LessonStatRow index={i} {lesson} {showNewWords} />
       {/each}
     </section>
   {/if}

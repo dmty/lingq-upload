@@ -106,9 +106,9 @@ test.describe("source list sidebar", () => {
     await expect(
       sidebar.getByRole("link", { name: "Settings", exact: true }),
     ).toHaveCount(0);
-    await expect(sidebar.getByRole("link", { name: "Add project" })).toHaveCount(
-      0,
-    );
+    await expect(
+      sidebar.getByRole("link", { name: "Add project" }),
+    ).toHaveCount(0);
     await expect(
       sidebar.getByRole("link", { name: "Quick upload" }),
     ).toHaveCount(0);
@@ -116,10 +116,9 @@ test.describe("source list sidebar", () => {
     const toolbar = page.getByTestId("app-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar.getByTestId("toolbar-title")).toHaveText("Library");
-    await expect(toolbar.getByRole("link", { name: "Add project" })).toHaveAttribute(
-      "title",
-      "Add project (⌘N)",
-    );
+    await expect(
+      toolbar.getByRole("link", { name: "Add project" }),
+    ).toHaveAttribute("title", "Add project (⌘N)");
     await expect(
       toolbar.getByRole("link", { name: "Quick upload" }),
     ).toHaveAttribute("title", "Quick upload (⌘⇧U)");
@@ -167,9 +166,9 @@ test.describe("source list sidebar", () => {
     const titleBox = await title.boundingBox();
     expect(historyBox).not.toBeNull();
     expect(titleBox).not.toBeNull();
-    expect(titleBox!.x - (historyBox!.x + historyBox!.width)).toBeGreaterThanOrEqual(
-      8,
-    );
+    expect(
+      titleBox!.x - (historyBox!.x + historyBox!.width),
+    ).toBeGreaterThanOrEqual(8);
   });
 
   test("the toolbar is 52px tall and content starts 24px below it", async ({
@@ -221,8 +220,26 @@ test.describe("source list sidebar", () => {
 
   test("overflowing languages scroll on their own", async ({ page }) => {
     const codes = [
-      "en", "ja", "de", "fr", "es", "it", "pt", "nl", "sv", "no",
-      "da", "fi", "pl", "cs", "hu", "ro", "tr", "el", "he", "ar",
+      "en",
+      "ja",
+      "de",
+      "fr",
+      "es",
+      "it",
+      "pt",
+      "nl",
+      "sv",
+      "no",
+      "da",
+      "fi",
+      "pl",
+      "cs",
+      "hu",
+      "ro",
+      "tr",
+      "el",
+      "he",
+      "ar",
     ];
     await seed(page, {
       __libraryEntries__: codes.map((language, i) =>
@@ -321,9 +338,7 @@ test.describe("toolbar history controls", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("Back and Forward start disabled on a fresh visit", async ({
-    page,
-  }) => {
+  test("Back and Forward start disabled on a fresh visit", async ({ page }) => {
     const toolbar = page.getByTestId("app-toolbar");
     await expect(toolbar.getByRole("button", { name: "Back" })).toBeDisabled();
     await expect(
@@ -433,9 +448,7 @@ test.describe("toolbar history controls", () => {
     expect(backBox!.x).toBeGreaterThanOrEqual(64);
     // ... and the floating toggle, independently — the two gutters happen
     // to share a number today, but each is its own constraint.
-    expect(backBox!.x).toBeGreaterThanOrEqual(
-      toggleBox!.x + toggleBox!.width,
-    );
+    expect(backBox!.x).toBeGreaterThanOrEqual(toggleBox!.x + toggleBox!.width);
     expect(forwardBox!.x).toBeGreaterThan(backBox!.x);
     expect(addBox!.x).toBeGreaterThan(forwardBox!.x);
     expect(uploadBox!.x).toBeGreaterThan(addBox!.x);
@@ -525,7 +538,9 @@ test.describe("overlay titlebar", () => {
     const columnBg = await page
       .locator(".content-column")
       .evaluate((el) => getComputedStyle(el).backgroundColor);
-    const mainBg = await main.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const mainBg = await main.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
     expect(mainBg).not.toBe(columnBg);
   });
 
@@ -567,7 +582,9 @@ test.describe("route title ownership", () => {
       // the heading stays exposed to the accessibility tree, not merely
       // present in the DOM — a `hidden` or `aria-hidden` heading would fail
       // this count while still passing a plain `main h1` count check.
-      const bodyHeading = page.locator("main").getByRole("heading", { name: title });
+      const bodyHeading = page
+        .locator("main")
+        .getByRole("heading", { name: title });
       await expect(bodyHeading).toHaveCount(1);
       await expect(page.locator("main h1")).toHaveCount(1);
       // The visible toolbar title is not a second heading: one route, one h1.
@@ -719,9 +736,10 @@ test.describe("inactive window chrome", () => {
     expect(inactiveFill).not.toBe("rgba(0, 0, 0, 0)");
     expect(inactiveFill).not.toBe(activeFill);
     await expect(cluster).not.toHaveCSS("box-shadow", "none");
-    await expect(
-      cluster.locator(".toolbar-action").nth(1),
-    ).not.toHaveCSS("border-inline-start-color", "rgba(0, 0, 0, 0)");
+    await expect(cluster.locator(".toolbar-action").nth(1)).not.toHaveCSS(
+      "border-inline-start-color",
+      "rgba(0, 0, 0, 0)",
+    );
   });
 
   test("primary buttons lose their accent in the inactive window", async ({

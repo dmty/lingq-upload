@@ -92,9 +92,7 @@ test.describe("match navigation", () => {
     await expect(
       page.locator("main").getByRole("heading", { name: "Resolve mismatch" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "← Library" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "← Library" })).toHaveCount(0);
     await expect(page.getByText("Book A — Toki")).toBeVisible();
     await expect(page.getByText("Proposed split")).toBeVisible();
     await expect(page.getByText("A Atom 1")).toBeVisible();

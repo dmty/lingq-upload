@@ -137,17 +137,34 @@
       >
     {/if}
     {#if freshness}
-      <span data-testid="course-freshness">updated {freshness}</span>
+      <span data-testid="course-freshness" class="sr-only">
+        updated {freshness}
+      </span>
     {/if}
   {/if}
-  <Button
-    variant="secondary"
-    size="sm"
+  <button
+    type="button"
     data-testid="course-refresh"
+    aria-label="Refresh"
+    title={freshness ? `Refresh — updated ${freshness}` : "Refresh"}
+    class="grid h-[24px] w-[24px] place-items-center rounded-sm text-fg-muted hover:bg-surface-sunken hover:text-fg"
     onclick={() => onrefresh?.()}
   >
-    Refresh
-  </Button>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+      <path d="M12.6 1.9v2.6h-2.6" />
+    </svg>
+  </button>
 </div>
 <div data-testid="course-stat-band" class="grid grid-cols-5 gap-4">
   {#each cells as cell (cell.id)}

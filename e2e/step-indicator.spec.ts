@@ -56,18 +56,15 @@ test.describe("pipeline step indicator", () => {
     for (const route of ["/add", `/match/${PROJECT_KEY}`]) {
       await page.goto(route);
       await page.waitForLoadState("networkidle");
-      const gap = await page
-        .getByTestId("step-indicator")
-        .evaluate((el) => {
-          let next = el.nextElementSibling;
-          while (next && getComputedStyle(next).position === "absolute") {
-            next = next.nextElementSibling;
-          }
-          return (
-            next!.getBoundingClientRect().top -
-            el.getBoundingClientRect().bottom
-          );
-        });
+      const gap = await page.getByTestId("step-indicator").evaluate((el) => {
+        let next = el.nextElementSibling;
+        while (next && getComputedStyle(next).position === "absolute") {
+          next = next.nextElementSibling;
+        }
+        return (
+          next!.getBoundingClientRect().top - el.getBoundingClientRect().bottom
+        );
+      });
       expect(gap).toBeGreaterThanOrEqual(8);
     }
   });

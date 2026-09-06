@@ -137,9 +137,9 @@ test.describe("sidebar toggle + resize", () => {
     await page.mouse.up();
     expect(await readSidebarWidth(page)).toBe(180);
 
-    expect(
-      await label.evaluate((el) => el.scrollWidth > el.clientWidth),
-    ).toBe(true);
+    expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+      true,
+    );
     const rowBox = await row.boundingBox();
     expect(rowBox!.height).toBe(28);
     const handleBox = await handle.boundingBox();

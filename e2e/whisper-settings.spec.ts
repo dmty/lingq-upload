@@ -43,9 +43,12 @@ test.describe("transcription settings", () => {
     const openai = page.getByRole("group", { name: "OpenAI provider" });
     await expect(openai.getByText("whisper-1", { exact: true })).toBeVisible();
     await expect(
-      openai.getByText("No free tier. Costs about $0.006 per minute of audio.", {
-        exact: true,
-      }),
+      openai.getByText(
+        "No free tier. Costs about $0.006 per minute of audio.",
+        {
+          exact: true,
+        },
+      ),
     ).toBeVisible();
 
     await expect(

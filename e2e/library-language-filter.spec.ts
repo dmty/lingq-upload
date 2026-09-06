@@ -55,12 +55,9 @@ test.describe("sidebar language destinations", () => {
     await expect(
       nav.getByRole("link", { name: "All", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".source-destinations .source-label")).toHaveText([
-      "All",
-      "French",
-      "German",
-      "Japanese",
-    ]);
+    await expect(page.locator(".source-destinations .source-label")).toHaveText(
+      ["All", "French", "German", "Japanese"],
+    );
     // Every destination leads with a symbol, as Finder's sidebar does.
     await expect(page.locator(".source-destinations svg")).toHaveCount(4);
     await expect(
@@ -211,7 +208,10 @@ test.describe("library navigation history", () => {
     page,
   }) => {
     await page.goto("/library?language=ja&q=Book");
-    await page.getByRole("button", { name: /^Open "/ }).first().click();
+    await page
+      .getByRole("button", { name: /^Open "/ })
+      .first()
+      .click();
     await expect(page).toHaveURL(/\/course\//);
 
     await page.goBack();

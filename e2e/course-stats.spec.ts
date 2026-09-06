@@ -116,9 +116,7 @@ test.describe("course screen", () => {
   }) => {
     await page.goto(`/course/${ROUTE_KEY}`);
 
-    await expect(
-      page.getByTestId("toolbar-title"),
-    ).toBeVisible();
+    await expect(page.getByTestId("toolbar-title")).toBeVisible();
     await expect(page.getByTestId("toolbar-title")).toHaveText(
       "Kafka on the Shore",
     );
@@ -146,14 +144,18 @@ test.describe("course screen", () => {
     expect(headingBox).not.toBeNull();
     expect(headingBox!.height).toBeLessThanOrEqual(1);
 
-    const cover = page.getByTestId("course-header").locator(".cover-placeholder, img");
+    const cover = page
+      .getByTestId("course-header")
+      .locator(".cover-placeholder, img");
     const coverBox = await cover.boundingBox();
     expect(coverBox!.width).toBe(64);
     expect(coverBox!.height).toBe(64);
 
     const identity = page.getByTestId("course-identity");
     const identityBox = await identity.boundingBox();
-    expect(identityBox!.x).toBeGreaterThanOrEqual(coverBox!.x + coverBox!.width);
+    expect(identityBox!.x).toBeGreaterThanOrEqual(
+      coverBox!.x + coverBox!.width,
+    );
 
     const openInLingq = page.getByTestId("course-header").getByRole("button", {
       name: "Open in LingQ",
@@ -165,7 +167,9 @@ test.describe("course screen", () => {
     await expect(openInLingq).toHaveAccessibleName("Open in LingQ");
     const openBox = await openInLingq.boundingBox();
     expect(openBox!.height).toBe(28);
-    expect(openBox!.x).toBeGreaterThanOrEqual(identityBox!.x + identityBox!.width);
+    expect(openBox!.x).toBeGreaterThanOrEqual(
+      identityBox!.x + identityBox!.width,
+    );
 
     // Exact match, not toContainText: the fixture's lessons_count (2) must
     // agree with its two-lesson array, or CourseStats logs a mismatch
@@ -211,9 +215,59 @@ test.describe("course screen", () => {
     await expect(rows.nth(0)).toContainText("2,841");
     await expect(rows.nth(0)).toContainText("214");
     await expect(rows.nth(0)).toContainText("8:32");
-    // 41.5 rounds half up to 42 (Math.round), same convention as the
-    // progress-strip aggregate above.
-    await expect(rows.nth(1)).toContainText("42%");
+    // A read lesson is a checkmark; a partly-read one is a bar. Neither
+    // repeats the percentage, which is identical on every finished row.
+    await expect(rows.nth(0).getByLabel("Read")).toBeVisible();
+    await expect(rows.nth(1).getByLabel("Read")).toHaveCount(0);
+    await expect(rows.nth(1).locator(".bg-accent")).toBeVisible();
+  });
+
+  test("tokenized LingQ titles are normalized for display", async ({
+    page,
+  }) => {
+    const KEY = "course-fixture-cjk";
+    await seed(page, {
+      __libraryEntries__: [
+        libraryEntry(KEY, {
+          title: "世界の終り",
+          language: "ja",
+          lingq_collection_id: 9001,
+          status: "done",
+        }),
+      ],
+      __courseView__: {
+        collection: {
+          id: 9001,
+          title: "世界の終り",
+          description: null,
+          level: null,
+          duration: null,
+          lessons_count: 1,
+          new_words_count: null,
+          image_url: null,
+          status: "private",
+          roses_count: null,
+          views_count: null,
+        },
+        lessons: [
+          {
+            id: 90,
+            title: "22世界 の 終り （灰色 の 煙 ）",
+            duration: 300,
+            word_count: 100,
+            unique_word_count: 50,
+            new_words_count: 0,
+            percent_completed: 100,
+          },
+        ],
+      },
+    });
+    await page.goto(`/course/${encodeURIComponent(`ch:${KEY}`)}`);
+
+    const row = page.getByTestId("lesson-row").first();
+    await expect(row).toContainText("世界の終り（灰色の煙）");
+    // The all-zero New column is dropped rather than shown as a wall of 0s.
+    await expect(page.getByText("New", { exact: true })).toHaveCount(0);
   });
 
   test("a lesson missing a word count falls back to the sibling average, not zero weight", async ({

@@ -19,13 +19,9 @@ test.describe("one-shot upload error surface", () => {
     // Pick text then audio via the dialog stub. Exact names avoid matching
     // the "Add the audio" submit-label button, which also contains "audio".
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
-    await page
-      .getByRole("button", { name: "Choose book file" })
-      .click();
+    await page.getByRole("button", { name: "Choose book file" }).click();
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
-    await page
-      .getByRole("button", { name: "Choose audio" })
-      .click();
+    await page.getByRole("button", { name: "Choose audio" }).click();
 
     // Gate the upload so we can emit progress mid-flight, then fail it.
     await page.evaluate(() => {
@@ -64,13 +60,9 @@ test.describe("one-shot upload error surface", () => {
     await page.locator("select").nth(1).selectOption("7");
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
-    await page
-      .getByRole("button", { name: "Choose book file" })
-      .click();
+    await page.getByRole("button", { name: "Choose book file" }).click();
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
-    await page
-      .getByRole("button", { name: "Choose audio" })
-      .click();
+    await page.getByRole("button", { name: "Choose audio" }).click();
 
     await page.evaluate(() => {
       window.__uploadOneShotGate__ = new Promise((r) => {
