@@ -5,10 +5,12 @@
     coverPath,
     imageUrl = null,
     title,
+    class: cls = "h-16 w-16 text-2xl",
   }: {
     coverPath: string | null;
     imageUrl?: string | null;
     title: string;
+    class?: string;
   } = $props();
 
   let errored = $state(false);
@@ -38,12 +40,12 @@
     {src}
     alt=""
     loading="lazy"
-    class="h-16 w-16 rounded-sm object-cover"
+    class="flex-none rounded-sm object-cover {cls}"
     onerror={() => (errored = true)}
   />
 {:else}
   <div
-    class="cover-placeholder flex h-16 w-16 items-center justify-center rounded-sm bg-accent-soft text-2xl font-semibold text-accent"
+    class="cover-placeholder flex flex-none items-center justify-center rounded-sm bg-accent-soft font-semibold text-accent {cls}"
     aria-hidden="true"
   >
     {glyph}

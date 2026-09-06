@@ -18,12 +18,9 @@
     spinIcon?: boolean;
   };
 
-  const specs: Record<Exclude<LibraryStatus, "idle">, Spec> = {
-    done: {
-      label: statusLabel("done"),
-      classes: "bg-success",
-      tooltip: "Upload complete",
-    },
+  // "Done" is true of almost every finished row, so it says nothing; only the
+  // states that ask something of the user get a badge.
+  const specs: Record<Exclude<LibraryStatus, "idle" | "done">, Spec> = {
     running: {
       label: statusLabel("running"),
       classes: "bg-accent",
@@ -47,7 +44,9 @@
     },
   };
 
-  const spec = $derived(status === "idle" ? null : specs[status]);
+  const spec = $derived(
+    status === "idle" || status === "done" ? null : specs[status],
+  );
   const tooltip = $derived(
     spec
       ? status === "failed" && failedReason

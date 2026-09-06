@@ -14,17 +14,20 @@ const entry = (i: number, language: string, status: LibraryStatus) =>
 test.describe("library badge casing", () => {
   test.beforeEach(async ({ page }) => {
     await seed(page, {
-      __libraryEntries__: [entry(1, "de", "done"), entry(2, "fr", "idle")],
+      __libraryEntries__: [
+        entry(1, "de", "done"),
+        entry(2, "fr", "needs_match"),
+      ],
     });
   });
 
-  test("status badges are sentence case", async ({ page }) => {
+  // A status that holds for almost every row says nothing, so a finished
+  // upload is silent and only the row that wants attention is badged.
+  test("only the exceptional status is badged", async ({ page }) => {
     await page.goto("/library");
-    // Wait for entries to load (we have 2)
     await expect(page.locator('li[role="option"]')).toHaveCount(2);
-    // Case-sensitive regex: plain getByText("Done") matches lowercase "done"
-    // too; exact:true fails because the badge also contains the icon glyph.
-    await expect(page.getByText(/Done/).first()).toBeVisible();
+    await expect(page.getByText(/Done/)).toHaveCount(0);
+    await expect(page.getByText("Needs review")).toBeVisible();
   });
 });
 
@@ -58,7 +61,8 @@ test.describe("sidebar language destinations", () => {
       "German",
       "Japanese",
     ]);
-    await expect(page.locator(".source-destinations svg")).toHaveCount(0);
+    // Every destination leads with a symbol, as Finder's sidebar does.
+    await expect(page.locator(".source-destinations svg")).toHaveCount(4);
     await expect(
       nav.getByRole("link", { name: "German", exact: true }),
     ).toHaveAttribute("href", "/library?language=de");
@@ -207,7 +211,7 @@ test.describe("library navigation history", () => {
     page,
   }) => {
     await page.goto("/library?language=ja&q=Book");
-    await page.getByRole("button", { name: "Open", exact: true }).click();
+    await page.getByRole("button", { name: /^Open "/ }).first().click();
     await expect(page).toHaveURL(/\/course\//);
 
     await page.goBack();

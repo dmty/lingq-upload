@@ -363,6 +363,57 @@
   margin-inline-end: 10px;
 }
 
+/* Finder keeps its search in the toolbar, sized like every other toolbar
+   control rather than like a page-level field. */
+.toolbar-search {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  width: 180px;
+  height: 24px;
+  margin-inline-end: 10px;
+  padding-inline: 7px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-fg) 10%, transparent);
+  color: var(--color-fg-muted);
+}
+
+.toolbar-search:focus-within {
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3.5px var(--color-accent-ring);
+}
+
+.toolbar-search input {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.toolbar-search-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--color-fg-subtle);
+}
+
+.toolbar-search-clear:hover {
+  color: var(--color-fg-muted);
+}
+
+.toolbar-search input::-webkit-search-decoration,
+.toolbar-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
 .toolbar-history-btn {
   width: 34px;
 }
@@ -472,7 +523,7 @@
   padding-inline: 8px;
   border-radius: var(--radius-sm);
   color: var(--color-fg);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: 500;
   text-decoration: none;
   transition: background-color 120ms var(--ease-snappy);
@@ -778,17 +829,6 @@ dialog::backdrop {
   color: color-mix(in srgb, var(--color-accent-fg) 87%, transparent);
 }
 
-/* Scoped to .hover-through (LibraryRow's row button and primary action link)
-   rather than every button/a: those bring no background of their own, so
-   their hover utility paints directly over the selected row's fill and
-   strands the remapped white text. A control with its own background (e.g.
-   MappingGrid's Confirm, `bg-surface`) is untouched by the remap above and
-   must keep its own hover — zeroing it out would expose the accent fill
-   behind an unmapped foreground instead. */
-[aria-selected="true"] .hover-through:hover {
-  background-color: transparent;
-}
-
 /* A status dot's own colour can coincidentally match the system accent
    filling a selected row (this is why `running` never shows one — it uses
    the spinner instead); the ring keeps every dot legible regardless. */
@@ -798,10 +838,10 @@ dialog::backdrop {
 
 .brand-wordmark {
   font-family: var(--font-brand);
-  font-weight: 800;
-  font-size: 15px;
+  font-weight: 700;
+  font-size: var(--text-sm);
   letter-spacing: -0.01em;
-  color: var(--color-fg);
+  color: var(--color-fg-muted);
 }
 
 .sidebar-resize-handle {

@@ -31,8 +31,6 @@
     {@const focused = focusIndex === i}
     <li
       class="relative grid grid-cols-[1fr_auto] gap-4 px-2"
-      class:border-l-2={focused}
-      class:border-accent={focused}
       class:bg-accent={focused}
       class:text-accent-fg={focused}
       data-row-index={i}

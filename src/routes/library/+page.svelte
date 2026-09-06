@@ -27,9 +27,7 @@
     return () => window.removeEventListener("focus", onFocus);
   });
 
-  let search = $state("");
   let lingqKeyMissing = $state(false);
-  let searchEl = $state<HTMLInputElement | null>(null);
   let focusIndex = $state<number | null>(null);
   let confirmRequestId = $state<string | null>(null);
 
@@ -53,15 +51,7 @@
     void navigationHistory.replace(libraryUrl(language, query));
   }
 
-  function setSearch(next: string) {
-    search = next;
-    replaceLibraryUrl(selectedLanguage, next);
-  }
-
-  // Back/Forward move the query without going through the field.
-  $effect(() => {
-    search = urlSearch;
-  });
+  const search = $derived(urlSearch);
 
   const entries = $derived(library.index?.entries ?? []);
 
@@ -114,7 +104,6 @@
     });
   });
 
-  const totalCount = $derived(entries.length);
   const runningCount = $derived(
     entries.filter((e) => (e.status ?? "idle") === "running").length,
   );
@@ -122,8 +111,7 @@
   // Clears just the query — the language is the sidebar's, and nothing here
   // reaches over to reset it.
   function clearSearchText() {
-    setSearch("");
-    searchEl?.focus();
+    replaceLibraryUrl(selectedLanguage, "");
   }
 
   // A focusIndex that survives re-filtering targets the wrong row.
@@ -173,22 +161,7 @@
   $effect(() => {
     function onKeydown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const inForm = isFormField(e.target);
-      const searchFocused = e.target === searchEl;
-
-      if (e.key === "/" && !inForm) {
-        e.preventDefault();
-        searchEl?.focus();
-        return;
-      }
-
-      if (e.key === "Escape" && searchFocused) {
-        setSearch("");
-        searchEl?.blur();
-        return;
-      }
-
-      if (inForm) return;
+      if (isFormField(e.target)) return;
 
       const list = filtered;
       if (list.length === 0) return;
@@ -210,7 +183,7 @@
         if (entry) primaryActionFor(entry).run();
         return;
       }
-      if (e.key === "Delete" && focusIndex != null) {
+      if ((e.key === "Backspace" || e.key === "Delete") && focusIndex != null) {
         e.preventDefault();
         const entry = list[focusIndex];
         if (entry) confirmRequestId = joinKey(entry.id);
@@ -222,24 +195,13 @@
 </script>
 
 <section class="col-wide">
-  <header class="mb-4 flex items-center justify-between">
-    <div>
-      <h1 class="sr-only">Library</h1>
-      {#if totalCount > 0}
-        <p class="mt-0.5 flex items-center gap-1 text-xs text-fg-muted">
-          <span>
-            {totalCount} books{runningCount > 0
-              ? ` · ${runningCount} in progress`
-              : ""}
-          </span>
-          {#if runningCount > 0}
-            <Spinner size="sm" aria-hidden="true" />
-          {/if}
-        </p>
-      {/if}
-    </div>
-    <Button href="/add">+ Add</Button>
-  </header>
+  <h1 class="sr-only">Library</h1>
+  {#if runningCount > 0}
+    <p class="mb-3 flex items-center gap-1.5 text-xs text-fg-muted">
+      <Spinner size="sm" aria-hidden="true" />
+      {runningCount} uploading
+    </p>
+  {/if}
 
   {#if lingqKeyMissing && !libraryBanner.dismissed}
     <Alert
@@ -289,52 +251,9 @@
       <p class="mt-2 text-sm text-fg-muted">
         Add a book, its audio, or both to get started.
       </p>
-      <Button href="/add" class="mt-4">+ Add a book</Button>
+      <Button href="/add" class="mt-4">Add a book…</Button>
     </div>
   {:else}
-    <div class="relative mb-3">
-      <svg
-        class="pointer-events-none absolute top-1/2 left-[8px] -translate-y-1/2 text-fg-subtle"
-        width="13"
-        height="13"
-        viewBox="0 0 13 13"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.4"
-        stroke-linecap="round"
-        aria-hidden="true"
-      >
-        <circle cx="5.4" cy="5.4" r="3.9" />
-        <path d="M8.4 8.4 11.6 11.6" />
-      </svg>
-      <input
-        type="search"
-        placeholder="Search titles or authors…"
-        value={search}
-        oninput={(event) => setSearch(event.currentTarget.value)}
-        bind:this={searchEl}
-        class="field field-lg pr-[26px] pl-[26px] placeholder:text-fg-muted"
-      />
-      {#if search}
-        <button
-          type="button"
-          aria-label="Clear search"
-          class="absolute top-1/2 right-[2px] -translate-y-1/2 p-[5px] text-fg-subtle hover:text-fg-muted"
-          onclick={clearSearchText}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-            <circle cx="7" cy="7" r="5.8" fill="currentColor" />
-            <path
-              d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
-              class="stroke-surface"
-              stroke-width="1.4"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
-      {/if}
-    </div>
-
     {#if filtered.length === 0}
       <div class="rounded-sm border border-border bg-surface p-4 text-sm">
         <p class="font-medium text-fg">No matches.</p>

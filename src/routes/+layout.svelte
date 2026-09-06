@@ -74,6 +74,13 @@
     return suffix ? `/upload?${suffix}` : "/upload";
   });
 
+  // 1.6: every sidebar row leads with a symbol, as Finder's and Mail's do.
+  const allIcon =
+    "M3 3.5h2.6v9H3z M6.6 3.5h2.6v9H6.6z" +
+    " M10.5 4.1l2.4-.5 1.6 8.3-2.4.5z";
+  const languageIcon =
+    "M3 3.2h7.4a1.4 1.4 0 011.4 1.4v8.2H4.4A1.4 1.4 0 013 11.4z" +
+    " M5.2 6h4.2 M5.2 8.2h3";
   const settingsIcon =
     "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
     " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
@@ -100,6 +107,12 @@
     navigationHistory.record(to.url.pathname + to.url.search + to.url.hash);
   });
 
+  let searchEl = $state<HTMLInputElement | null>(null);
+
+  function setQuery(next: string) {
+    void navigationHistory.replace(libraryUrl(currentLanguage, next));
+  }
+
   function handleGlobalKeydown(event: KeyboardEvent) {
     const target = event.target;
     const editable =
@@ -117,7 +130,10 @@
       return;
 
     const key = event.key.toLowerCase();
-    if (key === "[" && navigationHistory.canGoBack) {
+    if (key === "f" && onLibrary) {
+      event.preventDefault();
+      searchEl?.focus();
+    } else if (key === "[" && navigationHistory.canGoBack) {
       event.preventDefault();
       void navigationHistory.goBack();
     } else if (key === "]" && navigationHistory.canGoForward) {
@@ -309,6 +325,7 @@
           class="source-row"
           aria-current={onLibrary && !currentLanguage ? "page" : undefined}
         >
+          {@render icon(allIcon)}
           <span class="source-label">All</span>
         </a>
         {#each languages as language (language.code)}
@@ -320,6 +337,7 @@
               : undefined}
             title={language.label}
           >
+            {@render icon(languageIcon, "round")}
             <span class="source-label">{language.label}</span>
           </a>
         {/each}
@@ -383,6 +401,59 @@
       >
         {resolvedTitle}
       </div>
+      {#if onLibrary}
+        <div class="toolbar-search">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 13 13"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="5.4" cy="5.4" r="3.9" />
+            <path d="M8.4 8.4 11.6 11.6" />
+          </svg>
+          <input
+            type="search"
+            bind:this={searchEl}
+            value={currentQuery}
+            placeholder="Search"
+            aria-label="Search library"
+            data-testid="library-search"
+            oninput={(event) => setQuery(event.currentTarget.value)}
+            onkeydown={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault();
+              setQuery("");
+              event.currentTarget.blur();
+            }}
+          />
+          {#if currentQuery}
+            <button
+              type="button"
+              class="toolbar-search-clear"
+              aria-label="Clear search"
+              onclick={() => {
+                setQuery("");
+                searchEl?.focus();
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.8" fill="currentColor" />
+                <path
+                  d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
+                  class="stroke-surface"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
+          {/if}
+        </div>
+      {/if}
       <div class="toolbar-cluster" data-testid="toolbar-actions">
         <a
           href="/add"

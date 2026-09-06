@@ -38,7 +38,7 @@ export function primaryActionFor(entry: LibraryEntry): PrimaryAction {
       };
     case "needs_match":
       return {
-        label: "Resolve",
+        label: "Continue matching",
         disabled: false,
         run: () => void goto(`/match/${key}`),
       };

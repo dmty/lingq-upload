@@ -833,24 +833,22 @@ test.describe("form controls", () => {
     expect(shadow).toContain("3.5px");
   });
 
-  test("the search field is a 28px control with room for its glass", async ({
+  test("the search field is a 24px toolbar control with its glass", async ({
     page,
   }) => {
     await page.goto("/library");
     await page.waitForLoadState("networkidle");
-    const input = page.locator('input[type="search"]');
-    const box = await input.boundingBox();
-    expect(box!.height).toBe(28);
-    const glass = await page
-      .locator('input[type="search"] ~ svg, svg + input[type="search"]')
-      .count();
-    expect(glass).toBeGreaterThan(0);
-    // The icon is absolutely positioned, so only the padding keeps the
-    // caret and placeholder clear of it.
-    const padLeft = await input.evaluate((el) =>
-      parseFloat(getComputedStyle(el).paddingLeft),
+    const field = page.locator(".toolbar-search");
+    const box = await field.boundingBox();
+    expect(box!.height).toBe(24);
+    await expect(field.locator("svg")).toHaveCount(1);
+
+    // It lives in the toolbar, not in the page body.
+    const toolbar = await page.getByTestId("app-toolbar").boundingBox();
+    expect(box!.y).toBeGreaterThanOrEqual(toolbar!.y);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(
+      toolbar!.y + toolbar!.height,
     );
-    expect(padLeft).toBeGreaterThanOrEqual(24);
   });
 
   test("a popup button wears an accent badge that dims with the window", async ({

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { commands, type LibraryEntry } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
   import { formatRelative } from "$lib/format";
+  import { lingqCollectionUrl } from "$lib/lingq";
   import { primaryActionFor } from "$lib/library-actions";
   import { statusLabel } from "$lib/status-labels";
   import CoverThumb from "./CoverThumb.svelte";
@@ -40,41 +42,34 @@
     series != null && next?.series?.name === series.name,
   );
 
-  const authorLine = $derived.by(() => {
+  // One meta line, so the author and the state share it. The language lives in
+  // the sidebar filter and the LingQ course id on the course page; neither
+  // earns a place here.
+  const metaLine = $derived.by(() => {
     const left = authors.join(" · ");
-    if (series) {
-      const tail =
-        series.index == null
-          ? series.name
-          : `${series.name} #${Math.trunc(series.index)}`;
-      return left ? `${left} · ${tail}` : tail;
-    }
-    return left;
-  });
-
-  const stateLine = $derived.by(() => {
-    const lang = entry.language;
-    const collectionTail =
-      entry.lingq_collection_id != null
-        ? ` · LingQ #${entry.lingq_collection_id}`
-        : "";
-    switch (status) {
-      case "done":
-        return `${lang} · ${entry.completed_lesson_count} lessons${collectionTail}`;
-      case "running":
-        return `${lang} · uploading…`;
-      case "paused":
-        return `${lang} · ${entry.completed_lesson_count} of ${entry.receipt_count} uploaded`;
-      case "needs_match":
-        return `${lang} · ${entry.receipt_count} chapters`;
-      case "failed":
-        return `${lang} · ${failedReason ?? "upload stopped"}`;
-      case "idle":
-      default:
-        return entry.mtime
-          ? `${lang} · added ${formatRelative(entry.mtime)}`
-          : lang;
-    }
+    const seriesTail = series
+      ? series.index == null
+        ? series.name
+        : `${series.name} #${Math.trunc(series.index)}`
+      : "";
+    const state = (() => {
+      switch (status) {
+        case "done":
+          return `${entry.completed_lesson_count} lessons`;
+        case "running":
+          return "uploading…";
+        case "paused":
+          return `${entry.completed_lesson_count} of ${entry.receipt_count} uploaded`;
+        case "needs_match":
+          return `${entry.receipt_count} chapters`;
+        case "failed":
+          return failedReason ?? "upload stopped";
+        case "idle":
+        default:
+          return entry.mtime ? `added ${formatRelative(entry.mtime)}` : "";
+      }
+    })();
+    return [left || seriesTail, state].filter(Boolean).join(" · ");
   });
 
   const statusHumanLabel = $derived(statusLabel(status));
@@ -83,9 +78,7 @@
     if (entry.cover_path) return null;
     const cid = entry.lingq_collection_id;
     if (cid == null) return null;
-    return (
-      course.entry(entry.language, cid).view?.collection.image_url ?? null
-    );
+    return course.entry(entry.language, cid).view?.collection.image_url ?? null;
   });
 
   const action = $derived(primaryActionFor(entry));
@@ -133,15 +126,42 @@
     onPrimary(entry);
   }
 
-  function handlePrimary(e: MouseEvent) {
-    e.stopPropagation();
-    if (rowDisabled) return;
-    onPrimary(entry);
-  }
-
-  function handleTrashClick(e: MouseEvent) {
-    e.stopPropagation();
-    startConfirm();
+  // Right-click opens the real NSMenu. Outside Tauri (browser, e2e) there is
+  // no menu to open, and the keyboard path (↩ opens, ⌫ trashes) still covers
+  // every item in it.
+  async function openContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    const collectionId = entry.lingq_collection_id;
+    try {
+      const { Menu } = await import("@tauri-apps/api/menu");
+      const menu = await Menu.new({
+        items: [
+          {
+            id: "primary",
+            text: action.label,
+            enabled: !action.disabled,
+            action: () => onPrimary(entry),
+          },
+          ...(collectionId != null
+            ? [
+                {
+                  id: "lingq",
+                  text: "Open in LingQ",
+                  action: () =>
+                    void openUrl(
+                      lingqCollectionUrl(entry.language, collectionId),
+                    ),
+                },
+              ]
+            : []),
+          { item: "Separator" as const },
+          { id: "trash", text: "Move to Trash", action: startConfirm },
+        ],
+      });
+      await menu.popup();
+    } catch {
+      // No native menu here; the keyboard shortcuts remain the way in.
+    }
   }
 
   async function handleConfirmTrash(e: MouseEvent) {
@@ -178,26 +198,21 @@
     role="alertdialog"
     aria-live="assertive"
     aria-label={`Confirm move "${entry.title}" to trash`}
-    class="col-span-2 flex min-h-[88px] flex-col justify-center gap-1 py-3"
+    class="col-span-2 flex min-h-[64px] flex-col justify-center gap-1 py-2"
     transition:fade={{ duration: 200 }}
   >
     <div class="flex items-center justify-between gap-3">
-      <p class="text-sm text-fg-muted">
+      <p class="text-base text-fg-muted">
         Move <span class="font-medium text-fg">"{entry.title}"</span> to trash?
       </p>
       <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="rounded-sm px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg"
-          onclick={(e) => {
-            e.stopPropagation();
-            cancelConfirm();
-          }}
+        <Button variant="secondary" onclick={cancelConfirm}>Cancel</Button>
+        <Button
+          variant="danger"
+          disabled={trashBusy}
+          onclick={handleConfirmTrash}
         >
-          Cancel
-        </button>
-        <Button variant="danger" disabled={trashBusy} onclick={handleConfirmTrash}>
-          {trashBusy ? "Moving…" : "Move to trash"}
+          {trashBusy ? "Moving…" : "Move to Trash"}
         </Button>
       </div>
     </div>
@@ -208,53 +223,35 @@
 {:else}
   <button
     type="button"
-    class="hover-through grid grid-cols-[64px_1fr] gap-4 items-center text-left w-full min-h-[88px] py-3 transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:bg-transparent"
+    class="grid min-h-[64px] w-full grid-cols-[40px_1fr] items-center gap-3 py-1 text-left disabled:cursor-not-allowed"
     aria-label={`Open "${entry.title}" — ${statusHumanLabel}`}
     disabled={rowDisabled}
     title={rowDisabled ? "No LingQ collection id" : undefined}
     onclick={handleRow}
+    oncontextmenu={openContextMenu}
   >
     <CoverThumb
       coverPath={entry.cover_path ?? null}
       imageUrl={remoteCover}
       title={entry.title}
+      class="h-[56px] w-[40px] text-base" 
     />
 
     <div class="min-w-0">
       <div
-        class="truncate text-sm font-medium text-fg"
+        class="truncate text-base text-fg"
         data-testid="library-title"
         title={entry.title}
       >
         {entry.title}
       </div>
-      {#if authorLine}
-        <div class="truncate text-xs text-fg-muted">{authorLine}</div>
+      {#if metaLine}
+        <div class="truncate text-xs text-fg-muted">{metaLine}</div>
       {/if}
-      <div class="truncate text-xs text-fg-subtle">{stateLine}</div>
     </div>
   </button>
 
-  <div class="flex h-full flex-col items-end justify-between gap-2 py-3">
+  <div class="flex items-center justify-end py-1">
     <StatusBadge {status} {failedReason} />
-    <div class="flex items-center gap-2 text-xs">
-      <button
-        type="button"
-        class="hover-through rounded-sm px-2 py-1 font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={rowDisabled}
-        onclick={handlePrimary}
-      >
-        {action.label}
-      </button>
-      <span class="text-fg-subtle">·</span>
-      <button
-        type="button"
-        class="rounded-sm px-2 py-1 text-fg-muted hover:text-fg"
-        aria-label={`Move "${entry.title}" to trash`}
-        onclick={handleTrashClick}
-      >
-        Trash
-      </button>
-    </div>
   </div>
 {/if}

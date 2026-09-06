@@ -144,7 +144,8 @@ test.describe("sidebar toggle + resize", () => {
     expect(rowBox!.height).toBe(28);
     const handleBox = await handle.boundingBox();
     expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(handleBox!.x + 1);
-    await expect(row.locator("svg")).toHaveCount(0);
+    // The symbol never shrinks with the label; only the label truncates.
+    await expect(row.locator("svg")).toHaveCount(1);
 
     // Collapsing hides the whole source list; expanding brings back the same
     // selected destination.
