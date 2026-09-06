@@ -11,7 +11,7 @@
     ...rest
   }: {
     variant?: "primary" | "secondary" | "danger";
-    size?: "sm" | "md" | "lg" | "xl";
+    size?: "sm" | "md" | "lg";
     href?: string;
     class?: string;
     ref?: HTMLElement | null;
@@ -26,15 +26,15 @@
     secondary: "push-button text-fg",
     danger: "bg-error text-on-fill hover:bg-error/90 disabled:bg-fg-subtle",
   };
-  // px, not rem: exact macOS control heights (20/24/28/36px — coincidentally
-  // h-5/h-6/h-7/h-9 on the 16px scale), literal so they can't drift if
+  // px, not rem: exact macOS control heights (20/24/28px — coincidentally
+  // h-5/h-6/h-7 on the 16px scale), literal so they can't drift if
   // --text-base changes. md/lg deliberately match .field/.field-lg so the
-  // app has two control metrics, not four.
+  // app has two control metrics, not four. There is no full-width size:
+  // AppKit buttons take their intrinsic width.
   const sizes = {
     sm: "h-[20px] px-[8px] text-xs",
     md: "h-[24px] px-[10px] text-base",
     lg: "h-[28px] px-[14px] text-base",
-    xl: "h-[36px] w-full text-md",
   };
   const classes = $derived(
     `btn inline-flex items-center justify-center gap-[8px] rounded-sm font-medium transition-colors duration-120 ease-snappy disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${cls}`,

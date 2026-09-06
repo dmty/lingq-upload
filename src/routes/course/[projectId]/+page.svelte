@@ -145,7 +145,6 @@
     {#if collectionId != null}
       <Button
         variant="secondary"
-        size="lg"
         data-testid="open-in-lingq"
         onclick={() =>
           void openUrl(lingqCollectionUrl(entry.language, collectionId))}

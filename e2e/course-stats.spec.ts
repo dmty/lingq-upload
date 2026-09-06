@@ -166,7 +166,8 @@ test.describe("course screen", () => {
     // computed name, which is the actual regression the SVG swap prevents.
     await expect(openInLingq).toHaveAccessibleName("Open in LingQ");
     const openBox = await openInLingq.boundingBox();
-    expect(openBox!.height).toBe(28);
+    // Regular control height: this is one action among several, not a hero.
+    expect(openBox!.height).toBe(24);
     expect(openBox!.x).toBeGreaterThanOrEqual(
       identityBox!.x + identityBox!.width,
     );
