@@ -575,7 +575,7 @@
               ></span>
             {/each}
           </div>
-          <div class="mt-1 flex justify-between text-[10px] tracking-[0.18em] text-fg-subtle uppercase">
+          <div class="mt-1 flex justify-between text-xs text-fg-subtle">
             <span>Part 1</span>
             {#if partCount > 1}
               <span>Part {partCount}</span>
@@ -586,7 +586,7 @@
         <div class="mt-3 grid gap-2 px-3 sm:grid-cols-2">
           <figure class="rounded-sm border border-accent/30 bg-accent-soft/40 px-3 py-2">
             <figcaption
-              class="text-[10px] tracking-[0.18em] text-accent uppercase"
+              class="text-xs text-fg-muted"
             >
               Heard at start
             </figcaption>
@@ -599,7 +599,7 @@
           </figure>
           <figure class="rounded-sm border border-warning/30 bg-warning-soft/40 px-3 py-2">
             <figcaption
-              class="text-[10px] tracking-[0.18em] text-warning uppercase"
+              class="text-xs text-warning"
             >
               Heard at end
             </figcaption>

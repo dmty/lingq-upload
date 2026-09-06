@@ -626,6 +626,52 @@
     outline-offset: 2px;
   }
 
+  /* NSSegmentedControl: equal-height segments in one raised pill, hairline
+     between them, accent fill on the selected one. Drives both a radio group
+     (label wrapping a visually-hidden input) and a pressed-button pair. */
+  .segmented {
+    display: inline-flex;
+    height: 24px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    box-shadow: 0 0.5px 1px rgb(0 0 0 / 0.08);
+  }
+
+  .segmented > * {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 12px;
+    border: 0;
+    background: transparent;
+    color: var(--color-fg);
+    font-size: var(--text-base);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .segmented > * + * {
+    border-inline-start: 1px solid var(--color-border);
+  }
+
+  .segmented > *:hover:not(:has(:checked), [aria-pressed="true"]) {
+    background: var(--color-surface-sunken);
+  }
+
+  .segmented > *:has(:checked),
+  .segmented > [aria-pressed="true"] {
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
+  /* One ring around the whole control, as AppKit draws it — not per segment. */
+  .segmented:has(:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
   /* Surface fill and padding shared by every sheet's card; layered like
      .field/.push-button because nothing here competes with a Tailwind
      utility on the same element. Internal layout (grid vs flex, gaps) stays
@@ -849,6 +895,8 @@ dialog::backdrop {
   color: var(--color-fg-muted);
 }
 
+:root[data-window-inactive] .segmented > *:has(:checked),
+:root[data-window-inactive] .segmented > [aria-pressed="true"],
 :root[data-window-inactive] .btn.bg-accent,
 :root[data-window-inactive] .btn.bg-accent:hover {
   background-color: var(--color-surface-sunken);

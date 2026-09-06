@@ -344,7 +344,7 @@
   <div class="sheet-card flex flex-col gap-4">
     <header class="min-w-0">
       <p
-        class="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-accent"
+        class="mb-1 text-xs text-fg-muted"
       >
         Cover
       </p>

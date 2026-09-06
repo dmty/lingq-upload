@@ -7,6 +7,7 @@
     MappingState,
   } from "$lib/ipc/bindings";
   import { mapping } from "$lib/stores/mapping.svelte";
+  import { formatClock } from "$lib/format";
   import Button from "$lib/components/Button.svelte";
 
   /**
@@ -162,13 +163,6 @@
     return chapters.filter((c) => skipped.has(c.id));
   });
 
-  function fmtDur(sec: number): string {
-    const t = Math.max(0, Math.round(sec));
-    const m = Math.floor(t / 60);
-    const s = t % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }
-
   function relativeFromMs(ms: number): string {
     const delta = Math.max(0, Date.now() - ms);
     if (delta < 5_000) return "just now";
@@ -259,7 +253,7 @@
         >
           <span class="font-medium text-fg">
             {band.meta
-              ? `${band.meta.atomTitle ?? "Audio"} · ${fmtDur(band.meta.atomDurationSec)}`
+              ? `${band.meta.atomTitle ?? "Audio"} · ${formatClock(band.meta.atomDurationSec)}`
               : "Audio"}
           </span>
           {#if band.meta && isDrift(band.meta.charsPerSec)}
@@ -274,7 +268,7 @@
             type="button"
             data-testid="band-park"
             title="Exclude this audio from the upload"
-            class="ml-auto rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-sunken hover:text-fg"
+            class="ml-auto rounded-sm border border-border bg-surface px-1.5 py-0.5 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
             onclick={() => onOp({ kind: "park", track_id: band.trackId! })}
           >
             Park
@@ -317,7 +311,7 @@
               <span class="flex-1 truncate text-fg">{row.chapter.title}</span>
               {#if pair && isSingleton && confBand}
                 <span
-                  class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide {confBand.textClass}"
+                  class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-xs {confBand.textClass}"
                   data-testid="confidence-chip"
                   data-confidence={displayConf}
                   data-confidence-band={confBand.label}

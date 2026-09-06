@@ -84,7 +84,7 @@
             <span class="truncate">{trackTitleById[track] ?? track}</span>
             <button
               type="button"
-              class="text-[10px] uppercase tracking-wide text-fg-muted hover:text-fg"
+              class="text-xs text-fg-muted hover:text-fg"
               data-testid="parked-track-restore"
               onclick={() => (activePick = activePick === track ? null : track)}
             >

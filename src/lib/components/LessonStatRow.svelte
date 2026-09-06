@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LessonStat } from "$lib/ipc/bindings";
-  import { formatCount } from "$lib/format";
+  import { formatClock, formatCount } from "$lib/format";
 
   let { index, lesson }: { index: number; lesson: LessonStat } = $props();
 
@@ -8,19 +8,15 @@
     lesson.percent_completed == null ? null : Math.round(lesson.percent_completed),
   );
 
-  function clock(seconds: number | null): string {
-    if (seconds == null) return "—";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${String(s).padStart(2, "0")}`;
-  }
+  const clock = (seconds: number | null) =>
+    seconds == null ? "—" : formatClock(seconds);
 </script>
 
 <div
   data-testid="lesson-row"
   class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 py-2"
 >
-  <span class="tabular-nums text-fg-subtle">{String(index + 1).padStart(2, "0")}</span>
+  <span class="tabular-nums text-fg-subtle">{index + 1}</span>
   <span class="truncate">{lesson.title}</span>
   <span class="text-right tabular-nums text-fg-muted">{formatCount(lesson.word_count)}</span>
   <span class="text-right tabular-nums text-fg-muted">{formatCount(lesson.new_words_count)}</span>

@@ -137,7 +137,7 @@
       {:else}
         <div class="h-8 w-16 animate-pulse rounded-sm bg-surface-sunken"></div>
       {/if}
-      <div class="text-xs uppercase tracking-wide text-fg-subtle">{cell.label}</div>
+      <div class="text-xs text-fg-subtle">{cell.label}</div>
     </div>
   {/each}
 </div>

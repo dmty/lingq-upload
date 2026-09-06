@@ -43,8 +43,20 @@ export function formatAge(iso: string, now: number = Date.now()): string {
   return formatRelative(iso);
 }
 
-// Coarse duration for totals ("2h 45m"). Per-track labels use a finer m:ss
-// elsewhere; a book-length total in m:ss is unreadable.
+// Clock duration for a single track or position: m:ss under an hour,
+// h:mm:ss at or above it. Anything longer written as m:ss ("116:00") reads
+// as a bug rather than a duration.
+export function formatClock(sec: number): string {
+  const t = Math.max(0, Math.round(sec));
+  const s = t % 60;
+  const m = Math.floor(t / 60) % 60;
+  const h = Math.floor(t / 3600);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+// Coarse duration for totals ("2h 45m"). Per-track labels use formatClock;
+// a book-length total in m:ss is unreadable.
 export function formatDuration(sec: number): string {
   const t = Math.max(0, Math.round(sec));
   if (t < 60) return `${t}s`;

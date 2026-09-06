@@ -20,6 +20,7 @@
     type ProjectId as ProjectIdType,
   } from "$lib/ipc/bindings";
   import { appErrorMessage } from "$lib/errors";
+  import { formatClock } from "$lib/format";
   import { basename, extOf } from "$lib/paths";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import MismatchEvidence from "$lib/components/MismatchEvidence.svelte";
@@ -87,7 +88,7 @@
   let busyReplace = $state(false);
   let coverBusy = $state(false);
   let replaceError = $state<string | null>(null);
-  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let audioDropEl = $state<HTMLElement | null>(null);
   let localHover = $state(false);
   let coverPath = $state<string | null>(null);
   let coverOriginalPath = $state<string | null>(null);
@@ -345,15 +346,6 @@
     selected = data.preselect;
     bucketPreview = data.bucket_preview;
     hydrating = false;
-  }
-
-  function formatDuration(sec: number): string {
-    const total = Math.max(0, Math.round(sec));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
   }
 
   function median(values: number[]): number {
@@ -1112,7 +1104,7 @@
               {@const drift = isDrifting(row)}
               <li class="flex items-baseline gap-2 tabular">
                 <span>
-                  Ch {row.textRangeStart + 1}–{row.textRangeEnd} → {label} ({formatDuration(
+                  Ch {row.textRangeStart + 1}–{row.textRangeEnd} → {label} ({formatClock(
                     row.atomDurationSec,
                   )})
                 </span>

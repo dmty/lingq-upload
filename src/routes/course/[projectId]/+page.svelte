@@ -157,7 +157,7 @@
   {#if cached?.view && cached.view.lessons.length > 0}
     <section data-testid="course-lessons" class="mt-6">
       <div
-        class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 text-xs uppercase text-fg-subtle"
+        class="grid grid-cols-[2.5rem_1fr_5rem_4rem_4rem_5rem] items-center gap-3 text-xs text-fg-subtle"
       >
         <span></span>
         <span></span>

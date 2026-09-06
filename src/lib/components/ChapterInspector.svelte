@@ -1,6 +1,7 @@
 <script lang="ts">
   import { mapping } from "$lib/stores/mapping.svelte";
   import { audioUrl } from "$lib/audio";
+  import { formatClock } from "$lib/format";
 
   let id = $derived(mapping.selectedChapterId);
   let title = $derived(
@@ -86,11 +87,6 @@
     e.preventDefault();
     cur = Math.max(0, el.currentTime - audio.start);
   }
-  function fmt(s: number): string {
-    const m = Math.floor(s / 60);
-    const r = Math.floor(s % 60);
-    return `${m}:${r.toString().padStart(2, "0")}`;
-  }
 </script>
 
 {#if id}
@@ -101,7 +97,7 @@
     <header class="border-b border-border px-5 pb-4 pt-5">
       {#if bucketLabel}
         <div
-          class="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-accent"
+          class="mb-1 text-xs text-fg-muted"
         >
           {bucketLabel}
         </div>
@@ -169,8 +165,8 @@
           <div
             class="mt-1.5 flex justify-between text-[10px] tabular-nums text-fg-subtle"
           >
-            <span>{fmt(cur)}</span>
-            <span>{fmt(dur)}</span>
+            <span>{formatClock(cur)}</span>
+            <span>{formatClock(dur)}</span>
           </div>
         </div>
         {#if previewSrc}

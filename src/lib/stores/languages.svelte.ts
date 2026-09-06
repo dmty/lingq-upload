@@ -4,10 +4,13 @@ import { appErrorMessage } from "$lib/errors";
 const STORAGE_KEY = "cache.languages.v1";
 const SELECTION_KEY = "addProject.lang";
 
-export function formatLanguageOption(l: Language): string {
-  return l.known_words > 0
-    ? `${l.title} (${l.known_words.toLocaleString()})`
-    : l.title;
+// The bare number beside a language name ("Japanese (76,300)") reads as an
+// id; the count is only useful once it says what it counts, so it moves out
+// of the popup and into a hint beneath it.
+export function knownWordsHint(l: Language | undefined): string {
+  return l && l.known_words > 0
+    ? `${l.known_words.toLocaleString()} known words on LingQ`
+    : "";
 }
 
 export function getSavedLanguage(): string {

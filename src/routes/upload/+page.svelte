@@ -16,7 +16,7 @@
   import { appErrorMessage, isMissingApiKey } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
   import {
-    formatLanguageOption,
+    knownWordsHint,
     languagesStore,
   } from "$lib/stores/languages.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
@@ -65,8 +65,8 @@
   let unlisten: UnlistenFn | undefined;
   let unlistenDrop: UnlistenFn | undefined;
 
-  let textDropEl = $state<HTMLButtonElement | null>(null);
-  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let textDropEl = $state<HTMLElement | null>(null);
+  let audioDropEl = $state<HTMLElement | null>(null);
   let hoverZone = $state<"text" | "audio" | null>(null);
 
   const TEXT_EXTS = ["xhtml", "html", "htm", "txt"];
@@ -129,6 +129,10 @@
     showAllLanguages ? languages : languages.filter((l) => l.known_words > 0),
   );
 
+  const knownWords = $derived(
+    knownWordsHint(languages.find((l) => l.code === lang)),
+  );
+
   const collectionId = $derived(Number.parseInt(collectionIdRaw, 10));
 
   const collectionPicked = $derived(
@@ -149,14 +153,13 @@
   const aggregatePct = $derived((stageIndex + livePct) / stages.length);
   const liveMessage = $derived(progress.at(-1)?.message ?? null);
 
-  const submitLabel = $derived.by(() => {
-    if (busy) return "Uploading…";
-    if (!lang.trim()) return "Choose a language to continue";
-    if (!collectionPicked) return "Pick a collection";
-    if (!textPath) return "Add the chapter text";
-    if (!audioPath) return "Add the audio";
-    if (!title.trim()) return "Name the lesson";
-    return "Upload lesson";
+  const submitHint = $derived.by(() => {
+    if (busy || canSubmit) return "";
+    if (!lang.trim()) return "Choose a language to continue.";
+    if (!collectionPicked) return "Pick a collection to continue.";
+    if (!textPath) return "Add the chapter text to continue.";
+    if (!audioPath) return "Add the audio to continue.";
+    return "Name the lesson to continue.";
   });
 
   function stageLabel(stage: Stage["kind"]): string {
@@ -415,7 +418,7 @@
     Pick a destination, then drop in your text and audio.
   </p>
 
-  <div class="mt-6 rounded-md border border-border bg-surface shadow-card">
+  <div class="mt-6">
     {#if result}
       <ResultPanel {title} {result} onUploadAnother={uploadAnother} />
     {:else if !error && (busy || progress.length > 0)}
@@ -426,13 +429,8 @@
         onCancel={busy ? cancelUpload : undefined}
       />
     {:else}
-      <!-- Destination -->
-      <div class="p-6">
-        <h2
-          class="text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
-        >
-          Destination
-        </h2>
+      <div>
+        <h2 class="text-sm font-semibold text-fg">Destination</h2>
         <div class="mt-4 grid grid-cols-2 gap-4">
           <label class="block">
             <span class="text-sm text-fg-muted">Language</span>
@@ -448,9 +446,12 @@
                   : "Select language…"}
               </option>
               {#each visibleLanguages as l (l.code)}
-                <option value={l.code}>{formatLanguageOption(l)}</option>
+                <option value={l.code}>{l.title}</option>
               {/each}
             </Select>
+            {#if knownWords}
+              <span class="mt-1 block text-xs text-fg-muted">{knownWords}</span>
+            {/if}
             {#if languagesError}
               <span class="mt-1 block text-xs text-error">
                 {languagesError}
@@ -502,13 +503,8 @@
         </div>
       </div>
 
-      <!-- Content -->
-      <div class="border-t border-border p-6">
-        <h2
-          class="text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
-        >
-          Content
-        </h2>
+      <div class="mt-6 border-t border-border pt-6">
+        <h2 class="text-sm font-semibold text-fg">Content</h2>
 
         <label class="mt-4 block">
           <span class="text-sm text-fg-muted">Lesson title</span>
@@ -559,9 +555,14 @@
           </Alert>
         {/if}
 
-        <Button size="xl" class="mt-6" onclick={upload} disabled={!canSubmit}>
-          {submitLabel}
-        </Button>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          {#if submitHint}
+            <span class="text-xs text-fg-muted">{submitHint}</span>
+          {/if}
+          <Button onclick={upload} disabled={!canSubmit}>
+            {busy ? "Uploading…" : "Upload"}
+          </Button>
+        </div>
       </div>
     {/if}
   </div>

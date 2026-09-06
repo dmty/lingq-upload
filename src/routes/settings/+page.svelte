@@ -345,7 +345,7 @@
 
     <label class="mt-4 block">
       <span
-        class="block text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+        class="block text-xs font-medium text-fg-muted"
       >
         Key
       </span>
@@ -500,7 +500,7 @@
             {#if transcriptionPreferences.provider_id === provider.id}
               <label class="mt-4 block">
                 <span
-                  class="block text-xs font-medium tracking-[0.04em] text-fg-muted uppercase"
+                  class="block text-xs font-medium text-fg-muted"
                 >
                   API key
                 </span>

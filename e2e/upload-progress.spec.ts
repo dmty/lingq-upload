@@ -8,18 +8,18 @@ async function startUpload(page: Page) {
   await page.locator("select").nth(1).selectOption("7");
   await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
   await page
-    .getByRole("button", { name: "Drop chapter text or click to choose" })
+    .getByRole("button", { name: "Choose book file" })
     .click();
   await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
   await page
-    .getByRole("button", { name: "Drop audio or click to choose" })
+    .getByRole("button", { name: "Choose audio" })
     .click();
   await page.evaluate(() => {
     window.__uploadOneShotGate__ = new Promise((resolve) => {
       window.__releaseUpload__ = resolve;
     });
   });
-  await page.getByRole("button", { name: "Upload lesson" }).click();
+  await page.getByRole("button", { name: "Upload", exact: true }).click();
 }
 
 test.describe("aggregate upload progress", () => {

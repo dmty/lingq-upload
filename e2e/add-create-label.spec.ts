@@ -7,32 +7,36 @@ test.describe("add page create-button reasons", () => {
     });
   });
 
-  test("the disabled Create button says what's missing", async ({ page }) => {
+  test("the disabled Create button keeps its name and states the gap", async ({
+    page,
+  }) => {
     await page.goto("/add");
     // Language auto-selects the saved/first entry, so the only remaining gap
     // is content. Generous first assertion: this is the suite's first
     // navigation, so it absorbs the dev server's route compile.
+    await expect(page.getByRole("button", { name: "Create" })).toBeDisabled({
+      timeout: 30_000,
+    });
     await expect(
-      page.getByRole("button", { name: "Add a book file or audio" }),
-    ).toBeDisabled({ timeout: 30_000 });
+      page.getByText("Add a book file or audio to continue."),
+    ).toBeVisible();
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/book.epub"));
-    await page
-      .getByRole("button", { name: "Drop chapter text or click to choose" })
-      .click();
+    await page.getByRole("button", { name: "Choose book file" }).click();
     await expect(page.getByRole("button", { name: "Create" })).toBeEnabled();
+    await expect(
+      page.getByText("Add a book file or audio to continue."),
+    ).toBeHidden();
   });
 
   test("audio alone is enough to create a project", async ({ page }) => {
     await page.goto("/add");
-    await expect(
-      page.getByRole("button", { name: "Add a book file or audio" }),
-    ).toBeDisabled({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Create" })).toBeDisabled({
+      timeout: 30_000,
+    });
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/book.m4b"));
-    await page
-      .getByRole("button", { name: "Drop audio or click to choose" })
-      .click();
+    await page.getByRole("button", { name: "Choose audio" }).click();
     await expect(page.getByRole("button", { name: "Create" })).toBeEnabled();
   });
 });

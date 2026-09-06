@@ -16,7 +16,7 @@
   import { basename, extOf, filenameStem } from "$lib/paths";
   import { joinKey } from "$lib/identity";
   import {
-    formatLanguageOption,
+    knownWordsHint,
     getSavedLanguage,
     languagesStore,
     saveLanguage,
@@ -45,8 +45,8 @@
     conflict_title: string;
   } | null>(null);
 
-  let textDropEl = $state<HTMLButtonElement | null>(null);
-  let audioDropEl = $state<HTMLButtonElement | null>(null);
+  let textDropEl = $state<HTMLElement | null>(null);
+  let audioDropEl = $state<HTMLElement | null>(null);
   let hoverZone = $state<"text" | "audio" | null>(null);
   let unlistenDrop: UnlistenFn | undefined;
 
@@ -60,6 +60,10 @@
 
   const visibleLanguages = $derived(
     showAllLanguages ? languages : languages.filter((l) => l.known_words > 0),
+  );
+
+  const knownWords = $derived(
+    knownWordsHint(languages.find((l) => l.code === lang)),
   );
 
   function applyDefaultLanguage() {
@@ -292,13 +296,13 @@
         : pickedCandidate !== null,
   );
 
-  const createLabel = $derived.by(() => {
-    if (busy) return "Creating…";
-    if (!isManual) return pickedCandidate ? "Create" : "Pick a book to continue";
-    if (!textPath && audioPaths.length === 0) return "Add a book file or audio";
-    if (!lang.trim()) return "Choose a language";
-    if (!title.trim()) return "Name the project";
-    return "Create";
+  const createHint = $derived.by(() => {
+    if (busy || canCreate) return "";
+    if (!isManual) return "Pick a book to continue.";
+    if (!textPath && audioPaths.length === 0)
+      return "Add a book file or audio to continue.";
+    if (!lang.trim()) return "Choose a language to continue.";
+    return "Name the project to continue.";
   });
 
   async function pickText() {
@@ -446,9 +450,7 @@
 
   {#if isManual}
     <fieldset class="space-y-2">
-      <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Book (EPUB or HTML)
-      </legend>
+      <legend class="text-xs font-medium text-fg-muted">Book</legend>
       <DropZone
         variant="text"
         paths={textPath ? [textPath] : []}
@@ -461,9 +463,7 @@
     </fieldset>
 
     <fieldset class="space-y-2">
-      <legend class="text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Audio
-      </legend>
+      <legend class="text-xs font-medium text-fg-muted">Audio</legend>
       <DropZone
         variant="audio"
         paths={audioPaths}
@@ -479,18 +479,19 @@
 
     <div class="grid grid-cols-2 gap-3">
       <label class="space-y-1">
-        <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+        <span class="text-xs font-medium text-fg-muted">
           Title
         </span>
         <input
           type="text"
           bind:value={title}
-          class="field field-lg"
+          placeholder="Taken from the book if left blank"
+          class="field field-lg placeholder:text-fg-subtle"
           disabled={busy}
         />
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-medium uppercase tracking-wide text-fg-muted">
+        <span class="text-xs font-medium text-fg-muted">
           Language
         </span>
         <Select
@@ -501,9 +502,12 @@
             {languagesError ? "Could not load languages" : "Select language…"}
           </option>
           {#each visibleLanguages as l (l.code)}
-            <option value={l.code}>{formatLanguageOption(l)}</option>
+            <option value={l.code}>{l.title}</option>
           {/each}
         </Select>
+        {#if knownWords}
+          <span class="block text-xs text-fg-muted">{knownWords}</span>
+        {/if}
         {#if languagesError}
           <span class="block text-xs text-error">
             {languagesError}
@@ -586,9 +590,12 @@
     </div>
   {/if}
 
-  <div class="flex justify-end">
-    <Button size="lg" disabled={!canCreate} onclick={onCreate}>
-      {createLabel}
+  <div class="flex items-center justify-end gap-3">
+    {#if createHint}
+      <span class="text-xs text-fg-muted">{createHint}</span>
+    {/if}
+    <Button disabled={!canCreate} onclick={onCreate}>
+      {busy ? "Creating…" : "Create"}
     </Button>
   </div>
 </section>

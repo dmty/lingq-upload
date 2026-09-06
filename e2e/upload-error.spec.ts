@@ -20,11 +20,11 @@ test.describe("one-shot upload error surface", () => {
     // the "Add the audio" submit-label button, which also contains "audio".
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
     await page
-      .getByRole("button", { name: "Drop chapter text or click to choose" })
+      .getByRole("button", { name: "Choose book file" })
       .click();
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
     await page
-      .getByRole("button", { name: "Drop audio or click to choose" })
+      .getByRole("button", { name: "Choose audio" })
       .click();
 
     // Gate the upload so we can emit progress mid-flight, then fail it.
@@ -38,7 +38,7 @@ test.describe("one-shot upload error surface", () => {
       });
     });
 
-    await page.getByRole("button", { name: "Upload lesson" }).click();
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
     await page.evaluate(() =>
       window.__emitEvent__("job", {
         kind: "Started",
@@ -53,7 +53,7 @@ test.describe("one-shot upload error surface", () => {
     // The bug: ProgressPanel stays mounted and this alert never appears.
     await expect(page.getByRole("alert")).toContainText(/LingQ/i);
     await expect(
-      page.getByRole("button", { name: "Upload lesson" }),
+      page.getByRole("button", { name: "Upload", exact: true }),
     ).toBeVisible();
   });
 
@@ -65,11 +65,11 @@ test.describe("one-shot upload error surface", () => {
 
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.xhtml"));
     await page
-      .getByRole("button", { name: "Drop chapter text or click to choose" })
+      .getByRole("button", { name: "Choose book file" })
       .click();
     await page.evaluate(() => (window.__dialogPickPath__ = "/tmp/ch1.mp3"));
     await page
-      .getByRole("button", { name: "Drop audio or click to choose" })
+      .getByRole("button", { name: "Choose audio" })
       .click();
 
     await page.evaluate(() => {
@@ -78,7 +78,7 @@ test.describe("one-shot upload error surface", () => {
       });
     });
 
-    await page.getByRole("button", { name: "Upload lesson" }).click();
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
     await page.evaluate(() =>
       window.__emitEvent__("job", {
         kind: "Started",
