@@ -18,6 +18,7 @@
   } from "$lib/ipc/bindings";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import { openSettings } from "$lib/settings-window";
 
   onMount(() => {
     library.load();
@@ -40,7 +41,9 @@
     return s.normalize("NFC").toLowerCase();
   }
 
-  const selectedLanguage = $derived(page.url.searchParams.get("language") ?? "");
+  const selectedLanguage = $derived(
+    page.url.searchParams.get("language") ?? "",
+  );
   const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
 
   // A real navigation, not shallow routing: $app/navigation's replaceState
@@ -211,9 +214,13 @@
     >
       <span> Add your LingQ API key in Settings to start uploading. </span>
       <span class="flex items-center gap-3 text-xs">
-        <a href="/settings" class="font-medium text-accent hover:underline">
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => void openSettings()}
+        >
           Open Settings
-        </a>
+        </Button>
         <button
           type="button"
           class="text-fg-muted hover:text-fg"

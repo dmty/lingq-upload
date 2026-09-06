@@ -34,7 +34,7 @@ static BUILT_IN_PROVIDERS: [ProviderDescriptor; 2] = [
         endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
         pricing: PricingHint {
             summary:
-                "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+                "Free tier available. Paid use is about $0.04 per hour of audio.",
             estimated_usd_per_minute: Some(0.000_666_666_666_666_666_6),
             free_tier_eligible: true,
             docs_url: "https://console.groq.com/docs/speech-to-text",
@@ -48,7 +48,7 @@ static BUILT_IN_PROVIDERS: [ProviderDescriptor; 2] = [
         model: "whisper-1",
         endpoint: "https://api.openai.com/v1/audio/transcriptions",
         pricing: PricingHint {
-            summary: "No free tier; current reference $0.006/min",
+            summary: "No free tier. Costs about $0.006 per minute of audio.",
             estimated_usd_per_minute: Some(0.006),
             free_tier_eligible: false,
             docs_url: "https://developers.openai.com/api/docs/models/whisper-1",
@@ -209,7 +209,7 @@ mod tests {
         );
         assert_eq!(
             groq.pricing.summary,
-            "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour"
+            "Free tier available. Paid use is about $0.04 per hour of audio."
         );
         assert_eq!(
             groq.pricing.estimated_usd_per_minute,
@@ -233,7 +233,7 @@ mod tests {
         );
         assert_eq!(
             open_ai.pricing.summary,
-            "No free tier; current reference $0.006/min"
+            "No free tier. Costs about $0.006 per minute of audio."
         );
         assert_eq!(open_ai.pricing.estimated_usd_per_minute, Some(0.006));
         assert!(!open_ai.pricing.free_tier_eligible);

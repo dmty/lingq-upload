@@ -123,7 +123,7 @@ test.describe("library navigation history", () => {
     // A query typed in Library belongs to Library, not to the sidebar.
     await page.locator('input[type="search"]').fill("Book");
     await expect(page).toHaveURL("/library?language=ja&q=Book");
-    await page.getByRole("link", { name: "Settings", exact: true }).click();
+    await page.goto("/settings");
     await expect(page).toHaveURL("/settings");
     await page.getByRole("link", { name: "German", exact: true }).click();
     await expect(page).toHaveURL("/library?language=de");
@@ -189,7 +189,7 @@ test.describe("library navigation history", () => {
     await page.getByRole("link", { name: "Japanese", exact: true }).click();
     await expect(page).toHaveURL("/library?language=ja&q=Book");
 
-    await page.getByRole("link", { name: "Settings", exact: true }).click();
+    await page.goto("/settings");
     await expect(page).toHaveURL("/settings");
 
     await page.goBack();

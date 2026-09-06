@@ -20,5 +20,7 @@
 
 <span
   {...rest}
-  class="inline-block animate-spin rounded-full border-2 {sizes[size]} {tones[tone]} {cls}"
+  class="inline-block animate-spin rounded-full border-2 {sizes[size]} {tones[
+    tone
+  ]} {cls}"
 ></span>

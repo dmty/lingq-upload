@@ -479,9 +479,7 @@
 
     <div class="grid grid-cols-2 gap-3">
       <label class="space-y-1">
-        <span class="text-xs font-medium text-fg-muted">
-          Title
-        </span>
+        <span class="text-xs font-medium text-fg-muted"> Title </span>
         <input
           type="text"
           bind:value={title}
@@ -491,9 +489,7 @@
         />
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-medium text-fg-muted">
-          Language
-        </span>
+        <span class="text-xs font-medium text-fg-muted"> Language </span>
         <Select
           bind:value={lang}
           disabled={busy || visibleLanguages.length === 0}
@@ -569,7 +565,11 @@
         you want to do?
       </p>
       <div class="flex flex-wrap gap-2">
-        <Button variant="danger" disabled={busy} onclick={() => resolve("replace")}>
+        <Button
+          variant="danger"
+          disabled={busy}
+          onclick={() => resolve("replace")}
+        >
           Replace
         </Button>
         <Button disabled={busy} onclick={() => resolve("skip")}>

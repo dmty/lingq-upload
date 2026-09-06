@@ -92,9 +92,14 @@
             </button>
           </div>
           {#if activePick === track}
-            <div class="mt-1 flex flex-wrap gap-1" data-testid="parked-track-chapters">
+            <div
+              class="mt-1 flex flex-wrap gap-1"
+              data-testid="parked-track-chapters"
+            >
               {#if unpairedChapterIds.length === 0}
-                <span class="text-[10px] text-fg-muted">No unpaired chapters.</span>
+                <span class="text-[10px] text-fg-muted"
+                  >No unpaired chapters.</span
+                >
               {/if}
               {#each unpairedChapterIds as cid (cid)}
                 <button

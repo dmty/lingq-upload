@@ -17,6 +17,7 @@
   import Alert from "$lib/components/Alert.svelte";
   import StepIndicator from "$lib/components/StepIndicator.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
+  import { openSettings } from "$lib/settings-window";
 
   type Row = {
     index: number;
@@ -350,7 +351,9 @@
             View Course
           </button>
         {/if}
-        <a href="/library" class="text-fg-muted hover:text-fg">Back to Library</a>
+        <a href="/library" class="text-fg-muted hover:text-fg"
+          >Back to Library</a
+        >
       </span>
     </Alert>
   {/if}
@@ -359,7 +362,14 @@
     <Alert body class="px-4 py-2">
       {error}
       {#if errorNeedsKey}
-        <a href="/settings" class="ml-1 font-medium text-accent underline">Open Settings</a>
+        <Button
+          variant="secondary"
+          size="sm"
+          class="ml-2"
+          onclick={() => void openSettings()}
+        >
+          Open Settings
+        </Button>
       {/if}
     </Alert>
   {/if}

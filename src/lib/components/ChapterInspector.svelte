@@ -112,9 +112,7 @@
   >
     <header class="border-b border-border px-5 pb-4 pt-5">
       {#if bucketLabel}
-        <div
-          class="mb-1 text-xs text-fg-muted"
-        >
+        <div class="mb-1 text-xs text-fg-muted">
           {bucketLabel}
         </div>
       {/if}
@@ -201,7 +199,9 @@
         {/if}
       </div>
       {#if audioError}
-        <p class="border-b border-border bg-surface-sunken px-5 pb-3 text-xs text-error">
+        <p
+          class="border-b border-border bg-surface-sunken px-5 pb-3 text-xs text-error"
+        >
           Audio preview unavailable for this file.
         </p>
       {/if}

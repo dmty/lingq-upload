@@ -20,7 +20,8 @@
   } = $props();
 
   const variants = {
-    primary: "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-fg-subtle",
+    primary:
+      "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-fg-subtle",
     // .push-button is layered, so a bg/border/shadow utility in `class` beats it
     secondary: "push-button text-fg",
     danger: "bg-error text-on-fill hover:bg-error/90 disabled:bg-fg-subtle",
@@ -41,7 +42,12 @@
 </script>
 
 {#if href}
-  <a {href} {...rest} bind:this={ref} class="{classes} no-underline hover:no-underline">
+  <a
+    {href}
+    {...rest}
+    bind:this={ref}
+    class="{classes} no-underline hover:no-underline"
+  >
     {@render children()}
   </a>
 {:else}

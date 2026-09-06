@@ -42,7 +42,9 @@
   const parts = $derived.by(() => {
     const out: string[] = [];
     if (hasText) {
-      out.push(`${chapterCount} ${chapterCount === 1 ? "chapter" : "chapters"}`);
+      out.push(
+        `${chapterCount} ${chapterCount === 1 ? "chapter" : "chapters"}`,
+      );
       out.push(
         buckets.length === 0
           ? "no audio"
@@ -66,7 +68,8 @@
         title={files.join(", ")}>♪</span
       >
       {#if fileLabel}
-        <span class="truncate text-fg" title={files.join(", ")}>{fileLabel}</span
+        <span class="truncate text-fg" title={files.join(", ")}
+          >{fileLabel}</span
         >
       {/if}
       <span class="text-fg-subtle">·</span>

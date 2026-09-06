@@ -105,7 +105,7 @@ test.describe("source list sidebar", () => {
     ).toBeVisible();
     await expect(
       sidebar.getByRole("link", { name: "Settings", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(sidebar.getByRole("link", { name: "Add project" })).toHaveCount(
       0,
     );
@@ -186,26 +186,17 @@ test.describe("source list sidebar", () => {
     expect(firstChild!.y).toBe(toolbarBox!.y + toolbarBox!.height + 24);
   });
 
-  test("Settings sits below the destinations, inside the sidebar's bottom inset", async ({
+  test("the destinations end at the sidebar's bottom inset", async ({
     page,
   }) => {
     await page.goto("/library");
     const sidebar = page.getByRole("navigation", { name: "Sections" });
-    const library = await sidebar
-      .getByRole("link", { name: "All", exact: true })
-      .boundingBox();
-    const settings = await sidebar
-      .getByRole("link", { name: "Settings", exact: true })
-      .boundingBox();
+    const last = await sidebar.getByRole("link").last().boundingBox();
     const sidebarBox = await page.locator("#app-sidebar").boundingBox();
-    expect(library).not.toBeNull();
-    expect(settings).not.toBeNull();
+    expect(last).not.toBeNull();
     expect(sidebarBox).not.toBeNull();
-    expect(settings!.y).toBeGreaterThan(library!.y);
-    const bottomGap =
-      sidebarBox!.y + sidebarBox!.height - (settings!.y + settings!.height);
-    expect(bottomGap).toBeGreaterThanOrEqual(0);
-    expect(Math.abs(bottomGap - 8)).toBeLessThanOrEqual(1);
+    const bottomGap = sidebarBox!.y + sidebarBox!.height - last!.y;
+    expect(bottomGap).toBeGreaterThanOrEqual(8);
   });
 
   test("the source-list heading is a quiet 11px label above its rows", async ({
@@ -243,22 +234,18 @@ test.describe("source list sidebar", () => {
     await page.waitForLoadState("networkidle");
 
     const destinations = page.locator(".source-destinations");
-    const settings = page.getByRole("link", { name: "Settings", exact: true });
     expect(
       await destinations.evaluate((el) => el.scrollHeight > el.clientHeight),
     ).toBe(true);
 
     const headingBefore = await page.locator(".source-heading").boundingBox();
-    const settingsBefore = await settings.boundingBox();
     await destinations.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
 
-    await expect(settings).toBeVisible();
+    // The heading stays put however far the destinations scroll.
     const headingAfter = await page.locator(".source-heading").boundingBox();
-    const settingsAfter = await settings.boundingBox();
     expect(headingAfter!.y).toBe(headingBefore!.y);
-    expect(settingsAfter!.y).toBe(settingsBefore!.y);
     // The scroller keeps to its own column: no sideways drift.
     expect(
       await destinations.evaluate((el) => el.scrollWidth <= el.clientWidth),
@@ -279,11 +266,13 @@ test.describe("source list sidebar", () => {
   });
 
   test("the current section is marked for assistive tech", async ({ page }) => {
-    await page.goto("/settings");
+    await page.goto("/library");
     const nav = page.getByRole("navigation", { name: "Sections" });
     await expect(
-      nav.getByRole("link", { name: "Settings", exact: true }),
+      nav.getByRole("link", { name: "All", exact: true }),
     ).toHaveAttribute("aria-current", "page");
+
+    await page.goto("/settings");
     await expect(
       nav.getByRole("link", { name: "All", exact: true }),
     ).not.toHaveAttribute("aria-current", "page");
@@ -610,9 +599,14 @@ test.describe("inactive window chrome", () => {
   test("sidebar hover feedback is suppressed while the window is inactive", async ({
     page,
   }) => {
+    // Off Library so no destination is current: a selected row keeps its own
+    // inactive fill, which is a different rule from the hover suppression
+    // under test.
+    await page.goto("/add");
+    await page.waitForLoadState("networkidle");
     await deactivate(page);
     const targets = [
-      page.locator("#app-sidebar").getByRole("link", { name: "Settings" }),
+      page.locator("#app-sidebar").getByRole("link", { name: "All" }),
       page.getByTestId("sidebar-toggle"),
     ];
     for (const target of targets) {

@@ -18,7 +18,8 @@
           ? "text-fg-muted"
           : "text-fg-subtle"}
     >
-      {i + 1} {label}
+      {i + 1}
+      {label}
     </li>
   {/each}
 </ol>

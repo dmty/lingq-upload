@@ -15,15 +15,13 @@
   } from "$lib/ipc/bindings";
   import { appErrorMessage, isMissingApiKey } from "$lib/errors";
   import { extOf, filenameStem } from "$lib/paths";
-  import {
-    knownWordsHint,
-    languagesStore,
-  } from "$lib/stores/languages.svelte";
+  import { knownWordsHint, languagesStore } from "$lib/stores/languages.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import ProgressPanel from "$lib/components/ProgressPanel.svelte";
   import ResultPanel from "$lib/components/ResultPanel.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
+  import { openSettings } from "$lib/settings-window";
 
   type ProgressEntry = {
     stage: Stage["kind"];
@@ -548,9 +546,14 @@
           <Alert class="mt-4">
             {error}
             {#if errorNeedsKey}
-              <a href="/settings" class="ml-1 font-medium underline"
-                >Open Settings</a
+              <Button
+                variant="secondary"
+                size="sm"
+                class="ml-2"
+                onclick={() => void openSettings()}
               >
+                Open Settings
+              </Button>
             {/if}
           </Alert>
         {/if}

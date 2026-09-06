@@ -223,8 +223,7 @@ export const mapping = {
     state.skippedIds = loaded.data.skipped_chapters ?? [];
     state.mappingState = loaded.data.mapping ?? null;
     state.absorbPolicy = loaded.data.absorb_policy ?? "forward";
-    state.detectionEvidence =
-      loaded.data.matcher_decision?.detection ?? null;
+    state.detectionEvidence = loaded.data.matcher_decision?.detection ?? null;
     state.hasUploadReceipts = (loaded.data.receipts?.length ?? 0) > 0;
 
     const chaptersResult = await commands.cmdProjectChapters(loaded.data.id);

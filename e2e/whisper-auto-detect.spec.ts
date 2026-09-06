@@ -435,7 +435,7 @@ test.describe("gated automatic range detection", () => {
     );
     const assist = page.getByTestId("detection-assist");
     await expect(
-      assist.getByRole("link", { name: "Switch transcription provider" }),
+      assist.getByRole("button", { name: "Switch transcription provider" }),
     ).toBeVisible();
     await expect(
       assist.getByRole("button", { name: "Try detection again" }),

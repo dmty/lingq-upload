@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { commands, type AbsorbPolicy, type ProjectId } from "$lib/ipc/bindings";
+  import {
+    commands,
+    type AbsorbPolicy,
+    type ProjectId,
+  } from "$lib/ipc/bindings";
 
   let {
     projectId,
@@ -9,23 +13,24 @@
     absorbPolicy?: AbsorbPolicy;
   } = $props();
 
-  const policies: Array<{ value: AbsorbPolicy; label: string; hint: string }> = [
-    {
-      value: "forward",
-      label: "Forward",
-      hint: "Silence joins the next chapter (default)."
-    },
-    {
-      value: "backward",
-      label: "Backward",
-      hint: "Silence joins the previous chapter."
-    },
-    {
-      value: "drop",
-      label: "Drop",
-      hint: "Silence is excluded from both sides."
-    }
-  ];
+  const policies: Array<{ value: AbsorbPolicy; label: string; hint: string }> =
+    [
+      {
+        value: "forward",
+        label: "Forward",
+        hint: "Silence joins the next chapter (default).",
+      },
+      {
+        value: "backward",
+        label: "Backward",
+        hint: "Silence joins the previous chapter.",
+      },
+      {
+        value: "drop",
+        label: "Drop",
+        hint: "Silence is excluded from both sides.",
+      },
+    ];
 
   // Namespace the radio group so two ProjectSettings instances can't collide.
   const groupName = $derived(`absorb-policy-${projectId.content_hash}`);

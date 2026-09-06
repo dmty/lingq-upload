@@ -163,7 +163,8 @@
   });
 
   const toolbarLabel = $derived(
-    bookTitle || (mapping.mappingState ? "Confirm pairing" : "Resolve mismatch"),
+    bookTitle ||
+      (mapping.mappingState ? "Confirm pairing" : "Resolve mismatch"),
   );
 
   $effect(() => {
@@ -232,7 +233,9 @@
     // can_start is the backend's own conjunction of eligibility, key, consent
     // and absent evidence — re-checking the parts here would only let the two
     // gates drift apart.
-    return preferences.auto_detect_start && availability.can_start && !suppressed;
+    return (
+      preferences.auto_detect_start && availability.can_start && !suppressed
+    );
   }
 
   // Opt-in auto mode runs the assist's own manual start path — no second
@@ -1065,7 +1068,9 @@
               selected = "split_proportional";
               queueMicrotask(() =>
                 document
-                  .querySelector('[data-testid="mismatch-response-split_proportional"]')
+                  .querySelector(
+                    '[data-testid="mismatch-response-split_proportional"]',
+                  )
                   ?.scrollIntoView({
                     // An explicit JS `behavior` overrides CSS scroll-behavior,
                     // so prefers-reduced-motion has to be checked here too.

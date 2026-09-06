@@ -20,6 +20,9 @@
 
   let key = $state("");
   let savedTail = $state<string | null>(null); // last 4 chars of stored key
+  // A stored key shows itself masked and read-only; "Change…" swaps in the
+  // editable field, so the screen never says "no key" and "key saved" at once.
+  let editing = $state(false);
   let busy = $state(false);
   let error = $state<string | null>(null);
   let justSaved = $state(false);
@@ -262,6 +265,8 @@
     }
   }
 
+  const showStoredKey = $derived(savedTail !== null && !editing);
+
   async function save() {
     if (!key.trim()) {
       error = "Enter a key first.";
@@ -272,6 +277,7 @@
     const res = await commands.cmdSaveLingqKey(key);
     if (res.status === "ok") {
       key = "";
+      editing = false;
       languagesStore.invalidate();
       clearSavedLanguage();
       void languagesStore.ensureLoaded();
@@ -329,126 +335,131 @@
 
 <section class="col-form">
   <h1 class="sr-only">Settings</h1>
-  <p class="text-base text-fg-muted">
-    Where this app keeps your keys and preferences.
-  </p>
 
-  <div class="mt-6 rounded-md border border-border bg-surface p-6 shadow-card">
-    <h2 class="text-md font-semibold text-fg">LingQ API key</h2>
-    <p class="mt-1 text-sm text-fg-subtle">
-      Find it at <a
+  <div>
+    <h2 class="text-sm font-semibold text-fg">LingQ API key</h2>
+    <p class="mt-1 text-xs text-fg-subtle">
+      Find your key at <a
         href="https://www.lingq.com/accounts/apikey/"
         target="_blank"
-        rel="noopener noreferrer">lingq.com/accounts/apikey/</a
-      > — we store it in your OS keychain.
+        rel="noopener noreferrer">lingq.com/accounts/apikey</a
+      >. Stored in your keychain.
     </p>
 
-    <label class="mt-4 block">
-      <span
-        class="block text-xs font-medium text-fg-muted"
-      >
+    <div class="mt-4">
+      <!-- `for`, not a wrapping label: the Paste button sits inside the field
+           box, and a wrapping label would fold its text into the input's
+           accessible name. -->
+      <label for="lingq-key" class="block text-xs font-medium text-fg-muted">
         Key
-      </span>
+      </label>
       <div class="relative mt-1.5">
         <input
+          id="lingq-key"
           type="password"
           autocomplete="off"
           spellcheck="false"
-          bind:value={key}
+          value={showStoredKey ? `••••••••••••${savedTail}` : key}
+          oninput={(event) => (key = event.currentTarget.value)}
+          readonly={showStoredKey}
           disabled={busy}
           placeholder="Paste your LingQ API key"
           class="field field-lg pr-[64px] placeholder:text-fg-subtle"
         />
-        <button
-          type="button"
-          onclick={pasteFromClipboard}
-          disabled={busy}
-          class="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg disabled:opacity-50"
-        >
-          Paste
-        </button>
+        {#if !showStoredKey}
+          <button
+            type="button"
+            onclick={pasteFromClipboard}
+            disabled={busy}
+            class="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors duration-120 hover:bg-surface-sunken hover:text-fg disabled:opacity-50"
+          >
+            Paste
+          </button>
+        {/if}
       </div>
-    </label>
-
-    <div class="mt-4 flex items-center gap-2 text-sm">
-      <span
-        class="inline-block h-2 w-2 rounded-full transition-colors duration-180 ease-snappy"
-        class:bg-fg-subtle={!savedTail}
-        class:bg-success={!!savedTail}
-      ></span>
-      {#if savedTail}
-        <span class="text-fg-muted">
-          Key saved · <code class="tabular text-fg">•••• {savedTail}</code>
-        </span>
-      {:else}
-        <span class="text-fg-subtle">No key set yet.</span>
-      {/if}
     </div>
+
+    {#if !savedTail}
+      <p class="mt-2 text-xs text-fg-subtle">No key set yet.</p>
+    {/if}
 
     {#if error}
       <Alert class="mt-4">{error}</Alert>
     {/if}
 
-    <div class="mt-6 flex items-center justify-end gap-2">
-      <button
-        type="button"
-        onclick={requestClear}
-        disabled={busy || !savedTail}
-        class="rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-120 hover:bg-surface-sunken disabled:opacity-40 {clearArmed
-          ? 'text-error'
-          : 'text-fg-muted hover:text-fg'}"
-      >
-        {clearArmed ? "Really clear?" : "Clear"}
-      </button>
-      <Button disabled={busy || key.length === 0} onclick={save}>
-        {#if justSaved}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+    <div class="mt-4 flex items-center justify-end gap-2">
+      {#if showStoredKey}
+        <Button
+          variant="secondary"
+          onclick={requestClear}
+          disabled={busy}
+          class={clearArmed ? "text-error" : ""}
+        >
+          {clearArmed ? "Really clear?" : "Remove"}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onclick={() => (editing = true)}
+        >
+          Change…
+        </Button>
+      {:else}
+        {#if savedTail}
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onclick={() => {
+              editing = false;
+              key = "";
+            }}
           >
-            <path d="M4 10.5l4 4 8-9" />
-          </svg>
-          Saved
-        {:else}
-          {busy ? "Saving…" : "Save"}
+            Cancel
+          </Button>
         {/if}
-      </Button>
+        <Button disabled={busy || key.length === 0} onclick={save}>
+          {#if justSaved}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 10.5l4 4 8-9" />
+            </svg>
+            Saved
+          {:else}
+            {busy ? "Saving…" : "Save"}
+          {/if}
+        </Button>
+      {/if}
     </div>
   </div>
 
   <section
-    class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
+    class="mt-6 border-t border-border pt-6"
     aria-labelledby="transcription-heading"
   >
-    <h2 id="transcription-heading" class="text-md font-semibold text-fg">
+    <h2 id="transcription-heading" class="text-sm font-semibold text-fg">
       Transcription (optional)
     </h2>
-    <p class="mt-1 text-sm text-fg-subtle">
+    <p class="mt-1 text-xs text-fg-subtle">
       Choose the app-wide provider used for transcription-assisted detection.
       Keys stay in your OS keychain.
     </p>
 
     {#if !transcriptionLoaded}
-      <p class="mt-4 text-sm text-fg-muted">Loading providers…</p>
+      <p class="mt-4 text-base text-fg-muted">Loading providers…</p>
     {:else}
-      <fieldset class="mt-5 space-y-3" disabled={transcriptionBusy}>
+      <fieldset class="mt-4 space-y-3" disabled={transcriptionBusy}>
         <legend class="sr-only">Transcription provider</legend>
         {#each transcribeProviders as provider (provider.id)}
-          <div
-            role="group"
-            aria-label={`${provider.label} provider`}
-            class="rounded-sm border p-4 transition-colors duration-120 {transcriptionPreferences.provider_id ===
-            provider.id
-              ? 'border-accent bg-accent-soft/30'
-              : 'border-border'}"
-          >
+          <div role="group" aria-label={`${provider.label} provider`}>
             <div class="flex items-start justify-between gap-4">
               <label class="flex min-h-[24px] items-start gap-3 cursor-pointer">
                 <input
@@ -461,9 +472,7 @@
                   class="mt-0.5 h-3.5 w-3.5"
                 />
                 <span>
-                  <span class="block text-sm font-semibold text-fg">
-                    {provider.label}
-                  </span>
+                  <span class="block text-base text-fg">{provider.label}</span>
                   <code class="tabular text-xs text-fg-muted">
                     {provider.model}
                   </code>
@@ -478,73 +487,76 @@
               </span>
             </div>
 
-            <p class="mt-3 text-sm text-fg-muted">
-              {provider.pricing_hint.summary}
-            </p>
-            <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              <a
-                href={provider.pricing_hint.docs_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`${provider.label} pricing documentation`}
-                >Pricing documentation</a
-              >
-              <a
-                href={provider.data_policy_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`${provider.label} data policy`}>Data policy</a
-              >
-            </p>
+            <!-- Indented under the radio, as a radio group's detail lines are.
+                 Pricing stays visible for every provider: it is what the
+                 choice is made on, so hiding it behind the choice is
+                 backwards. -->
+            <div class="pl-[26px]">
+              <p class="mt-1 text-xs text-fg-muted">
+                {provider.pricing_hint.summary}
+              </p>
+              <p class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                <a
+                  href={provider.pricing_hint.docs_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${provider.label} pricing documentation`}
+                  >Pricing documentation</a
+                >
+                <a
+                  href={provider.data_policy_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${provider.label} data policy`}>Data policy</a
+                >
+              </p>
 
-            {#if transcriptionPreferences.provider_id === provider.id}
-              <label class="mt-4 block">
-                <span
-                  class="block text-xs font-medium text-fg-muted"
-                >
-                  API key
-                </span>
-                <input
-                  type="password"
-                  autocomplete="off"
-                  spellcheck="false"
-                  bind:value={transcriptionKeys[provider.id]}
-                  disabled={transcriptionKeyBusy !== null}
-                  placeholder={`Paste your ${provider.label} API key`}
-                  class="field field-lg mt-1.5 placeholder:text-fg-subtle"
-                />
-              </label>
+              {#if transcriptionPreferences.provider_id === provider.id}
+                <label class="mt-3 block">
+                  <span class="block text-xs font-medium text-fg-muted">
+                    API key
+                  </span>
+                  <input
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    bind:value={transcriptionKeys[provider.id]}
+                    disabled={transcriptionKeyBusy !== null}
+                    placeholder={`Paste your ${provider.label} API key`}
+                    class="field field-lg mt-1.5 placeholder:text-fg-subtle"
+                  />
+                </label>
 
-              <div class="mt-4 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  aria-label={transcriptionClearArmed === provider.id
-                    ? `Confirm removing ${provider.label} key`
-                    : `Remove ${provider.label} key`}
-                  onclick={() => requestTranscriptionClear(provider.id)}
-                  disabled={transcriptionKeyBusy !== null ||
-                    !provider.key_present}
-                  class="rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-120 hover:bg-surface-sunken disabled:opacity-40 {transcriptionClearArmed ===
-                  provider.id
-                    ? 'text-error'
-                    : 'text-fg-muted hover:text-fg'}"
-                >
-                  {transcriptionClearArmed === provider.id
-                    ? "Really clear?"
-                    : "Clear"}
-                </button>
-                <Button
-                  aria-label={`Save ${provider.label} key`}
-                  disabled={transcriptionKeyBusy !== null ||
-                    transcriptionKeys[provider.id].length === 0}
-                  onclick={() => saveTranscriptionKey(provider.id)}
-                >
-                  {transcriptionKeyBusy === provider.id
-                    ? "Saving…"
-                    : "Save key"}
-                </Button>
-              </div>
-            {/if}
+                <div class="mt-3 flex items-center justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    aria-label={transcriptionClearArmed === provider.id
+                      ? `Confirm removing ${provider.label} key`
+                      : `Remove ${provider.label} key`}
+                    onclick={() => requestTranscriptionClear(provider.id)}
+                    disabled={transcriptionKeyBusy !== null ||
+                      !provider.key_present}
+                    class={transcriptionClearArmed === provider.id
+                      ? "text-error"
+                      : ""}
+                  >
+                    {transcriptionClearArmed === provider.id
+                      ? "Really clear?"
+                      : "Remove"}
+                  </Button>
+                  <Button
+                    aria-label={`Save ${provider.label} key`}
+                    disabled={transcriptionKeyBusy !== null ||
+                      transcriptionKeys[provider.id].length === 0}
+                    onclick={() => saveTranscriptionKey(provider.id)}
+                  >
+                    {transcriptionKeyBusy === provider.id
+                      ? "Saving…"
+                      : "Save key"}
+                  </Button>
+                </div>
+              {/if}
+            </div>
           </div>
         {/each}
       </fieldset>

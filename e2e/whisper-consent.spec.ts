@@ -101,8 +101,8 @@ test.describe("detected-range transcription consent", () => {
     const assist = page.getByTestId("detection-assist");
     await expect(assist).toContainText("Detect audio's text range");
     await expect(
-      assist.getByRole("link", { name: "Open transcription settings" }),
-    ).toHaveAttribute("href", "/settings");
+      assist.getByRole("button", { name: "Open transcription settings" }),
+    ).toBeEnabled();
     await expect(
       page.getByRole("button", { name: /Split by embedded chapters/ }),
     ).toBeVisible();
@@ -131,7 +131,7 @@ test.describe("detected-range transcription consent", () => {
       "optional book title and author prompt metadata",
     );
     await expect(dialog).toContainText(
-      "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+      "Free tier available. Paid use is about $0.04 per hour of audio.",
     );
     await expect(dialog).toContainText("OS keychain");
     await expect(
@@ -250,7 +250,7 @@ test.describe("detected-range transcription consent", () => {
     });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(
-      "No free tier; current reference $0.006/min",
+      "No free tier. Costs about $0.006 per minute of audio.",
     );
     await expect(
       dialog.getByRole("link", { name: "OpenAI data policy" }),

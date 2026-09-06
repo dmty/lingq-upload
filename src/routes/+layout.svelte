@@ -15,6 +15,7 @@
   import { sidebar } from "$lib/stores/sidebar.svelte";
   import { toolbarTitle } from "$lib/stores/toolbar.svelte";
   import { navigationHistory } from "$lib/stores/navigation.svelte";
+  import { SETTINGS_WINDOW_LABEL, openSettings } from "$lib/settings-window";
 
   let { children } = $props();
 
@@ -74,17 +75,12 @@
     return suffix ? `/upload?${suffix}` : "/upload";
   });
 
-  // 1.6: every sidebar row leads with a symbol, as Finder's and Mail's do.
+  // Every sidebar row leads with a symbol, as Finder's and Mail's do.
   const allIcon =
-    "M3 3.5h2.6v9H3z M6.6 3.5h2.6v9H6.6z" +
-    " M10.5 4.1l2.4-.5 1.6 8.3-2.4.5z";
+    "M3 3.5h2.6v9H3z M6.6 3.5h2.6v9H6.6z" + " M10.5 4.1l2.4-.5 1.6 8.3-2.4.5z";
   const languageIcon =
     "M3 3.2h7.4a1.4 1.4 0 011.4 1.4v8.2H4.4A1.4 1.4 0 013 11.4z" +
     " M5.2 6h4.2 M5.2 8.2h3";
-  const settingsIcon =
-    "M8 3.1a4.9 4.9 0 100 9.8 4.9 4.9 0 100-9.8 M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 100-4.2" +
-    " M12.9 8h1.4 M1.7 8h1.4 M8 12.9v1.4 M8 1.7v1.4" +
-    " M11.47 11.47l.99.99 M4.53 4.53l-.99-.99 M4.53 11.47l-.99.99 M11.47 4.53l.99-.99";
 
   // Static per-route fallback until a route publishes its own title via
   // toolbarTitle.set — routes with no fallback (course/match/run) render an
@@ -130,7 +126,10 @@
       return;
 
     const key = event.key.toLowerCase();
-    if (key === "f" && onLibrary) {
+    if (event.key === ",") {
+      event.preventDefault();
+      void openSettings();
+    } else if (key === "f" && onLibrary) {
       event.preventDefault();
       searchEl?.focus();
     } else if (key === "[" && navigationHistory.canGoBack) {
@@ -147,6 +146,10 @@
       void goto(uploadHref);
     }
   }
+
+  // The settings window carries no sidebar and no toolbar — it is its own
+  // window with its own title bar, the way a Mac settings window is.
+  let standalone = $state(false);
 
   let dialog = $state<HTMLDialogElement | null>(null);
   let pending = $state<Awaited<ReturnType<typeof check>>>(null);
@@ -192,6 +195,7 @@
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const win = getCurrentWindow();
+        standalone = win.label === SETTINGS_WINDOW_LABEL;
         apply(await win.isFocused());
         await pullSystemAccent();
         stop = await win.onFocusChanged(({ payload }) => {
@@ -282,220 +286,225 @@
   </svg>
 {/snippet}
 
-<div
-  class="app-shell"
-  class:dragging={isDragging}
-  data-sidebar-collapsed={sidebar.collapsed}
-  style="grid-template-columns: {effectiveWidth}px 1fr; --sidebar-width: {effectiveWidth}px"
->
+{#if standalone}
+  <main class="standalone-window">
+    {@render children?.()}
+  </main>
+{:else}
   <div
-    id="app-sidebar"
-    class="app-sidebar flex flex-col gap-[4px] px-[8px] pb-[8px]"
+    class="app-shell"
+    class:dragging={isDragging}
+    data-sidebar-collapsed={sidebar.collapsed}
+    style="grid-template-columns: {effectiveWidth}px 1fr; --sidebar-width: {effectiveWidth}px"
   >
-    <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
-      <div
-        data-tauri-drag-region="deep"
-        class="flex self-stretch flex-1 items-center"
-      >
-        <span class="pl-[64px] text-sm text-fg-muted">
-          <span class="brand-wordmark">LingQ</span> Importer
-        </span>
+    <div
+      id="app-sidebar"
+      class="app-sidebar flex flex-col gap-[4px] px-[8px] pb-[8px]"
+    >
+      <div class="flex h-[52px] flex-none items-center px-[8px] pb-[6px]">
+        <div
+          data-tauri-drag-region="deep"
+          class="flex self-stretch flex-1 items-center"
+        >
+          <span class="pl-[64px] text-sm text-fg-muted">
+            <span class="brand-wordmark">LingQ</span> Importer
+          </span>
+        </div>
+        <button
+          type="button"
+          class="sidebar-toggle"
+          data-testid="sidebar-toggle"
+          aria-label={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebar.collapsed}
+          aria-controls="app-sidebar"
+          onclick={() => sidebar.toggle()}
+        >
+          {@render toggleIcon()}
+        </button>
       </div>
+      <nav aria-label="Sections" class="flex min-h-0 flex-1 flex-col">
+        <div id="library-heading" class="source-heading">Library</div>
+        <div
+          class="source-destinations flex flex-col gap-[2px]"
+          role="group"
+          aria-labelledby="library-heading"
+        >
+          <a
+            href={libraryUrl("", currentQuery)}
+            class="source-row"
+            aria-current={onLibrary && !currentLanguage ? "page" : undefined}
+          >
+            {@render icon(allIcon)}
+            <span class="source-label">All</span>
+          </a>
+          {#each languages as language (language.code)}
+            <a
+              href={libraryUrl(language.code, currentQuery)}
+              class="source-row"
+              aria-current={currentLanguage === language.code
+                ? "page"
+                : undefined}
+              title={language.label}
+            >
+              {@render icon(languageIcon, "round")}
+              <span class="source-label">{language.label}</span>
+            </a>
+          {/each}
+        </div>
+      </nav>
+    </div>
+
+    <div
+      class="sidebar-resize-handle"
+      data-testid="sidebar-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      hidden={sidebar.collapsed}
+      onpointerdown={startResize}
+    ></div>
+
+    <div class="content-column">
+      <div
+        class="app-toolbar"
+        class:scrolled
+        data-testid="app-toolbar"
+        data-tauri-drag-region="deep"
+      >
+        <div class="toolbar-cluster toolbar-history">
+          <button
+            type="button"
+            class="toolbar-action toolbar-history-btn"
+            aria-label="Back"
+            title="Back (⌘[)"
+            disabled={!navigationHistory.canGoBack}
+            onclick={() => navigationHistory.goBack()}
+          >
+            {@render icon("M10 3L6 8l4 5", "round")}
+          </button>
+          <button
+            type="button"
+            class="toolbar-action toolbar-history-btn"
+            aria-label="Forward"
+            title="Forward (⌘])"
+            disabled={!navigationHistory.canGoForward}
+            onclick={() => navigationHistory.goForward()}
+          >
+            {@render icon("M6 3l4 5-4 5", "round")}
+          </button>
+        </div>
+        <!-- Not a heading: each route body owns its single semantic h1. Also
+           kept non-interactive so it stays part of the window drag region. -->
+        <div
+          class="toolbar-title"
+          data-testid="toolbar-title"
+          title={resolvedTitle}
+        >
+          {resolvedTitle}
+        </div>
+        {#if onLibrary}
+          <div class="toolbar-search">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 13 13"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="5.4" cy="5.4" r="3.9" />
+              <path d="M8.4 8.4 11.6 11.6" />
+            </svg>
+            <input
+              type="search"
+              bind:this={searchEl}
+              value={currentQuery}
+              placeholder="Search"
+              aria-label="Search library"
+              data-testid="library-search"
+              oninput={(event) => setQuery(event.currentTarget.value)}
+              onkeydown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                setQuery("");
+                event.currentTarget.blur();
+              }}
+            />
+            {#if currentQuery}
+              <button
+                type="button"
+                class="toolbar-search-clear"
+                aria-label="Clear search"
+                onclick={() => {
+                  setQuery("");
+                  searchEl?.focus();
+                }}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 14 14"
+                  aria-hidden="true"
+                >
+                  <circle cx="7" cy="7" r="5.8" fill="currentColor" />
+                  <path
+                    d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
+                    class="stroke-surface"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            {/if}
+          </div>
+        {/if}
+        <div class="toolbar-cluster" data-testid="toolbar-actions">
+          <a
+            href="/add"
+            class="toolbar-action"
+            aria-label="Add project"
+            aria-current={isActive("/add") ? "page" : undefined}
+            title="Add project (⌘N)"
+          >
+            {@render icon("M8 3v10 M3 8h10")}
+          </a>
+          <a
+            href={uploadHref}
+            class="toolbar-action"
+            aria-label="Quick upload"
+            aria-current={isActive("/upload") ? "page" : undefined}
+            title="Quick upload (⌘⇧U)"
+          >
+            {@render icon("M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5")}
+          </a>
+        </div>
+      </div>
+
+      <main
+        class="px-8 pt-6 pb-8"
+        onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
+      >
+        {@render children?.()}
+      </main>
+    </div>
+
+    {#if sidebar.collapsed}
       <button
         type="button"
-        class="sidebar-toggle"
-        data-testid="sidebar-toggle"
-        aria-label={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-expanded={!sidebar.collapsed}
+        class="sidebar-floating-toggle"
+        data-testid="sidebar-floating-toggle"
+        aria-label="Expand sidebar"
+        aria-expanded="false"
         aria-controls="app-sidebar"
         onclick={() => sidebar.toggle()}
       >
         {@render toggleIcon()}
       </button>
-    </div>
-    <nav aria-label="Sections" class="flex min-h-0 flex-1 flex-col">
-      <div id="library-heading" class="source-heading">Library</div>
-      <div
-        class="source-destinations flex flex-col gap-[2px]"
-        role="group"
-        aria-labelledby="library-heading"
-      >
-        <a
-          href={libraryUrl("", currentQuery)}
-          class="source-row"
-          aria-current={onLibrary && !currentLanguage ? "page" : undefined}
-        >
-          {@render icon(allIcon)}
-          <span class="source-label">All</span>
-        </a>
-        {#each languages as language (language.code)}
-          <a
-            href={libraryUrl(language.code, currentQuery)}
-            class="source-row"
-            aria-current={currentLanguage === language.code
-              ? "page"
-              : undefined}
-            title={language.label}
-          >
-            {@render icon(languageIcon, "round")}
-            <span class="source-label">{language.label}</span>
-          </a>
-        {/each}
-      </div>
-      <a
-        href="/settings"
-        class="source-row shrink-0"
-        aria-current={isActive("/settings") ? "page" : undefined}
-      >
-        {@render icon(settingsIcon)}
-        Settings
-      </a>
-    </nav>
+    {/if}
   </div>
-
-  <div
-    class="sidebar-resize-handle"
-    data-testid="sidebar-resize-handle"
-    role="separator"
-    aria-orientation="vertical"
-    aria-label="Resize sidebar"
-    hidden={sidebar.collapsed}
-    onpointerdown={startResize}
-  ></div>
-
-  <div class="content-column">
-    <div
-      class="app-toolbar"
-      class:scrolled
-      data-testid="app-toolbar"
-      data-tauri-drag-region="deep"
-    >
-      <div class="toolbar-cluster toolbar-history">
-        <button
-          type="button"
-          class="toolbar-action toolbar-history-btn"
-          aria-label="Back"
-          title="Back (⌘[)"
-          disabled={!navigationHistory.canGoBack}
-          onclick={() => navigationHistory.goBack()}
-        >
-          {@render icon("M10 3L6 8l4 5", "round")}
-        </button>
-        <button
-          type="button"
-          class="toolbar-action toolbar-history-btn"
-          aria-label="Forward"
-          title="Forward (⌘])"
-          disabled={!navigationHistory.canGoForward}
-          onclick={() => navigationHistory.goForward()}
-        >
-          {@render icon("M6 3l4 5-4 5", "round")}
-        </button>
-      </div>
-      <!-- Not a heading: each route body owns its single semantic h1. Also
-           kept non-interactive so it stays part of the window drag region. -->
-      <div
-        class="toolbar-title"
-        data-testid="toolbar-title"
-        title={resolvedTitle}
-      >
-        {resolvedTitle}
-      </div>
-      {#if onLibrary}
-        <div class="toolbar-search">
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 13 13"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <circle cx="5.4" cy="5.4" r="3.9" />
-            <path d="M8.4 8.4 11.6 11.6" />
-          </svg>
-          <input
-            type="search"
-            bind:this={searchEl}
-            value={currentQuery}
-            placeholder="Search"
-            aria-label="Search library"
-            data-testid="library-search"
-            oninput={(event) => setQuery(event.currentTarget.value)}
-            onkeydown={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              setQuery("");
-              event.currentTarget.blur();
-            }}
-          />
-          {#if currentQuery}
-            <button
-              type="button"
-              class="toolbar-search-clear"
-              aria-label="Clear search"
-              onclick={() => {
-                setQuery("");
-                searchEl?.focus();
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">
-                <circle cx="7" cy="7" r="5.8" fill="currentColor" />
-                <path
-                  d="M5.2 5.2 8.8 8.8 M8.8 5.2 5.2 8.8"
-                  class="stroke-surface"
-                  stroke-width="1.4"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
-          {/if}
-        </div>
-      {/if}
-      <div class="toolbar-cluster" data-testid="toolbar-actions">
-        <a
-          href="/add"
-          class="toolbar-action"
-          aria-label="Add project"
-          title="Add project (⌘N)"
-        >
-          {@render icon("M8 3v10 M3 8h10")}
-        </a>
-        <a
-          href={uploadHref}
-          class="toolbar-action"
-          aria-label="Quick upload"
-          title="Quick upload (⌘⇧U)"
-        >
-          {@render icon("M8 12V4 M5 7l3-3 3 3 M3 11.5L8 13L13 11.5")}
-        </a>
-      </div>
-    </div>
-
-    <main
-      class="px-8 pt-6 pb-8"
-      onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}
-    >
-      {@render children?.()}
-    </main>
-  </div>
-
-  {#if sidebar.collapsed}
-    <button
-      type="button"
-      class="sidebar-floating-toggle"
-      data-testid="sidebar-floating-toggle"
-      aria-label="Expand sidebar"
-      aria-expanded="false"
-      aria-controls="app-sidebar"
-      onclick={() => sidebar.toggle()}
-    >
-      {@render toggleIcon()}
-    </button>
-  {/if}
-</div>
+{/if}
 
 <dialog
   bind:this={dialog}

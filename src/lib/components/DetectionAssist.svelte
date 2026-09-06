@@ -25,6 +25,7 @@
   import DetectionRangePreview from "$lib/components/DetectionRangePreview.svelte";
   import TranscribeConsentModal from "$lib/components/TranscribeConsentModal.svelte";
   import Button from "$lib/components/Button.svelte";
+  import { openSettings } from "$lib/settings-window";
 
   let {
     projectId,
@@ -285,10 +286,10 @@
   const sameTopHit = $derived(
     Boolean(
       lowConfidence?.top_head[0] &&
-        lowConfidence.top_tail[0] &&
-        lowConfidence.top_head[0].chapter_id ===
-          lowConfidence.top_tail[0].chapter_id &&
-        eligibleCount > 1,
+      lowConfidence.top_tail[0] &&
+      lowConfidence.top_head[0].chapter_id ===
+        lowConfidence.top_tail[0].chapter_id &&
+      eligibleCount > 1,
     ),
   );
 
@@ -301,7 +302,12 @@
     if (start !== null && end !== null && start > end) {
       return "The end chapter comes before the start chapter. Choose an end chapter at or after it.";
     }
-    if (startId !== null && endId !== null && startId === endId && eligibleCount > 1) {
+    if (
+      startId !== null &&
+      endId !== null &&
+      startId === endId &&
+      eligibleCount > 1
+    ) {
       return "Start and end are the same chapter. That would drop the rest of the book onto one lesson. Pick a later end, or split all audio parts across the book.";
     }
     return null;
@@ -309,7 +315,9 @@
 
   // Recomputed from current chapter metadata, not from the candidate orders the
   // server reported.
-  const blockedReason = $derived(rangeBlockedReason(selectedHead, selectedTail));
+  const blockedReason = $derived(
+    rangeBlockedReason(selectedHead, selectedTail),
+  );
   const detectedBlockedReason = $derived(
     preview
       ? rangeBlockedReason(
@@ -525,20 +533,21 @@
           <div class="mt-2 flex flex-wrap gap-2">
             {#each error.actions as action (action)}
               {#if action === "settings" || action === "switch_provider"}
-                <Button variant="secondary" href="/settings">
+                <Button variant="secondary" onclick={() => void openSettings()}>
                   {action === "settings"
                     ? "Open transcription settings"
                     : "Switch transcription provider"}
                 </Button>
               {:else if action === "retry"}
-                <Button variant="secondary" onclick={() => void startDetection()}>
+                <Button
+                  variant="secondary"
+                  onclick={() => void startDetection()}
+                >
                   Try detection again
                 </Button>
               {/if}
             {/each}
-            <Button variant="secondary" onclick={clearOutcome}>
-              Refine
-            </Button>
+            <Button variant="secondary" onclick={clearOutcome}>Refine</Button>
           </div>
         {/if}
       </div>
@@ -561,8 +570,9 @@
         <div class="border-b border-border bg-surface-sunken px-3 py-2">
           <p class="text-sm font-medium text-fg">Detection needs refinement</p>
           <p class="mt-0.5 text-xs text-fg-muted">
-            Listened to the <span class="text-fg">opening of each audio part</span>.
-            Interior parts are matched to the chapter they contain, not only
+            Listened to the <span class="text-fg"
+              >opening of each audio part</span
+            >. Interior parts are matched to the chapter they contain, not only
             the first and last files.
           </p>
         </div>
@@ -570,9 +580,7 @@
         <div class="px-3 pt-3">
           <div class="flex items-end gap-1" aria-hidden="true">
             {#each Array.from({ length: partCount }) as _, index (index)}
-              <span
-                class="h-2 min-w-0 flex-1 rounded-sm bg-accent"
-              ></span>
+              <span class="h-2 min-w-0 flex-1 rounded-sm bg-accent"></span>
             {/each}
           </div>
           <div class="mt-1 flex justify-between text-xs text-fg-subtle">
@@ -584,10 +592,10 @@
         </div>
 
         <div class="mt-3 grid gap-2 px-3 sm:grid-cols-2">
-          <figure class="rounded-sm border border-accent/30 bg-accent-soft/40 px-3 py-2">
-            <figcaption
-              class="text-xs text-fg-muted"
-            >
+          <figure
+            class="rounded-sm border border-accent/30 bg-accent-soft/40 px-3 py-2"
+          >
+            <figcaption class="text-xs text-fg-muted">
               Heard at start
             </figcaption>
             <blockquote
@@ -597,12 +605,10 @@
                 "No start transcript kept."}
             </blockquote>
           </figure>
-          <figure class="rounded-sm border border-warning/30 bg-warning-soft/40 px-3 py-2">
-            <figcaption
-              class="text-xs text-warning"
-            >
-              Heard at end
-            </figcaption>
+          <figure
+            class="rounded-sm border border-warning/30 bg-warning-soft/40 px-3 py-2"
+          >
+            <figcaption class="text-xs text-warning">Heard at end</figcaption>
             <blockquote
               class="mt-1 font-serif text-sm leading-snug text-fg italic"
             >
@@ -622,9 +628,7 @@
               <Button variant="secondary" onclick={() => void startDetection()}>
                 Try detection again
               </Button>
-              <Button variant="secondary" onclick={clearOutcome}>
-                Refine
-              </Button>
+              <Button variant="secondary" onclick={clearOutcome}>Refine</Button>
             </div>
           </div>
         {:else}
@@ -715,8 +719,8 @@
           {:else}
             <p class="px-3 pt-3 text-xs text-fg-muted">
               Optional trim: start is the first story chapter (skip title page),
-              end is the last story chapter (skip credits). Everything between is
-              then packed onto the {partCount} audio
+              end is the last story chapter (skip credits). Everything between
+              is then packed onto the {partCount} audio
               {partCount === 1 ? "part" : "parts"}.
             </p>
             <fieldset class="mt-3 px-3">
@@ -795,9 +799,7 @@
               Try detection again
             </Button>
           {/if}
-          <Button variant="secondary" onclick={clearOutcome}>
-            Refine
-          </Button>
+          <Button variant="secondary" onclick={clearOutcome}>Refine</Button>
         </div>
       </div>
     {/if}
@@ -808,15 +810,17 @@
           Cancel detection
         </Button>
       {:else if !preview && !contentResult && !error && availability.key_present}
-        <Button onclick={requestDetection}>
-          Detect audio's text range
-        </Button>
+        <Button onclick={requestDetection}>Detect audio's text range</Button>
       {:else if !preview && !contentResult && !error}
         <p class="text-xs text-fg-muted">
           Add an API key for {availability.active_provider.label} to use this optional
           assist.
         </p>
-        <Button variant="secondary" class="mt-2" href="/settings">
+        <Button
+          variant="secondary"
+          class="mt-2"
+          onclick={() => void openSettings()}
+        >
           Open transcription settings
         </Button>
       {/if}

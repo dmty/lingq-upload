@@ -1,9 +1,5 @@
 import { untrack } from "svelte";
-import {
-  commands,
-  type AppError,
-  type CourseView,
-} from "$lib/ipc/bindings";
+import { commands, type AppError, type CourseView } from "$lib/ipc/bindings";
 import { isLingqNotFound } from "$lib/errors";
 
 export const STALE_AFTER_MS = 15 * 60 * 1000;
@@ -41,7 +37,8 @@ export const course = {
 
     // Suppression exists for the come-and-go case: bouncing between the
     // library and a course should not re-hit LingQ each time.
-    const age = current?.fetchedAt == null ? Infinity : Date.now() - current.fetchedAt;
+    const age =
+      current?.fetchedAt == null ? Infinity : Date.now() - current.fetchedAt;
     if (!force && current?.view != null && age < STALE_AFTER_MS) return;
 
     entries[key] = { ...(current ?? blank()), revalidating: true };
@@ -76,7 +73,10 @@ export const course = {
       entries[key] = {
         ...entries[key],
         revalidating: false,
-        error: { kind: "Other", message: e instanceof Error ? e.message : String(e) },
+        error: {
+          kind: "Other",
+          message: e instanceof Error ? e.message : String(e),
+        },
       };
     }
   },

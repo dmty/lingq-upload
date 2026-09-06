@@ -11,7 +11,12 @@
   import LessonStatRow from "$lib/components/LessonStatRow.svelte";
   import Button from "$lib/components/Button.svelte";
   import Alert from "$lib/components/Alert.svelte";
-  import { appErrorMessage, isLingqNotFound, isMissingApiKey } from "$lib/errors";
+  import {
+    appErrorMessage,
+    isLingqNotFound,
+    isMissingApiKey,
+  } from "$lib/errors";
+  import { openSettings } from "$lib/settings-window";
 
   const projectKey = $derived(page.params.projectId ?? "");
 
@@ -23,11 +28,14 @@
   const authorLine = $derived((entry?.authors ?? []).join(" · "));
 
   const cached = $derived(
-    entry && collectionId != null ? course.entry(entry.language, collectionId) : null,
+    entry && collectionId != null
+      ? course.entry(entry.language, collectionId)
+      : null,
   );
 
   function refresh(force = false) {
-    if (entry && collectionId != null) void course.ensure(entry.language, collectionId, force);
+    if (entry && collectionId != null)
+      void course.ensure(entry.language, collectionId, force);
   }
 
   $effect(() => {
@@ -61,7 +69,11 @@
       };
     }
     if (isLingqNotFound(err)) {
-      return { message: "This course is no longer on LingQ.", settings: false, retry: false };
+      return {
+        message: "This course is no longer on LingQ.",
+        settings: false,
+        retry: false,
+      };
     }
     if (err.kind === "Lingq" && err.message.kind === "Transport") {
       return { message: "Couldn't reach LingQ.", settings: false, retry: true };
@@ -88,7 +100,9 @@
 {/snippet}
 
 {#if entry == null && (library.status === "idle" || library.status === "loading")}
-  <p data-testid="course-loading" class="text-sm text-fg-muted">Loading your library…</p>
+  <p data-testid="course-loading" class="text-sm text-fg-muted">
+    Loading your library…
+  </p>
 {:else if entry == null && library.status === "error"}
   <p data-testid="course-library-error">
     {appErrorMessage(library.error!)} <a href="/library">Back to Library</a>
@@ -118,7 +132,8 @@
         variant="secondary"
         size="lg"
         data-testid="open-in-lingq"
-        onclick={() => void openUrl(lingqCollectionUrl(entry.language, collectionId))}
+        onclick={() =>
+          void openUrl(lingqCollectionUrl(entry.language, collectionId))}
       >
         {@render externalLinkIcon()}
         Open in LingQ
@@ -135,11 +150,23 @@
       <Alert variant="warning" data-testid="course-alert" class="flex-1">
         {alert.message}
         {#if alert.settings}
-          <a href="/settings" class="ml-1 font-medium text-accent underline">Settings</a>
+          <Button
+            variant="secondary"
+            size="sm"
+            class="ml-2"
+            onclick={() => void openSettings()}
+          >
+            Settings
+          </Button>
         {/if}
       </Alert>
       {#if alert.retry}
-        <Button variant="secondary" size="sm" data-testid="course-refresh" onclick={() => refresh(true)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          data-testid="course-refresh"
+          onclick={() => refresh(true)}
+        >
           Retry
         </Button>
       {/if}

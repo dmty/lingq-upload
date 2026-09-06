@@ -36,9 +36,7 @@
   class="mt-3 rounded-md border border-success/40 bg-success-soft/30 p-3"
 >
   {#if (preview.atom_starts ?? []).length > 0}
-    <p class="text-xs font-medium text-success">
-      Heard each audio part
-    </p>
+    <p class="text-xs font-medium text-success">Heard each audio part</p>
     <ol class="mt-2 space-y-1" data-testid="detection-atom-starts">
       {#each preview.atom_starts ?? [] as start (start.track_index)}
         <li class="text-sm text-fg">
@@ -50,13 +48,11 @@
     </ol>
     <p class="mt-2 text-xs text-fg-muted">
       {preview.align_source === "title" ? "Embedded titles" : "Transcription"}
-      · {Math.round(preview.confidence * 100)}%
-      · text between these openings is packed onto that part
+      · {Math.round(preview.confidence * 100)}% · text between these openings is
+      packed onto that part
     </p>
   {:else}
-    <p class="text-xs font-medium text-success">
-      Proposed EPUB span
-    </p>
+    <p class="text-xs font-medium text-success">Proposed EPUB span</p>
     <p class="mt-1 text-sm font-medium text-fg">
       {chapterLabel(preview.range.start_chapter_id)}
       <span class="text-fg-muted"> → </span>
@@ -64,8 +60,8 @@
     </p>
     <p class="mt-1 text-xs text-fg-muted">
       {preview.align_source === "title" ? "Embedded titles" : "Transcription"}
-      · {Math.round(preview.confidence * 100)}%
-      · every text chapter in this span shares the audio parts
+      · {Math.round(preview.confidence * 100)}% · every text chapter in this
+      span shares the audio parts
     </p>
   {/if}
 

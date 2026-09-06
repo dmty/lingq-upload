@@ -28,7 +28,9 @@
   });
 
   const freshness = $derived(
-    fetchedAt == null ? null : formatAge(new Date(fetchedAt).toISOString(), now),
+    fetchedAt == null
+      ? null
+      : formatAge(new Date(fetchedAt).toISOString(), now),
   );
 
   const lessons = $derived(
@@ -51,7 +53,9 @@
 
   const words = $derived(sum((l) => l.word_count));
   const uniqueWords = $derived(sum((l) => l.unique_word_count));
-  const newWords = $derived(view?.collection.new_words_count ?? sum((l) => l.new_words_count));
+  const newWords = $derived(
+    view?.collection.new_words_count ?? sum((l) => l.new_words_count),
+  );
   const audio = $derived(view?.collection.duration ?? sum((l) => l.duration));
 
   function hoursMinutes(seconds: number | null): string {
@@ -65,7 +69,11 @@
   const cells = $derived([
     { id: "stat-lessons", label: "lessons", value: formatCount(lessons) },
     { id: "stat-words", label: "words", value: formatCount(words) },
-    { id: "stat-unique-words", label: "unique words", value: formatCount(uniqueWords) },
+    {
+      id: "stat-unique-words",
+      label: "unique words",
+      value: formatCount(uniqueWords),
+    },
     { id: "stat-new-words", label: "new words", value: formatCount(newWords) },
     { id: "stat-audio", label: "audio", value: hoursMinutes(audio) },
   ]);
@@ -92,13 +100,18 @@
       const pct = l.percent_completed;
       if (pct == null) continue;
       counted += 1;
-      const w = (l.word_count ?? 0) > 0 ? (l.word_count as number) : fallbackWeight;
+      const w =
+        (l.word_count ?? 0) > 0 ? (l.word_count as number) : fallbackWeight;
       weighted += pct * w;
       weight += w;
       if (pct >= 100) read += 1;
     }
     if (counted === 0) return null;
-    return { percent: Math.round(weighted / weight), read, total: view.lessons.length };
+    return {
+      percent: Math.round(weighted / weight),
+      read,
+      total: view.lessons.length,
+    };
   });
 
   $effect(() => {
@@ -119,13 +132,20 @@
     </span>
   {:else}
     {#if refreshFailed}
-      <span data-testid="course-refresh-failed" class="text-warning">Couldn't refresh</span>
+      <span data-testid="course-refresh-failed" class="text-warning"
+        >Couldn't refresh</span
+      >
     {/if}
     {#if freshness}
       <span data-testid="course-freshness">updated {freshness}</span>
     {/if}
   {/if}
-  <Button variant="secondary" size="sm" data-testid="course-refresh" onclick={() => onrefresh?.()}>
+  <Button
+    variant="secondary"
+    size="sm"
+    data-testid="course-refresh"
+    onclick={() => onrefresh?.()}
+  >
     Refresh
   </Button>
 </div>
@@ -144,7 +164,10 @@
 {#if progress}
   <div data-testid="course-progress" class="mt-3 flex items-center gap-3">
     <div class="h-1 flex-1 rounded-sm bg-surface-sunken">
-      <div class="h-1 rounded-sm bg-accent" style="width: {progress.percent}%"></div>
+      <div
+        class="h-1 rounded-sm bg-accent"
+        style="width: {progress.percent}%"
+      ></div>
     </div>
     <span class="text-xs tabular-nums text-fg-muted">
       {progress.percent}% · {progress.read} of {progress.total} read

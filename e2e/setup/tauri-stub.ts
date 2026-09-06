@@ -91,7 +91,7 @@ export function tauriStub(workerIndex: number): void {
         model: "whisper-large-v3-turbo",
         pricing_hint: {
           summary:
-            "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+            "Free tier available. Paid use is about $0.04 per hour of audio.",
           estimated_usd_per_minute: 0.0006666666666666666,
           free_tier_eligible: true,
           docs_url: "https://console.groq.com/docs/speech-to-text",
@@ -104,7 +104,7 @@ export function tauriStub(workerIndex: number): void {
         label: "OpenAI",
         model: "whisper-1",
         pricing_hint: {
-          summary: "No free tier; current reference $0.006/min",
+          summary: "No free tier. Costs about $0.006 per minute of audio.",
           estimated_usd_per_minute: 0.006,
           free_tier_eligible: false,
           docs_url: "https://developers.openai.com/api/docs/models/whisper-1",

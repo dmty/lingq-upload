@@ -139,7 +139,11 @@
           <Button disabled={resetting} onclick={confirmReset}>
             {resetting ? "Resetting…" : "Confirm reset"}
           </Button>
-          <Button variant="secondary" disabled={resetting} onclick={restoreFocus}>
+          <Button
+            variant="secondary"
+            disabled={resetting}
+            onclick={restoreFocus}
+          >
             Keep detected range
           </Button>
         </div>

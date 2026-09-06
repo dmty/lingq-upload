@@ -34,7 +34,7 @@ test.describe("transcription settings", () => {
     ).toBeVisible();
     await expect(
       groq.getByText(
-        "Free-tier eligible; limits depend on your account/tier; current paid reference $0.04/hour",
+        "Free tier available. Paid use is about $0.04 per hour of audio.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -43,7 +43,7 @@ test.describe("transcription settings", () => {
     const openai = page.getByRole("group", { name: "OpenAI provider" });
     await expect(openai.getByText("whisper-1", { exact: true })).toBeVisible();
     await expect(
-      openai.getByText("No free tier; current reference $0.006/min", {
+      openai.getByText("No free tier. Costs about $0.006 per minute of audio.", {
         exact: true,
       }),
     ).toBeVisible();

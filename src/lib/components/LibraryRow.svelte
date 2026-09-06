@@ -234,7 +234,7 @@
       coverPath={entry.cover_path ?? null}
       imageUrl={remoteCover}
       title={entry.title}
-      class="h-[56px] w-[40px] text-base" 
+      class="h-[56px] w-[40px] text-base"
     />
 
     <div class="min-w-0">

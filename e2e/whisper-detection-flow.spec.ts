@@ -800,12 +800,16 @@ test.describe("detected text range flow", () => {
       });
       const assist = page.getByTestId("detection-assist");
       await expect(page.getByRole("alert")).toContainText(failure.copy);
+      // A recovery action is a button, not blue text: it opens the settings
+      // window rather than navigating anywhere.
       if (failure.link) {
         await expect(
-          assist.getByRole("link", { name: failure.link }),
+          assist.getByRole("button", { name: failure.link }),
         ).toBeVisible();
       } else {
-        await expect(assist.getByRole("link")).toHaveCount(0);
+        await expect(
+          assist.getByRole("button", { name: /transcription/ }),
+        ).toHaveCount(0);
       }
       await expect(
         assist.getByRole("button", { name: "Try detection again" }),

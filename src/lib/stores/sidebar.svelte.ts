@@ -7,7 +7,10 @@ type Persisted = { width: number; collapsed: boolean };
 
 function clampWidth(px: number): number {
   if (!Number.isFinite(px)) return SIDEBAR_DEFAULT_WIDTH;
-  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(px)));
+  return Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_MIN_WIDTH, Math.round(px)),
+  );
 }
 
 function readPersisted(): Persisted {

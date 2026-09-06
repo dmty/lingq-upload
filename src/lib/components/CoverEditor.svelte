@@ -5,7 +5,17 @@
 
   /** Crop rectangle in 0..1 of the image, so it survives window resizes. */
   type Rect = { x: number; y: number; w: number; h: number };
-  type Grip = "new" | "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+  type Grip =
+    | "new"
+    | "move"
+    | "n"
+    | "s"
+    | "e"
+    | "w"
+    | "ne"
+    | "nw"
+    | "se"
+    | "sw";
 
   const FULL: Rect = { x: 0, y: 0, w: 1, h: 1 };
   /** Smallest crop a drag can produce, in displayed px. */
@@ -343,11 +353,7 @@
 >
   <div class="sheet-card flex flex-col gap-4">
     <header class="min-w-0">
-      <p
-        class="mb-1 text-xs text-fg-muted"
-      >
-        Cover
-      </p>
+      <p class="mb-1 text-xs text-fg-muted">Cover</p>
       <h2
         id="cover-editor-title"
         class="truncate font-serif text-lg font-semibold leading-snug text-fg"
