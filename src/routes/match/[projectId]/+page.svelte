@@ -867,47 +867,47 @@
                 Use this cover for LingQ course
               </label>
               <div class="flex gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   data-testid="cover-replace"
-                  class="text-xs text-accent hover:underline disabled:opacity-50"
                   disabled={coverBusy}
                   onclick={replaceCover}
                 >
-                  {coverPath ? "Replace cover" : "Add cover"}
-                </button>
-                <button
-                  type="button"
+                  {coverPath ? "Change…" : "Choose…"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   data-testid="cover-clear"
-                  class="text-xs text-fg-muted hover:underline disabled:opacity-50"
                   disabled={coverBusy || coverPath === null}
                   onclick={clearCover}
                 >
-                  Clear
-                </button>
+                  Remove
+                </Button>
               </div>
             </div>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <div data-testid="strategy-toggle" class="flex gap-1">
+          <span class="text-xs text-fg-muted">Lesson layout:</span>
+          <div
+            data-testid="strategy-toggle"
+            class="segmented"
+            role="group"
+            aria-label="Lesson layout"
+          >
             <button
               type="button"
               data-testid="strategy-split"
-              class="rounded-sm border px-2 py-1 text-xs {strategy ===
-              'split_proportional'
-                ? 'border-accent bg-accent-soft text-accent'
-                : 'border-border text-fg-muted'}"
+              aria-pressed={strategy === "split_proportional"}
               onclick={() => setStrategy("split_proportional")}
-              >Split proportionally</button
+              >Split by chapter</button
             >
             <button
               type="button"
               data-testid="strategy-single"
-              class="rounded-sm border px-2 py-1 text-xs {strategy ===
-              'single_lesson'
-                ? 'border-accent bg-accent-soft text-accent'
-                : 'border-border text-fg-muted'}"
+              aria-pressed={strategy === "single_lesson"}
               onclick={() => setStrategy("single_lesson")}>One lesson</button
             >
           </div>

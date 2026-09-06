@@ -52,30 +52,29 @@
   }: Props = $props();
 
   type ConfidenceBand = {
-    borderClass: string;
-    label: "high" | "med" | "low";
+    label: "Check" | "Low match";
     textClass: string;
+    tooltip: string;
   };
 
-  function confidenceBand(c: number): ConfidenceBand {
-    if (c >= 0.8) {
-      return {
-        borderClass: "border-l-4 border-l-success",
-        label: "high",
-        textClass: "text-success",
-      };
-    }
+  // A confident pairing is the norm and so says nothing; only one worth a
+  // second look is badged, and the badge is the whole encoding — no coloured
+  // bar repeating it.
+  function confidenceBand(c: number): ConfidenceBand | null {
+    if (c >= 0.8) return null;
     if (c >= 0.6) {
       return {
-        borderClass: "border-l-4 border-l-warning",
-        label: "med",
+        label: "Check",
         textClass: "text-warning",
+        tooltip:
+          "Chapter title and audio matched only loosely — open it to confirm.",
       };
     }
     return {
-      borderClass: "border-l-4 border-l-error",
-      label: "low",
+      label: "Low match",
       textClass: "text-error",
+      tooltip:
+        "Chapter title and audio barely matched — open it to confirm or repair.",
     };
   }
 
@@ -206,7 +205,19 @@
     Object.fromEntries(buckets.map((b) => [b.trackId, b.atomTitle ?? "Audio"])),
   );
 
-  function onChapterKeydown(ev: KeyboardEvent, chapterId: string) {
+  function onChapterKeydown(
+    ev: KeyboardEvent,
+    chapterId: string,
+    upTrack: string | null,
+    downTrack: string | null,
+  ) {
+    if (ev.altKey && (ev.key === "ArrowUp" || ev.key === "ArrowDown")) {
+      const target = ev.key === "ArrowUp" ? upTrack : downTrack;
+      if (!target) return;
+      ev.preventDefault();
+      onMove(chapterId, target);
+      return;
+    }
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
       mapping.selectChapter(chapterId);
@@ -267,11 +278,11 @@
           <button
             type="button"
             data-testid="band-park"
-            title="Exclude this audio from the upload"
-            class="ml-auto rounded-sm border border-border bg-surface px-1.5 py-0.5 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
+            title="Leave this audio out of the upload"
+            class="ml-auto rounded-sm px-2 py-0.5 text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg"
             onclick={() => onOp({ kind: "park", track_id: band.trackId! })}
           >
-            Park
+            Set aside
           </button>
         </header>
       {/if}
@@ -293,14 +304,12 @@
             aria-selected={mapping.selectedChapterId === row.chapter.id}
             data-testid="mapping-chapter-row"
             data-chapter-id={row.chapter.id}
-            class="flex cursor-pointer flex-col gap-1 px-3 py-1.5 text-sm transition-colors hover:bg-surface-sunken/60 {pair &&
-            confBand
-              ? confBand.borderClass
-              : 'border-l-4 border-l-transparent'}"
+            class="flex cursor-pointer flex-col gap-1 px-3 py-1 text-base"
             class:selected={mapping.selectedChapterId === row.chapter.id}
             tabindex={0}
             onclick={() => mapping.selectChapter(row.chapter.id)}
-            onkeydown={(ev) => onChapterKeydown(ev, row.chapter.id)}
+            onkeydown={(ev) =>
+              onChapterKeydown(ev, row.chapter.id, upTrack, downTrack)}
           >
             <div class="flex items-center gap-2">
               <span
@@ -315,6 +324,7 @@
                   data-testid="confidence-chip"
                   data-confidence={displayConf}
                   data-confidence-band={confBand.label}
+                  title={confBand.tooltip}
                 >
                   {confBand.label}
                 </span>
@@ -336,10 +346,10 @@
                 data-chapter-id={row.chapter.id}
                 aria-label={`Move ${row.chapter.title} up to the previous audio`}
                 title={upTrack
-                  ? "Move to the previous audio"
+                  ? "Move to the previous audio (⌥↑)"
                   : "Only the first chapter of a group can move up"}
                 disabled={!upTrack}
-                class="rounded-sm px-1 leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+                class="grid h-[24px] w-[24px] flex-none place-items-center rounded-sm leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
                 onclick={() => onMove(row.chapter.id, upTrack!)}>↑</button
               >
               <button
@@ -348,17 +358,18 @@
                 data-chapter-id={row.chapter.id}
                 aria-label={`Move ${row.chapter.title} down to the next audio`}
                 title={downTrack
-                  ? "Move to the next audio"
+                  ? "Move to the next audio (⌥↓)"
                   : "Only the last chapter of a group can move down"}
                 disabled={!downTrack}
-                class="rounded-sm px-1 leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+                class="grid h-[24px] w-[24px] flex-none place-items-center rounded-sm leading-none text-fg-muted transition hover:bg-surface-sunken hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
                 onclick={() => onMove(row.chapter.id, downTrack!)}>↓</button
               >
               <button
                 type="button"
                 data-testid="chapter-remove"
                 aria-label={`Remove ${row.chapter.title}`}
-                class="text-fg-subtle hover:text-error"
+                title="Remove from upload"
+                class="grid h-[24px] w-[24px] flex-none place-items-center rounded-sm text-fg-subtle hover:bg-surface-sunken hover:text-error"
                 onclick={() => onRemove(row.chapter.id)}>×</button
               >
             </div>
@@ -369,11 +380,15 @@
   {/each}
 
   {#if removedChapters.length > 0}
-    <div
+    <!-- Open by default: collapsing it would hide the only way back. -->
+    <details
+      open
       data-testid="removed-strip"
-      class="rounded-md border border-dashed border-border-strong px-3 py-2 text-xs text-fg-muted"
+      class="rounded-md border border-border px-3 py-2 text-xs text-fg-muted"
     >
-      <span class="font-medium">Removed ({removedChapters.length})</span>
+      <summary class="cursor-pointer font-medium">
+        Removed ({removedChapters.length})
+      </summary>
       <span class="mt-1.5 flex flex-wrap gap-1.5">
         {#each removedChapters as c (c.id)}
           <button
@@ -388,7 +403,7 @@
           </button>
         {/each}
       </span>
-    </div>
+    </details>
   {/if}
 
   <ParkingLot

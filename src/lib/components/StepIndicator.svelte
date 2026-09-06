@@ -13,7 +13,7 @@
     <li
       aria-current={i + 1 === current ? "step" : undefined}
       class={i + 1 === current
-        ? "font-medium text-accent"
+        ? "font-semibold text-fg"
         : i + 1 < current
           ? "text-fg-muted"
           : "text-fg-subtle"}

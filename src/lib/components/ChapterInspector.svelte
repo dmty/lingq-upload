@@ -19,7 +19,7 @@
     const buckets = mapping.buckets ?? [];
     const i = buckets.findIndex((b) => b.trackId === pair?.track_id);
     return i >= 0
-      ? `Audio ${i + 1} · ${buckets[i].atomTitle ?? ""}`.trim()
+      ? `Track ${i + 1} · ${buckets[i].atomTitle ?? ""}`.trim()
       : "";
   });
 
@@ -87,12 +87,28 @@
     e.preventDefault();
     cur = Math.max(0, el.currentTime - audio.start);
   }
+
+  // Space plays and pauses while the inspector holds focus — except on a
+  // control, where Space already means "activate this".
+  function onInspectorKeydown(ev: KeyboardEvent) {
+    if (ev.key !== " " || !audio) return;
+    const target = ev.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest("button, [role='slider'], input, textarea")
+    )
+      return;
+    ev.preventDefault();
+    toggle();
+  }
 </script>
 
 {#if id}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <aside
     data-testid="chapter-inspector"
     class="sticky top-4 ml-5 flex max-h-[calc(100vh-2rem)] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-card"
+    onkeydown={onInspectorKeydown}
   >
     <header class="border-b border-border px-5 pb-4 pt-5">
       {#if bucketLabel}
@@ -114,7 +130,7 @@
           data-testid="inspector-play"
           onclick={toggle}
           aria-label={playing ? "Pause" : "Play"}
-          class="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-accent-fg transition hover:bg-accent-hover active:scale-95 focus-visible:outline-2 focus-visible:outline-fg focus-visible:outline-offset-2"
+          class="grid h-[20px] w-[20px] flex-none place-items-center rounded-sm text-fg transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-fg focus-visible:outline-offset-2"
         >
           {#if playing}
             <svg
@@ -215,9 +231,11 @@
 {:else}
   <aside
     data-testid="chapter-inspector-empty"
-    class="sticky top-4 ml-5 grid max-h-[calc(100vh-2rem)] min-w-0 flex-1 place-items-center rounded-lg border border-dashed border-border bg-surface p-8 text-center"
+    class="sticky top-4 ml-5 grid max-h-[calc(100vh-2rem)] min-w-0 flex-1 place-items-center p-8 text-center"
   >
-    <p class="text-sm text-fg-muted">Select a chapter to preview its text and audio.</p>
+    <p class="text-base text-fg-muted">
+      Select a chapter to preview its text and audio.
+    </p>
   </aside>
 {/if}
 

@@ -70,8 +70,8 @@ test.describe("match cover header", () => {
     await expect(page.getByTestId("match-title")).toHaveText("Botchan");
     await expect(page.getByTestId("match-author")).toHaveText("Natsume Soseki");
     await expect(page.getByTestId("match-cover")).toBeVisible();
-    // cover_path is null → no real <img>, fallback tile, button reads "Add cover".
-    await expect(page.getByTestId("cover-replace")).toHaveText("Add cover");
+    // cover_path is null → no real <img>, fallback tile, button reads "Choose…".
+    await expect(page.getByTestId("cover-replace")).toHaveText("Choose…");
 
     // The toolbar owns the only visible title; the body heading survives for
     // document semantics but is clipped to a degenerate box, not just absent
@@ -87,13 +87,13 @@ test.describe("match cover header", () => {
     ).toHaveCount(0);
   });
 
-  test("replace picks a file and flips the control to Replace cover", async ({
+  test("replace picks a file and flips the control to Change…", async ({
     page,
   }) => {
     await page.goto(`/match/${PROJECT_KEY}`);
-    await expect(page.getByTestId("cover-replace")).toHaveText("Add cover");
+    await expect(page.getByTestId("cover-replace")).toHaveText("Choose…");
     await page.getByTestId("cover-replace").click();
     // open() returns __dialogPickPath__ → cmdSetCover → coverPath state updates.
-    await expect(page.getByTestId("cover-replace")).toHaveText("Replace cover");
+    await expect(page.getByTestId("cover-replace")).toHaveText("Change…");
   });
 });

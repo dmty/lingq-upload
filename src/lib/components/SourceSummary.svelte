@@ -34,13 +34,10 @@
     buckets.reduce((acc, b) => acc + (b.atomDurationSec ?? 0), 0),
   );
 
-  const fileLabel = $derived(
-    files.length === 0
-      ? null
-      : files.length === 1
-        ? files[0]
-        : `${files.length} files`,
-  );
+  // A single source file is named by the window title already, and its raw
+  // name is a store id more often than a title ("[B082T…"), so it stays in
+  // the tooltip. Several files are a fact worth stating.
+  const fileLabel = $derived(files.length > 1 ? `${files.length} files` : null);
 
   const parts = $derived.by(() => {
     const out: string[] = [];
@@ -63,13 +60,15 @@
 
 <div data-testid="source-summary" class="mt-0.5 space-y-1">
   <p class="flex items-center gap-1.5 text-xs text-fg-muted">
-    {#if fileLabel}
+    {#if files.length > 0}
       <span
-        aria-hidden="true"
-        class="shrink-0 rounded-sm bg-surface-sunken px-1 text-[10px] leading-4 text-fg-subtle"
-        >♪</span
+        class="shrink-0 rounded-sm bg-surface-sunken px-1 text-xs leading-4 text-fg-subtle"
+        title={files.join(", ")}>♪</span
       >
-      <span class="truncate text-fg" title={files.join(", ")}>{fileLabel}</span>
+      {#if fileLabel}
+        <span class="truncate text-fg" title={files.join(", ")}>{fileLabel}</span
+        >
+      {/if}
       <span class="text-fg-subtle">·</span>
     {/if}
     <span class="tabular whitespace-nowrap">{parts.join(" · ")}</span>
