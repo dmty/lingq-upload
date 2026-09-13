@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.6.0](https://github.com/dmty/lingq-upload/compare/v0.5.0...v0.6.0) (2026-09-13)
+
+
+### Features
+
+* add language destinations to the sidebar ([fc285fc](https://github.com/dmty/lingq-upload/commit/fc285fcb4bc0e25917decb8771c4f43a5c39b76d))
+* add macOS action toolbar ([225c988](https://github.com/dmty/lingq-upload/commit/225c988021f0198b3ec27fe86a930772cf4bac92))
+* add sidebar state store with clamped width and persistence ([a62a1d9](https://github.com/dmty/lingq-upload/commit/a62a1d9bbdb1f9dc3d8532a6f13aaa5b4b4200eb))
+* add toolbar navigation controls ([123821a](https://github.com/dmty/lingq-upload/commit/123821a5c2fde6bd5b2621b235d45533598f9f8a))
+* **add:** name an audio-only project from its first track ([a81b5e2](https://github.com/dmty/lingq-upload/commit/a81b5e2f603902940d0176f686572edae384ee18))
+* carry the current course into quick upload's destination ([e310383](https://github.com/dmty/lingq-upload/commit/e3103831196f55fff43bb8fcd7a8285ff6dd374d))
+* **course:** prefer LingQ image_url in header ([eb9d27d](https://github.com/dmty/lingq-upload/commit/eb9d27dc1c3cc63eaf8acdbfaabf5cdff7f9afcb))
+* **cover:** add a square crop preset and shift-drag to keep the shape ([ba49f53](https://github.com/dmty/lingq-upload/commit/ba49f53cf3de04fcfaea8b670de5b4da2430dd2e))
+* **cover:** fall back to audio embedded art when there is no epub cover ([1384792](https://github.com/dmty/lingq-upload/commit/13847926e1603393c94c95e841ad36b7e2728f2c))
+* **cover:** view the cover full size and crop it before upload ([440b16f](https://github.com/dmty/lingq-upload/commit/440b16f6becfa7689900e9a7cbb2e799eb7266dc))
+* **match:** split mapping and inspector columns evenly ([d3b232d](https://github.com/dmty/lingq-upload/commit/d3b232dbfa1d98c23d53df15f710d5bc2193551d))
+* sidebar toggle, resize handle, and brand wordmark title ([7ad4276](https://github.com/dmty/lingq-upload/commit/7ad4276a16b922a0eb6d80cc537010abfb050ddf))
+* store library filters in the URL ([065f729](https://github.com/dmty/lingq-upload/commit/065f72918cb85c524f587298335ca2662b79cd52))
+* **upload:** allow text-only and audio-only projects ([7076555](https://github.com/dmty/lingq-upload/commit/7076555948c93e60077fa1410df78be92ca9a53b))
+
+
+### Bug Fixes
+
+* **cover:** write the cropped image before removing old sidecars ([32de2df](https://github.com/dmty/lingq-upload/commit/32de2df1e57344a8fbc303e4253852dcc0ec8853))
+* give the quick upload tray a shallow book-shaped crease ([92f55c1](https://github.com/dmty/lingq-upload/commit/92f55c186e8efd6a1d0f7ecf0360189575dacb5c))
+* keep a live library search out of the toolbar's history ([e64b61c](https://github.com/dmty/lingq-upload/commit/e64b61c670d11fe1779994e9febe72e9caf7b8c9))
+* keep disabled history buttons gray in an inactive window ([945d858](https://github.com/dmty/lingq-upload/commit/945d858cb6ba0acd55d6fd29e266336bcf5e4910))
+* **matcher:** fold full-width ASCII when normalizing titles ([8914b6b](https://github.com/dmty/lingq-upload/commit/8914b6b00126f4ad7fb75bf3a01c7e8d7602c040))
+* **matcher:** strip shared filename prefix before title anchoring ([566673d](https://github.com/dmty/lingq-upload/commit/566673d2b4465e78b8c370112d7d49c6d7b710f5))
+* **match:** honour parked tracks when planning an audio-only upload ([8026027](https://github.com/dmty/lingq-upload/commit/80260278f4fa882ae6edcda662db12726a358e03))
+* **match:** restore bottom padding when scrolled to end ([44cb5ad](https://github.com/dmty/lingq-upload/commit/44cb5ad9f45b235b4f02e533eec32e62a7cd4801))
+* **match:** show audio source and chapter breakdown for single-source projects ([ec59d4c](https://github.com/dmty/lingq-upload/commit/ec59d4c94f0c389c0b9137a9862cd74a6e955af1))
+* persist LingQ covers missing locally ([c9c37f5](https://github.com/dmty/lingq-upload/commit/c9c37f5f1a3f548d0343cc3e05d5638b6e4d48ac))
+* recover unavailable library languages ([5169678](https://github.com/dmty/lingq-upload/commit/51696786f44827fe44c2551d85e61bba7757e6cd))
+* refine Finder-style window chrome ([46cc8ad](https://github.com/dmty/lingq-upload/commit/46cc8ad6f2cc455c925636f402a0e76aeeffec98))
+* **shell:** ignore held-key repeats for the global toolbar shortcuts ([d4f051b](https://github.com/dmty/lingq-upload/commit/d4f051b4a619719fbea437537204144c9cc60e73))
+* **shell:** keep a gap between the pipeline step indicator and the copy below it ([ed8474a](https://github.com/dmty/lingq-upload/commit/ed8474a6192bdf4e885dae094415670d2c4e3897))
+* **shell:** keep one semantic h1 per route by demoting the toolbar title ([0644c51](https://github.com/dmty/lingq-upload/commit/0644c5120fdc04667342027a0dff3680f7a081f0))
+* **shell:** suppress hover feedback and neutralise sidebar selection in a background window ([a79c481](https://github.com/dmty/lingq-upload/commit/a79c481f6b5b5c2e1d59d88cce45fea3363b792c))
+* sidebar collapse under Tauri drag region and grid placement ([aa364b3](https://github.com/dmty/lingq-upload/commit/aa364b35be7d2f9fe9e62bfb8e61e51f622c6ce4))
+* stretch sidebar drag region to full titlebar height ([627d3c6](https://github.com/dmty/lingq-upload/commit/627d3c6fefc9f9eb4c47c631b628b4aceac4109d))
+* **upload:** key audio-only chapter picker off resolved tracks ([3fe1b3a](https://github.com/dmty/lingq-upload/commit/3fe1b3a76458f49387fe30e48d7742b61237b5c6))
+
+
+### Performance Improvements
+
+* **build:** cut dev rebuild time with line-tables debuginfo and rlib-only lib ([89cf70a](https://github.com/dmty/lingq-upload/commit/89cf70a30bd5db5bf4e7434c3125cc83fa8c6625))
+* **test:** build dependencies with opt-level 2 in the dev profile ([84f6da4](https://github.com/dmty/lingq-upload/commit/84f6da4b346c77a788e2067967ba98ce7f748f0d))
+* **test:** compile the crate with opt-level 2 in the test profile ([d241bfc](https://github.com/dmty/lingq-upload/commit/d241bfcce0050e3fb6322faf1bce995b2b45d961))
+
 ## [0.5.0](https://github.com/dmty/lingq-upload/compare/v0.4.0...v0.5.0) (2026-08-18)
 
 
