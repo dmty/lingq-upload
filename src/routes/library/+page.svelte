@@ -287,8 +287,7 @@
       <div class="text-3xl">📚</div>
       <p class="mt-3 text-base font-medium text-fg">Your shelf is empty.</p>
       <p class="mt-2 text-sm text-fg-muted">
-        Point me at your Calibre library or a Libation folder and I'll show you
-        what's there.
+        Add a book, its audio, or both to get started.
       </p>
       <Button href="/add" class="mt-4">+ Add a book</Button>
     </div>

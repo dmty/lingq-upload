@@ -21,7 +21,6 @@
     languagesStore,
     saveLanguage,
   } from "$lib/stores/languages.svelte";
-  import SourcePicker from "$lib/components/SourcePicker.svelte";
   import DropZone from "$lib/components/DropZone.svelte";
   import BookPicker from "$lib/components/BookPicker.svelte";
   import Button from "$lib/components/Button.svelte";
@@ -433,12 +432,10 @@
     <StepIndicator current={1} />
     <h1 class="sr-only">Add project</h1>
     <p class="mt-1 text-sm text-fg-muted">
-      Pick a source, then a book, audio, or both. Collection is created
+      Pick a book, audio, or both. Collection is created
       automatically.
     </p>
   </header>
-
-  <SourcePicker bind:value={source} />
 
   {#if source !== "manual"}
     <BookPicker
