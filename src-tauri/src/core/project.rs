@@ -276,7 +276,10 @@ impl From<&Project> for ProjectSummary {
             title: p.settings.collection_title.clone(),
             language: p.settings.language.clone(),
             receipt_count: p.receipts.len(),
-            completed_lesson_count: p.completed_lesson_ids.len(),
+            // Receipts are written per chapter. completed_lesson_ids is only
+            // rebuilt when the upload loop finishes, so a quit mid-run leaves
+            // that vec empty while lesson_ids are already on the receipts.
+            completed_lesson_count: p.receipts.iter().filter(|r| r.lesson_id.is_some()).count(),
             cover_path: p.cover_path.clone(),
             authors: p.authors.clone(),
             series: p.series.clone(),
@@ -402,6 +405,41 @@ mod confirmed_at_tests {
         p.confirmed_at = Some(now);
         let s: ProjectSummary = (&p).into();
         assert_eq!(s.confirmed_at, Some(now));
+    }
+
+    #[test]
+    fn summary_counts_uploaded_receipts_when_lesson_ids_not_yet_rebuilt() {
+        // Quit mid-upload persists each receipt via patch_chapter, but
+        // completed_lesson_ids is only rebuilt when the loop finishes.
+        let id = ProjectId::from_title_author("T", "A");
+        let mut p = Project::new_test(id, "T");
+        p.completed_lesson_ids.clear();
+        p.receipts = vec![
+            ChapterReceipt {
+                chapter_index: 0,
+                track_index: Some(0),
+                lesson_id: Some(11),
+                degraded: false,
+                uploaded_at: None,
+            },
+            ChapterReceipt {
+                chapter_index: 1,
+                track_index: Some(1),
+                lesson_id: Some(22),
+                degraded: false,
+                uploaded_at: None,
+            },
+            ChapterReceipt {
+                chapter_index: 2,
+                track_index: Some(2),
+                lesson_id: None,
+                degraded: false,
+                uploaded_at: None,
+            },
+        ];
+        let s: ProjectSummary = (&p).into();
+        assert_eq!(s.receipt_count, 3);
+        assert_eq!(s.completed_lesson_count, 2);
     }
 }
 
