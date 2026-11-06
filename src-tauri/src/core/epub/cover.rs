@@ -15,14 +15,14 @@
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
+use quick_xml::events::Event;
 use quick_xml::Reader;
 use quick_xml::XmlVersion;
-use quick_xml::events::Event;
 use zip::ZipArchive;
 
 use super::{
-    EpubError, local_name, parent_dir, read_bytes_from_zip, read_container_opf_path,
-    read_to_string_from_zip,
+    local_name, parent_dir, read_bytes_from_zip, read_container_opf_path, read_to_string_from_zip,
+    EpubError,
 };
 
 #[derive(Debug, Clone)]
@@ -99,7 +99,11 @@ pub fn extract_to_dir_from_bytes(
 
     // Rung 4: filename heuristic
     let names: Vec<String> = (0..zip.len())
-        .filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_string()))
+        .filter_map(|i| {
+            zip.by_index(i)
+                .ok()
+                .and_then(|f| f.name().ok().map(|n| n.into_owned()))
+        })
         .collect();
     for name in names {
         let lower = name.to_ascii_lowercase();

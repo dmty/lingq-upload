@@ -159,7 +159,10 @@ fn collect_candidate_files<R: std::io::Read + std::io::Seek>(
     for i in 0..zip.len() {
         let name = {
             let entry = zip.by_index(i).map_err(|e| EpubError::Zip(e.to_string()))?;
-            entry.name().to_string()
+            entry
+                .name()
+                .map_err(|e| EpubError::Zip(e.to_string()))?
+                .into_owned()
         };
         let lower = name.to_ascii_lowercase();
         let kind =
