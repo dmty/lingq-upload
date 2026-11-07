@@ -213,6 +213,9 @@
 
   const hasReceipts = $derived((project?.receipts?.length ?? 0) > 0);
   const doneCount = $derived(rows.filter((r) => r.status === "done").length);
+  const uploadDone = $derived(
+    completed || (rows.length > 0 && doneCount === rows.length),
+  );
   // Without a server-issued jobId every event is dropped, so nothing below
   // can advance. Progress UI must not imply otherwise.
   const attached = $derived(jobId !== null);
@@ -325,7 +328,9 @@
         >
           {cancelling ? "Cancelling…" : "Cancel"}
         </Button>
-      {:else if project && (project.confirmed_at != null || hasReceipts)}
+      {:else if project &&
+        (project.confirmed_at != null || hasReceipts) &&
+        !uploadDone}
         <Button size="sm" onclick={start} disabled={starting}>
           {starting ? "Starting..." : hasReceipts ? "Resume" : "Start"}
         </Button>

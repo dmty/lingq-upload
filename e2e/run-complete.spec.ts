@@ -58,6 +58,7 @@ test.describe("run completion and cancel states", () => {
       "All chapters uploaded",
     );
     await expect(page.getByTestId("run-complete")).toContainText("View Course");
+    await expect(page.getByRole("button", { name: "Resume" })).toHaveCount(0);
   });
 
   test("Cancel shows a pending state until Cancelled arrives", async ({
@@ -137,6 +138,7 @@ test.describe("run completion links to the course screen", () => {
       }),
     );
     await expect(page.getByTestId("run-complete")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resume" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "View Course" }).click();
 
