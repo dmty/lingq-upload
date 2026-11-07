@@ -283,7 +283,7 @@ async fn libation_folder_does_not_invoke_atom_probe() {
     let _coll = server
         .mock(
             "GET",
-            mockito::Matcher::Regex(r"^/api/v3/ja/collections/\?search=".into()),
+            mockito::Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -357,7 +357,7 @@ async fn atomless_single_m4b_falls_back_to_whole_file() {
     let _coll = server
         .mock(
             "GET",
-            mockito::Matcher::Regex(r"^/api/v3/ja/collections/\?search=".into()),
+            mockito::Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")

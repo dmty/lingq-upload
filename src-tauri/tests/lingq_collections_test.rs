@@ -10,7 +10,7 @@ fn ja() -> LanguageCode {
 async fn find_or_create_returns_existing_id_on_exact_match() {
     let mut server = Server::new_async().await;
     let _m = server
-        .mock("GET", "/api/v3/ja/collections/?search=Foo")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(r#"{"results":[{"pk":42,"title":"Foo"}]}"#)
@@ -29,7 +29,7 @@ async fn find_or_create_returns_existing_id_on_exact_match() {
 async fn find_or_create_posts_when_no_match() {
     let mut server = Server::new_async().await;
     let _search = server
-        .mock("GET", "/api/v3/ja/collections/?search=Foo")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(200)
         .with_body(r#"{"results":[]}"#)
         .create_async()
@@ -54,7 +54,7 @@ async fn find_or_create_matches_nfd_response_to_nfc_request() {
     // (U+30AB KATAKANA KA + U+3099 voicing). Should match via title_hash.
     let mut server = Server::new_async().await;
     let _m = server
-        .mock("GET", "/api/v3/ja/collections/?search=%E3%82%AC")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body("{\"results\":[{\"pk\":11,\"title\":\"\u{30AB}\u{3099}\"}]}")
@@ -75,7 +75,7 @@ async fn find_or_create_post_4xx_then_research_finds_id() {
     // a follow-up search now finds the row.
     let mut server = Server::new_async().await;
     let _search_first = server
-        .mock("GET", "/api/v3/ja/collections/?search=Race")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(200)
         .with_body(r#"{"results":[]}"#)
         .expect(1)
@@ -89,7 +89,7 @@ async fn find_or_create_post_4xx_then_research_finds_id() {
         .create_async()
         .await;
     let _search_second = server
-        .mock("GET", "/api/v3/ja/collections/?search=Race")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(200)
         .with_body(r#"{"results":[{"pk":555,"title":"Race"}]}"#)
         .expect(1)
@@ -107,7 +107,7 @@ async fn find_or_create_post_4xx_then_research_finds_id() {
 async fn find_or_create_401_returns_unauthorized() {
     let mut server = Server::new_async().await;
     let _m = server
-        .mock("GET", "/api/v3/ja/collections/?search=Foo")
+        .mock("GET", "/api/v3/ja/collections/my/?page_size=200")
         .with_status(401)
         .with_body("Unauthorized")
         .create_async()

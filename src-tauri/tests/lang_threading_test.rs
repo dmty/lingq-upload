@@ -11,7 +11,7 @@ use secrecy::SecretString;
 async fn assert_create_uses_lang_segment(code: &str) {
     let mut server = Server::new_async().await;
 
-    let search_path = format!("/api/v3/{code}/collections/?search=Sample");
+    let search_path = format!("/api/v3/{code}/collections/my/?page_size=200");
     let create_path = format!("/api/v3/{code}/collections/");
 
     let search = server

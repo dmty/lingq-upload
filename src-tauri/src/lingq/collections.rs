@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::StatusCode;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
@@ -104,12 +103,13 @@ impl LingqClient {
         }
     }
 
+    // LingQ ignores `?search=` on /collections/ and returns the public catalogue
+    // unfiltered, so match against the user's own courses instead.
     async fn search_collection(&self, title: &str) -> Result<Option<CollectionId>, LingqError> {
         let search_url = format!(
-            "{}/api/v3/{}/collections/?search={}",
+            "{}/api/v3/{}/collections/my/?page_size=200",
             self.base_url(),
             self.lang(),
-            urlencode(title)
         );
         let resp = self
             .http()
@@ -264,10 +264,6 @@ impl LingqClient {
         }
         Ok(false)
     }
-}
-
-fn urlencode(s: &str) -> String {
-    utf8_percent_encode(s, NON_ALPHANUMERIC).to_string()
 }
 
 async fn read_items(resp: reqwest::Response) -> Result<Vec<serde_json::Value>, LingqError> {

@@ -241,7 +241,7 @@ fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
     let _ = server
         .mock(
             "GET",
-            Matcher::Regex(r"^/api/v3/ja/collections/\?search=".into()),
+            Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")

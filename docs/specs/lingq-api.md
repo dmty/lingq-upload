@@ -21,7 +21,7 @@
 | Op | Method | URL | Notes |
 |---|---|---|---|
 | List my languages | GET | `/api/v2/languages/` | **One of the few surviving v2 endpoints.** Not lang-scoped. Returns the catalogue with the caller's known-word counts. Response is either a flat array or `{ results: [...] }`; the client tolerates either. |
-| List my collections | GET | `/api/v3/{lang}/collections/my/?search=<title>&page_size=200` | Paginated; used to resume / dedupe by title. Entry is thin: `{id, title, imageUrl}`. |
+| List my collections | GET | `/api/v3/{lang}/collections/my/?page_size=200` | Used to resume / dedupe by title (matched client-side via `title_hash`). The public `/collections/?search=` ignores `search` and must not be used for dedupe. Entry is thin: `{id, title, imageUrl}`. |
 | Collection detail | GET | `/api/v3/{lang}/collections/{cid}/` | Full course record. Fields listed below. |
 | Create collection | POST | `/api/v3/{lang}/collections/` | JSON body `{title, description, tags?: ["books", …]}`. Returns `{id, …}`. `tags` is a JSON array (not comma-string as on lesson import). Cover-image field shape **unconfirmed** — see Open probes. There is **no `category` field**; LingQ's UI "Books" category is derived from the `books` tag. |
 | List lessons | GET | `/api/v3/{lang}/collections/{cid}/lessons/?page=N&page_size=100` | Paginated. Used to skip already-uploaded lessons by title. Rich per-entry fields (see below). |
