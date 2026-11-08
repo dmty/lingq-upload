@@ -280,14 +280,21 @@ async fn libation_folder_does_not_invoke_atom_probe() {
     store.put(&project).unwrap();
 
     let mut server = Server::new_async().await;
+    // No pin: the job creates the course. Pinned (resume): it confirms by id.
     let _coll = server
+        .mock("POST", "/api/v3/ja/collections/")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"pk":9001,"title":"Libation Folder"}"#)
+        .create();
+    let _ = server
         .mock(
             "GET",
-            mockito::Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
+            mockito::Matcher::Regex(r"^/api/v3/ja/collections/\d+/$".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"results":[{"pk":9001,"title":"Libation Folder"}]}"#)
+        .with_body(r#"{"id":1,"title":"Pinned"}"#)
         .create();
     for i in 0..3 {
         let _ = server
@@ -354,14 +361,21 @@ async fn atomless_single_m4b_falls_back_to_whole_file() {
     store.put(&project).unwrap();
 
     let mut server = Server::new_async().await;
+    // No pin: the job creates the course. Pinned (resume): it confirms by id.
     let _coll = server
+        .mock("POST", "/api/v3/ja/collections/")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"pk":424242,"title":"Atomless"}"#)
+        .create();
+    let _ = server
         .mock(
             "GET",
-            mockito::Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
+            mockito::Matcher::Regex(r"^/api/v3/ja/collections/\d+/$".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"results":[{"pk":424242,"title":"Atomless"}]}"#)
+        .with_body(r#"{"id":1,"title":"Pinned"}"#)
         .create();
     let _import = server
         .mock("POST", "/api/v3/ja/lessons/import/")

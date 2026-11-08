@@ -7,6 +7,7 @@ import type {
   Chapter,
   ChapterReceipt,
   Collection,
+  CollectionDetail,
   CourseView,
   DetectStartResult,
   DetectedRange,
@@ -105,6 +106,8 @@ declare global {
     __uploadOneShotGate__?: Gate;
     __releaseUpload__?: Release;
     __cancelJobCalls__?: { jobId: string }[];
+    __existingCourse__?: CollectionDetail | null;
+    __useCourseCalls__?: { projectId: ProjectId; collectionId: number }[];
 
     // Transcription / detection fixtures.
     __transcriptionPreferences__?: AppTranscriptionPreferences;

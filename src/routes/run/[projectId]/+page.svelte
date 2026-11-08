@@ -5,7 +5,9 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import {
     commands,
+    type AppError,
     type ChapterReceipt,
+    type CollectionDetail,
     type JobEvent,
     type PlanStep,
     type Project,
@@ -49,6 +51,7 @@
   let cancelling = $state(false);
   let completed = $state(false);
   let stage = $state<Stage["kind"] | null>(null);
+  let existingCourse = $state<CollectionDetail | null>(null);
 
   function uploadStatus(
     receipt: ChapterReceipt | undefined,
@@ -140,7 +143,45 @@
     }
   }
 
+  function showError(e: AppError) {
+    error = appErrorMessage(e);
+    errorNeedsKey = isMissingApiKey(e);
+  }
+
+  // A first upload into a title the account already has would otherwise
+  // create a duplicate course, so offer the existing one first. Pinned
+  // projects skip this: the backend always reuses the pinned course.
   async function start() {
+    error = null;
+    errorNeedsKey = false;
+    if (project!.lingq_collection_id == null) {
+      starting = true;
+      const found = await commands.cmdProjectExistingCourse(project!.id);
+      starting = false;
+      if (found.status === "error") return showError(found.error);
+      existingCourse = found.data;
+      if (existingCourse) return;
+    }
+    await launch();
+  }
+
+  async function addToExisting() {
+    const res = await commands.cmdProjectUseCourse(
+      project!.id,
+      existingCourse!.id,
+    );
+    if (res.status === "error") return showError(res.error);
+    existingCourse = null;
+    await reloadProject();
+    await launch();
+  }
+
+  async function createNew() {
+    existingCourse = null;
+    await launch();
+  }
+
+  async function launch() {
     completed = false;
     error = null;
     errorNeedsKey = false;
@@ -328,9 +369,7 @@
         >
           {cancelling ? "Cancelling…" : "Cancel"}
         </Button>
-      {:else if project &&
-        (project.confirmed_at != null || hasReceipts) &&
-        !uploadDone}
+      {:else if project && (project.confirmed_at != null || hasReceipts) && !uploadDone && !existingCourse}
         <Button size="sm" onclick={start} disabled={starting}>
           {starting ? "Starting..." : hasReceipts ? "Resume" : "Start"}
         </Button>
@@ -359,6 +398,27 @@
         <a href="/library" class="text-fg-muted hover:text-fg"
           >Back to Library</a
         >
+      </span>
+    </Alert>
+  {/if}
+
+  {#if existingCourse}
+    <Alert
+      variant="warning"
+      data-testid="existing-course"
+      class="flex items-center justify-between gap-3 px-4 py-3"
+    >
+      <span>
+        Your LingQ account already has a course named “{existingCourse.title}”{existingCourse.lessons_count !=
+        null
+          ? ` with ${existingCourse.lessons_count} lessons`
+          : ""}. Add these lessons to it?
+      </span>
+      <span class="flex shrink-0 items-center gap-2">
+        <Button variant="secondary" size="sm" onclick={createNew}>
+          Create New Course
+        </Button>
+        <Button size="sm" onclick={addToExisting}>Add to Course</Button>
       </span>
     </Alert>
   {/if}

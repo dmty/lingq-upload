@@ -238,16 +238,21 @@ async fn make_fixture(chapters: usize) -> Fixture {
 }
 
 fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
+    // No pin: the job creates the course. Pinned (resume): it confirms by id.
+    let _ = server
+        .mock("POST", "/api/v3/ja/collections/")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(format!(r#"{{"pk":{collection_id},"title":"Resume Book"}}"#))
+        .create();
     let _ = server
         .mock(
             "GET",
-            Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
+            Matcher::Regex(r"^/api/v3/ja/collections/\d+/$".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(format!(
-            r#"{{"results":[{{"pk":{collection_id},"title":"Resume Book"}}]}}"#
-        ))
+        .with_body(r#"{"id":1,"title":"Pinned"}"#)
         .create();
 }
 

@@ -1,5 +1,5 @@
 //! Per-language URL threading. Spins up mockito, builds a `LingqClient` with
-//! a non-`ja` language, calls `find_or_create_collection`, and asserts the
+//! a non-`ja` language, calls `create_collection`, and asserts the
 //! request URL carries the matching segment. Covers ko / ru / en.
 
 use lingq_upload_lib::lingq::{
@@ -11,17 +11,8 @@ use secrecy::SecretString;
 async fn assert_create_uses_lang_segment(code: &str) {
     let mut server = Server::new_async().await;
 
-    let search_path = format!("/api/v3/{code}/collections/my/?page_size=200");
     let create_path = format!("/api/v3/{code}/collections/");
 
-    let search = server
-        .mock("GET", search_path.as_str())
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(r#"{"results":[]}"#)
-        .expect(1)
-        .create_async()
-        .await;
     let create = server
         .mock("POST", create_path.as_str())
         .with_status(201)
@@ -38,13 +29,9 @@ async fn assert_create_uses_lang_segment(code: &str) {
         server.url(),
     );
 
-    let id = client
-        .find_or_create_collection("Sample", "desc")
-        .await
-        .expect("create ok");
+    let id = client.create_collection("Sample").await.expect("create ok");
     assert_eq!(id, CollectionId(4242));
 
-    search.assert_async().await;
     create.assert_async().await;
 }
 

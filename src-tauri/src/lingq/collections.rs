@@ -1,69 +1,26 @@
-use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
-use reqwest::StatusCode;
 use reqwest::multipart::{Form, Part};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::sync::Arc;
-use tokio::sync::Mutex as AsyncMutex;
 
-use super::client::LingqClient;
+use super::client::{read_detail, LingqClient};
 use super::error::LingqError;
 use super::lessons::title_hash;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct CollectionId(pub i64);
 
-type LockKey = (String, [u8; 32]);
-type LockMap = Mutex<HashMap<LockKey, Arc<AsyncMutex<()>>>>;
-
-/// In-process serialiser for `find_or_create_collection` keyed by `(lang, title_hash)`.
-/// Prevents two concurrent calls within the same process from both POSTing when the
-/// server has no existing match. Does NOT protect across multiple app instances —
-/// that case relies on the post-POST re-search fallback below + server-side dedupe.
-fn create_locks() -> &'static LockMap {
-    static LOCKS: OnceLock<LockMap> = OnceLock::new();
-    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn lock_for(lang: &str, title: &str) -> Arc<AsyncMutex<()>> {
-    let key = (lang.to_string(), title_hash(title));
-    let mut map = create_locks().lock().expect("collection locks poisoned");
-    map.entry(key)
-        .or_insert_with(|| Arc::new(AsyncMutex::new(())))
-        .clone()
-}
-
 impl LingqClient {
-    /// Find an existing collection by normalised-title equality or create one.
-    ///
-    /// Title comparison uses [`title_hash`] (NFC + half-width fold + whitespace
-    /// collapse + lowercase) so that NFC/NFD variants, full/half-width digits,
-    /// and incidental whitespace do not produce duplicates.
-    ///
-    /// Concurrency: serialised in-process per `(lang, title)` via an async mutex.
-    /// If the search-then-create race still slips through (different process,
-    /// different machine), a 4xx on the POST triggers a single re-search and the
-    /// found id is returned. Only if the re-search also misses do we surface
-    /// `BadRequest`.
-    pub async fn find_or_create_collection(
-        &self,
-        title: &str,
-        description: &str,
-    ) -> Result<CollectionId, LingqError> {
-        let guard = lock_for(self.lang(), title);
-        let _held = guard.lock().await;
-
-        if let Some(id) = self.search_collection(title).await? {
-            return Ok(id);
-        }
-
+    /// Always creates a new collection. Reusing an existing one is the
+    /// caller's decision: see [`Self::find_my_collection`].
+    pub async fn create_collection(&self, title: &str) -> Result<CollectionId, LingqError> {
         let create_url = format!("{}/api/v3/{}/collections/", self.base_url(), self.lang());
         let body = serde_json::json!({
             "title": title,
-            "description": description,
+            "description": "",
             "tags": ["books"],
         });
         let resp = self
@@ -87,55 +44,65 @@ impl LingqClient {
                     .ok_or_else(|| LingqError::Schema("collection id missing".into()))
             }
             StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
-            s if s.is_client_error() => {
-                let detail = resp.text().await.unwrap_or_default();
-                // Race-after-search: another writer may have just created it.
-                match self.search_collection(title).await? {
-                    Some(id) => Ok(id),
-                    None => Err(LingqError::BadRequest(detail)),
-                }
-            }
-            s if s.is_server_error() => {
-                let detail = resp.text().await.unwrap_or_default();
-                Err(LingqError::Server(detail))
-            }
+            s if s.is_client_error() => Err(LingqError::BadRequest(read_detail(resp).await)),
+            s if s.is_server_error() => Err(LingqError::Server(read_detail(resp).await)),
             other => Err(LingqError::Transport(format!("unexpected status {other}"))),
         }
     }
 
-    // LingQ ignores `?search=` on /collections/ and returns the public catalogue
-    // unfiltered, so match against the user's own courses instead.
-    async fn search_collection(&self, title: &str) -> Result<Option<CollectionId>, LingqError> {
-        let search_url = format!(
-            "{}/api/v3/{}/collections/my/?page_size=200",
-            self.base_url(),
-            self.lang(),
-        );
-        let resp = self
-            .http()
-            .get(&search_url)
-            .header("Authorization", self.auth_header())
-            .send()
-            .await
-            .map_err(|e| LingqError::Transport(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => {
-                let items = read_items(resp).await?;
-                let target = title_hash(title);
-                for v in &items {
-                    let t = v.get("title").and_then(|x| x.as_str()).unwrap_or("");
-                    if title_hash(t) == target {
-                        if let Some(id) =
-                            v.get("pk").or_else(|| v.get("id")).and_then(|x| x.as_i64())
-                        {
-                            return Ok(Some(CollectionId(id)));
-                        }
-                    }
+    /// The user's own collection whose title matches under [`title_hash`],
+    /// walking every page.
+    ///
+    /// LingQ has no usable title filter: `/collections/?search=` ignores the
+    /// parameter, and `/collections/my/?search=` only hits byte-exact titles,
+    /// so an NFC request misses a course stored NFD.
+    pub async fn find_my_collection(
+        &self,
+        title: &str,
+    ) -> Result<Option<CollectionId>, LingqError> {
+        let target = title_hash(title);
+        let mut page = 1;
+        loop {
+            let url = format!(
+                "{}/api/v3/{}/collections/my/?page_size=200&page={page}",
+                self.base_url(),
+                self.lang(),
+            );
+            let resp = self
+                .http()
+                .get(&url)
+                .header("Authorization", self.auth_header())
+                .send()
+                .await
+                .map_err(|e| LingqError::Transport(e.to_string()))?;
+            let body: serde_json::Value = match resp.status() {
+                s if s.is_success() => resp
+                    .json()
+                    .await
+                    .map_err(|e| LingqError::Transport(e.to_string()))?,
+                StatusCode::UNAUTHORIZED => return Err(LingqError::Unauthorized),
+                s if s.is_client_error() => {
+                    return Err(LingqError::BadRequest(read_detail(resp).await));
                 }
-                Ok(None)
+                _ => return Err(LingqError::Server(read_detail(resp).await)),
+            };
+            let items = body
+                .get("results")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| LingqError::Schema("expected `results: []`".into()))?;
+            let hit = items.iter().find_map(|v| {
+                let t = v.get("title").and_then(|x| x.as_str())?;
+                (title_hash(t) == target)
+                    .then(|| v.get("id").or_else(|| v.get("pk")).and_then(|x| x.as_i64()))
+                    .flatten()
+            });
+            if let Some(id) = hit {
+                return Ok(Some(CollectionId(id)));
             }
-            StatusCode::UNAUTHORIZED => Err(LingqError::Unauthorized),
-            _ => Ok(None),
+            if body.get("next").is_none_or(|n| n.is_null()) {
+                return Ok(None);
+            }
+            page += 1;
         }
     }
 }
@@ -264,20 +231,4 @@ impl LingqClient {
         }
         Ok(false)
     }
-}
-
-async fn read_items(resp: reqwest::Response) -> Result<Vec<serde_json::Value>, LingqError> {
-    let body: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| LingqError::Transport(e.to_string()))?;
-    if let Some(arr) = body.as_array() {
-        return Ok(arr.clone());
-    }
-    if let Some(arr) = body.get("results").and_then(|v| v.as_array()) {
-        return Ok(arr.clone());
-    }
-    Err(LingqError::Schema(
-        "expected JSON array or `results: []`".into(),
-    ))
 }

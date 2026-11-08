@@ -179,16 +179,21 @@ async fn make_fixture_with_counts(chapters: usize, tracks: usize) -> Fixture {
 }
 
 fn mock_collection(server: &mut ServerGuard, collection_id: i64) {
+    // No pin: the job creates the course. Pinned (resume): it confirms by id.
+    let _ = server
+        .mock("POST", "/api/v3/ja/collections/")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(format!(r#"{{"pk":{collection_id},"title":"My Book"}}"#))
+        .create();
     let _ = server
         .mock(
             "GET",
-            Matcher::Regex(r"^/api/v3/ja/collections/my/".into()),
+            Matcher::Regex(r"^/api/v3/ja/collections/\d+/$".into()),
         )
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(format!(
-            r#"{{"results":[{{"pk":{collection_id},"title":"My Book"}}]}}"#
-        ))
+        .with_body(r#"{"id":1,"title":"Pinned"}"#)
         .create();
 }
 
@@ -343,6 +348,104 @@ async fn happy_path_three_chapters_three_tracks() {
     assert_eq!(project.completed_lesson_ids.len(), 3);
 
     let _ = fixture.audio_dir; // keep alive
+}
+
+async fn run_with(fixture: &Fixture, sink: &mut RecordingSink) -> Result<(), AppError> {
+    let client = Arc::new(LingqClient::with_base_url(
+        SecretString::new("test-key".into()),
+        LanguageCode::new("ja").expect("valid lang"),
+        fixture.server.url(),
+    ));
+    run_project_job(
+        fixture.store.clone(),
+        client,
+        fixture.project_id.clone(),
+        CancellationToken::new(),
+        sink,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn pinned_collection_is_reused_without_creating_or_title_lookup() {
+    let mut fixture = make_fixture(3).await;
+    fixture
+        .store
+        .update(&fixture.project_id, &mut |p| {
+            p.lingq_collection_id = Some(777)
+        })
+        .unwrap();
+    let create = fixture
+        .server
+        .mock("POST", "/api/v3/ja/collections/")
+        .expect(0)
+        .create();
+    let lookup = fixture
+        .server
+        .mock("GET", Matcher::Regex(r"^/api/v3/ja/collections/my/".into()))
+        .expect(0)
+        .create();
+    let detail = fixture
+        .server
+        .mock("GET", "/api/v3/ja/collections/777/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":777,"title":"Renamed on LingQ"}"#)
+        .expect(1)
+        .create();
+    mock_imports(&mut fixture.server, 3, 1000);
+
+    run_with(&fixture, &mut RecordingSink::default())
+        .await
+        .expect("orchestrator run");
+
+    create.assert();
+    lookup.assert();
+    detail.assert();
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert_eq!(project.lingq_collection_id, Some(777));
+    assert_eq!(project.completed_lesson_ids.len(), 3);
+}
+
+#[tokio::test]
+async fn deleted_pinned_collection_unpins_and_stops_before_uploading() {
+    let mut fixture = make_fixture(3).await;
+    fixture
+        .store
+        .update(&fixture.project_id, &mut |p| {
+            p.lingq_collection_id = Some(777)
+        })
+        .unwrap();
+    let _detail = fixture
+        .server
+        .mock("GET", "/api/v3/ja/collections/777/")
+        .with_status(404)
+        .create();
+    let create = fixture
+        .server
+        .mock("POST", "/api/v3/ja/collections/")
+        .expect(0)
+        .create();
+    let imports = fixture
+        .server
+        .mock("POST", "/api/v3/ja/lessons/import/")
+        .expect(0)
+        .create();
+
+    let mut sink = RecordingSink::default();
+    run_with(&fixture, &mut sink)
+        .await
+        .expect_err("deleted course must stop the run");
+
+    create.assert();
+    imports.assert();
+    let events = sink.events.lock().unwrap().clone();
+    assert!(matches!(
+        events.last(),
+        Some(RecordedEvent::Result(false, _))
+    ));
+    let project = fixture.store.get(&fixture.project_id).unwrap().unwrap();
+    assert_eq!(project.lingq_collection_id, None);
 }
 
 #[tokio::test]

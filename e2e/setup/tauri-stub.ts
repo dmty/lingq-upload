@@ -414,6 +414,18 @@ export function tauriStub(workerIndex: number): void {
       return null;
     },
     cmd_start_project_job: () => "job-1",
+    // Seed window.__existingCourse__ to have the run screen offer reuse.
+    cmd_project_existing_course: () => window.__existingCourse__ ?? null,
+    cmd_project_use_course: (args) => {
+      const call = args as NonNullable<
+        typeof window.__useCourseCalls__
+      >[number];
+      window.__useCourseCalls__ = window.__useCourseCalls__ || [];
+      window.__useCourseCalls__.push(call);
+      const pinned = window.__projectByKey__?.[call.projectId.content_hash];
+      if (pinned) pinned.lingq_collection_id = call.collectionId;
+      return null;
+    },
     cmd_project_cancel: () => 1,
     cmd_cancel_job: (args) => {
       window.__cancelJobCalls__ = window.__cancelJobCalls__ || [];

@@ -5,10 +5,12 @@ use tauri::AppHandle;
 
 use super::{app_data_dir, parse_lang};
 use crate::commands::project::set_cover_bytes_impl;
+use crate::core::identity::ProjectId;
 use crate::core::store::ProjectStore;
 use crate::error::AppError;
 use crate::lingq::{
-    AccountProfile, Collection, CollectionId, CourseView, Language, LanguageCode, LingqClient,
+    AccountProfile, Collection, CollectionDetail, CollectionId, CourseView, Language, LanguageCode,
+    LingqClient,
 };
 use crate::secrets::{SecretsStore, LINGQ_ACCOUNT};
 
@@ -57,6 +59,49 @@ pub async fn cmd_list_collections(
 ) -> Result<Vec<Collection>, AppError> {
     let client = client_for(&app, parse_lang(&lang)?)?;
     Ok(client.list_my_collections().await?)
+}
+
+/// A course on the user's account titled like this project, offered before
+/// the first upload so its lessons can join that course instead of a new
+/// duplicate. `None` once pinned: a pinned project never re-resolves by title.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_project_existing_course(
+    app: AppHandle,
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+) -> Result<Option<CollectionDetail>, AppError> {
+    let project = store
+        .get(&project_id)
+        .map_err(|e| AppError::Other(format!("store.get: {e}")))?
+        .ok_or_else(|| AppError::Other("project not found".into()))?;
+    if project.lingq_collection_id.is_some() {
+        return Ok(None);
+    }
+    let client = client_for(&app, parse_lang(&project.settings.language)?)?;
+    match client
+        .find_my_collection(&project.settings.collection_title)
+        .await?
+    {
+        Some(id) => Ok(Some(client.collection_detail(id).await?)),
+        None => Ok(None),
+    }
+}
+
+/// Pin the project to an existing LingQ course; the next job uploads into it.
+#[tauri::command]
+#[specta::specta]
+pub async fn cmd_project_use_course(
+    store: tauri::State<'_, Arc<dyn ProjectStore>>,
+    project_id: ProjectId,
+    collection_id: i64,
+) -> Result<(), AppError> {
+    store
+        .update(&project_id, &mut |p| {
+            p.lingq_collection_id = Some(collection_id);
+        })
+        .map_err(|e| AppError::Other(format!("store.update: {e}")))?;
+    Ok(())
 }
 
 /// Course-screen payload: collection header stats plus per-lesson stats.
@@ -108,10 +153,7 @@ pub async fn adopt_missing_cover(
         .into_iter()
         .filter(|s| {
             s.lingq_collection_id == Some(collection_id)
-                && s.cover_path
-                    .as_ref()
-                    .map(|p| !p.exists())
-                    .unwrap_or(true)
+                && s.cover_path.as_ref().map(|p| !p.exists()).unwrap_or(true)
         })
         .map(|s| s.id)
         .collect();

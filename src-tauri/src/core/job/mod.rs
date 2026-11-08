@@ -28,7 +28,7 @@ use crate::core::store::ProjectStore;
 use crate::core::text::read_text_for_upload;
 use crate::error::AppError;
 use crate::ingest::{audio_source_paths, AudioSource, TextSource};
-use crate::lingq::{ImportLessonRequest, LessonStatus, LingqClient};
+use crate::lingq::{CollectionId, ImportLessonRequest, LessonStatus, LingqClient, LingqError};
 use crate::transcribe::{AtomStart, DetectedRange, DetectedRangeError};
 
 /// Returns the next lifecycle stage the project should advance to, or `None`
@@ -232,12 +232,34 @@ pub async fn run_project_job(
         prepopulate_receipts(p, &plan);
     })?;
 
-    // Resolve the collection up front. Idempotent on the server side.
-    let collection = match client
-        .find_or_create_collection(&project.settings.collection_title, "")
-        .await
-    {
+    // A pinned collection is authoritative, so a resume never re-resolves by
+    // title. Without a pin the run screen has already offered any same-titled
+    // course and pinned it if accepted; reaching here unpinned means "create".
+    let resolved = match project.lingq_collection_id {
+        Some(id) => client
+            .collection_detail(CollectionId(id))
+            .await
+            .map(|_| CollectionId(id)),
+        None => {
+            client
+                .create_collection(&project.settings.collection_title)
+                .await
+        }
+    };
+    let collection = match resolved {
         Ok(id) => id,
+        Err(LingqError::NotFound) => {
+            // Deleted on LingQ. Unpin so the next start offers the choice again.
+            persist_with(store.as_ref(), &project_id, &mut |p| {
+                p.lingq_collection_id = None;
+            })?;
+            let app = AppError::Other(
+                "This project's LingQ course no longer exists. Press Start to choose a course."
+                    .into(),
+            );
+            sink.result(false, serde_json::json!({"error": app.to_string()}));
+            return Err(app);
+        }
         Err(e) => {
             let app = AppError::from(e);
             sink.result(false, serde_json::json!({"error": app.to_string()}));
@@ -246,8 +268,8 @@ pub async fn run_project_job(
     };
     tracing::info!(collection = collection.0, "job: collection resolved");
 
-    // Pin the resolved collection on the project so library list & external
-    // links can deep-link without re-querying the LingQ API.
+    // Pin a newly created collection: every later run uploads into it, and
+    // the library deep-links to it without re-querying LingQ.
     if project.lingq_collection_id != Some(collection.0) {
         project = persist_with(store.as_ref(), &project_id, &mut |p| {
             p.lingq_collection_id = Some(collection.0);

@@ -335,6 +335,44 @@ export const commands = {
     }
   },
   /**
+   * A course on the user's account titled like this project, offered before
+   * the first upload so its lessons can join that course instead of a new
+   * duplicate. `None` once pinned: a pinned project never re-resolves by title.
+   */
+  async cmdProjectExistingCourse(
+    projectId: ProjectId,
+  ): Promise<Result<CollectionDetail | null, AppError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_project_existing_course", { projectId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Pin the project to an existing LingQ course; the next job uploads into it.
+   */
+  async cmdProjectUseCourse(
+    projectId: ProjectId,
+    collectionId: number,
+  ): Promise<Result<null, AppError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("cmd_project_use_course", {
+          projectId,
+          collectionId,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
    * Course-screen payload: collection header stats plus per-lesson stats.
    *
    * Two requests, never a per-lesson fetch. `lang` comes from the project entry —
