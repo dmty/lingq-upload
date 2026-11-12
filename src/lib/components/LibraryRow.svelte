@@ -9,6 +9,7 @@
   import { statusLabel } from "$lib/status-labels";
   import CoverThumb from "./CoverThumb.svelte";
   import StatusBadge from "./StatusBadge.svelte";
+  import ExternalLinkIcon from "./ExternalLinkIcon.svelte";
   import Button from "$lib/components/Button.svelte";
   import { course } from "$lib/stores/course.svelte";
 
@@ -34,6 +35,7 @@
   const authors = $derived(entry.authors ?? []);
   const series = $derived(entry.series ?? null);
   const failedReason = $derived(entry.failed_reason ?? null);
+  const collectionId = $derived(entry.lingq_collection_id);
 
   const connectsTop = $derived(
     series != null && prev?.series?.name === series.name,
@@ -131,7 +133,6 @@
   // every item in it.
   async function openContextMenu(event: MouseEvent) {
     event.preventDefault();
-    const collectionId = entry.lingq_collection_id;
     try {
       const { Menu } = await import("@tauri-apps/api/menu");
       const menu = await Menu.new({
@@ -251,7 +252,25 @@
     </div>
   </button>
 
-  <div class="flex items-center justify-end py-1">
+  <div class="flex items-center justify-end gap-2 py-1">
+    {#if collectionId != null}
+      <!-- Revealed on hover and on the selected row, like Music's row actions.
+           Enter stops here so the page's list shortcut doesn't also open the
+           selected row. -->
+      <button
+        type="button"
+        class="grid size-6 place-items-center rounded-sm text-fg-muted opacity-0 hover:text-fg group-hover:opacity-100 group-aria-selected:opacity-100 focus-visible:opacity-100"
+        title="Open in LingQ"
+        aria-label="Open in LingQ"
+        onclick={() =>
+          void openUrl(lingqCollectionUrl(entry.language, collectionId))}
+        onkeydown={(e) => {
+          if (e.key === "Enter") e.stopPropagation();
+        }}
+      >
+        <ExternalLinkIcon />
+      </button>
+    {/if}
     <StatusBadge {status} {failedReason} />
   </div>
 {/if}

@@ -10,6 +10,7 @@
   import CourseStats from "$lib/components/CourseStats.svelte";
   import LessonStatRow from "$lib/components/LessonStatRow.svelte";
   import Button from "$lib/components/Button.svelte";
+  import ExternalLinkIcon from "$lib/components/ExternalLinkIcon.svelte";
   import Alert from "$lib/components/Alert.svelte";
   import {
     appErrorMessage,
@@ -97,23 +98,6 @@
   });
 </script>
 
-{#snippet externalLinkIcon()}
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.3"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M6.5 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9.5" />
-    <path d="M9 3h4v4 M13 3 7 9" />
-  </svg>
-{/snippet}
-
 {#if entry == null && (library.status === "idle" || library.status === "loading")}
   <p data-testid="course-loading" class="text-sm text-fg-muted">
     Loading your library…
@@ -149,7 +133,7 @@
         onclick={() =>
           void openUrl(lingqCollectionUrl(entry.language, collectionId))}
       >
-        {@render externalLinkIcon()}
+        <ExternalLinkIcon />
         Open in LingQ
       </Button>
     {/if}

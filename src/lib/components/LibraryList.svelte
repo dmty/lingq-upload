@@ -30,7 +30,7 @@
   {#each entries as entry, i (joinKey(entry.id))}
     {@const focused = focusIndex === i}
     <li
-      class="relative grid grid-cols-[1fr_auto] gap-4 px-2"
+      class="group relative grid grid-cols-[1fr_auto] gap-4 px-2"
       class:bg-accent={focused}
       class:text-accent-fg={focused}
       data-row-index={i}
