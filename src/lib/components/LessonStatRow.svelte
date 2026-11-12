@@ -1,12 +1,20 @@
 <script lang="ts">
   import type { LessonStat } from "$lib/ipc/bindings";
   import { formatClock, formatCount, normalizeLessonTitle } from "$lib/format";
+  import { lingqLessonUrl } from "$lib/lingq";
+  import OpenInLingqButton from "./OpenInLingqButton.svelte";
 
   let {
     index,
     lesson,
+    language,
     showNewWords = true,
-  }: { index: number; lesson: LessonStat; showNewWords?: boolean } = $props();
+  }: {
+    index: number;
+    lesson: LessonStat;
+    language: string;
+    showNewWords?: boolean;
+  } = $props();
 
   const percent = $derived(
     lesson.percent_completed == null
@@ -22,10 +30,10 @@
 
 <div
   data-testid="lesson-row"
-  class="grid items-center gap-3 border-t border-border py-1.5"
+  class="group grid items-center gap-3 border-t border-border py-1.5"
   style="grid-template-columns: 2.5rem 1fr 5rem {showNewWords
     ? '4rem '
-    : ''}4rem 5rem"
+    : ''}4rem 5rem 1.5rem"
 >
   <span class="tabular-nums text-fg-subtle">{index + 1}</span>
   <span class="truncate" title={lesson.title}>{title}</span>
@@ -67,4 +75,5 @@
       </span>
     {/if}
   </span>
+  <OpenInLingqButton url={lingqLessonUrl(language, lesson.id)} />
 </div>

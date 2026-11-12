@@ -185,7 +185,7 @@
         class="grid items-center gap-3 pb-1 text-xs text-fg-subtle"
         style="grid-template-columns: 2.5rem 1fr 5rem {showNewWords
           ? '4rem '
-          : ''}4rem 5rem"
+          : ''}4rem 5rem 1.5rem"
       >
         <span></span>
         <span></span>
@@ -193,9 +193,15 @@
         {#if showNewWords}<span class="text-right">New</span>{/if}
         <span class="text-right">Time</span>
         <span class="text-right">Progress</span>
+        <span></span>
       </div>
       {#each cached.view.lessons as lesson, i (lesson.id)}
-        <LessonStatRow index={i} {lesson} {showNewWords} />
+        <LessonStatRow
+          index={i}
+          {lesson}
+          language={entry.language}
+          {showNewWords}
+        />
       {/each}
     </section>
   {/if}

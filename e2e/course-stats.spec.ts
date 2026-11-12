@@ -195,6 +195,23 @@ test.describe("course screen", () => {
       .toBe("https://www.lingq.com/ja/learn/ja/web/library/course/7");
   });
 
+  test("a lesson row opens that lesson in LingQ from its hover button", async ({
+    page,
+  }) => {
+    await page.goto(`/course/${ROUTE_KEY}`);
+
+    const row = page.getByTestId("lesson-row").nth(1);
+    const button = row.getByRole("button", { name: "Open in LingQ" });
+    await expect(button).toHaveCSS("opacity", "0");
+    await row.hover();
+    await expect(button).toHaveCSS("opacity", "1");
+
+    await button.click();
+    await expect
+      .poll(() => page.evaluate(() => window.__openedUrl__))
+      .toBe("https://www.lingq.com/ja/learn/ja/web/reader/11");
+  });
+
   test("the progress strip weights completion by word count", async ({
     page,
   }) => {
