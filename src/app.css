@@ -173,12 +173,7 @@
   }
 
   button {
-    cursor: pointer;
     font: inherit;
-  }
-
-  button:disabled {
-    cursor: not-allowed;
   }
 
   input,
@@ -424,7 +419,6 @@
 
 .toolbar-history-btn:disabled {
   color: var(--color-fg-subtle);
-  cursor: not-allowed;
 }
 
 :root[data-window-inactive] .toolbar-cluster {
@@ -711,7 +705,6 @@
     color: var(--color-fg);
     font-size: var(--text-base);
     white-space: nowrap;
-    cursor: pointer;
   }
 
   .segmented > * + * {
@@ -882,7 +875,6 @@ dialog::backdrop {
   border: 0;
   border-radius: var(--radius-sm);
   color: var(--color-fg-muted);
-  cursor: pointer;
 }
 
 .sidebar-toggle {

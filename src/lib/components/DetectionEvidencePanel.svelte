@@ -107,13 +107,13 @@
 
   {#if evidence.transcript_head_preview}
     <details class="mt-2 text-sm text-fg">
-      <summary class="cursor-pointer text-fg-muted">Start transcript</summary>
+      <summary class="text-fg-muted">Start transcript</summary>
       <p class="mt-1 whitespace-pre-wrap">{evidence.transcript_head_preview}</p>
     </details>
   {/if}
   {#if evidence.transcript_tail_preview}
     <details class="mt-2 text-sm text-fg">
-      <summary class="cursor-pointer text-fg-muted">End transcript</summary>
+      <summary class="text-fg-muted">End transcript</summary>
       <p class="mt-1 whitespace-pre-wrap">{evidence.transcript_tail_preview}</p>
     </details>
   {/if}

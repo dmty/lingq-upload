@@ -304,7 +304,7 @@
             aria-selected={mapping.selectedChapterId === row.chapter.id}
             data-testid="mapping-chapter-row"
             data-chapter-id={row.chapter.id}
-            class="flex cursor-pointer flex-col gap-1 px-3 py-1 text-base"
+            class="flex flex-col gap-1 px-3 py-1 text-base"
             class:selected={mapping.selectedChapterId === row.chapter.id}
             tabindex={0}
             onclick={() => mapping.selectChapter(row.chapter.id)}
@@ -386,7 +386,7 @@
       data-testid="removed-strip"
       class="rounded-md border border-border px-3 py-2 text-xs text-fg-muted"
     >
-      <summary class="cursor-pointer font-medium">
+      <summary class="font-medium">
         Removed ({removedChapters.length})
       </summary>
       <span class="mt-1.5 flex flex-wrap gap-1.5">

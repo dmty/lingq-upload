@@ -157,7 +157,7 @@
         </button>
         <div class="min-w-0 flex-1">
           <div
-            class="group relative h-1.5 w-full cursor-pointer rounded-full bg-border-strong/40"
+            class="group relative h-1.5 w-full rounded-full bg-border-strong/40"
             role="slider"
             tabindex="0"
             aria-label="Seek audio"

@@ -108,10 +108,8 @@
     align-items: baseline;
     gap: 0.5rem;
     min-height: 24px;
-    cursor: pointer;
   }
   .absorb-policy:disabled label {
-    cursor: default;
     opacity: 0.6;
   }
   .pending-note {

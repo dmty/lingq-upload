@@ -661,9 +661,7 @@
 
           {#if sameTopHit}
             <details class="px-3 py-3">
-              <summary
-                class="cursor-pointer text-xs font-medium text-fg-muted hover:text-fg"
-              >
+              <summary class="text-xs font-medium text-fg-muted hover:text-fg">
                 Or trim title page / credits first
               </summary>
               <p class="mt-2 text-xs text-fg-muted">

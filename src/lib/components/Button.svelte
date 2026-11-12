@@ -37,7 +37,7 @@
     lg: "h-[28px] px-[14px] text-base",
   };
   const classes = $derived(
-    `btn inline-flex items-center justify-center gap-[8px] rounded-sm font-medium transition-colors duration-120 ease-snappy disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${cls}`,
+    `btn inline-flex items-center justify-center gap-[8px] rounded-sm font-medium transition-colors duration-120 ease-snappy ${variants[variant]} ${sizes[size]} ${cls}`,
   );
 </script>
 

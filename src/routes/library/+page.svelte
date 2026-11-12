@@ -239,7 +239,7 @@
       <p class="font-medium">Library is unreadable</p>
       <p class="mt-1 text-fg-muted">{appErrorMessage(library.error!)}</p>
       <details class="mt-2 text-xs text-fg-muted">
-        <summary class="cursor-pointer">Show details</summary>
+        <summary>Show details</summary>
         <pre
           class="mt-2 overflow-auto rounded-sm bg-surface-sunken p-2">{JSON.stringify(
             library.error,

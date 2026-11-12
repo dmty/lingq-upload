@@ -461,7 +461,7 @@
         {#each transcribeProviders as provider (provider.id)}
           <div role="group" aria-label={`${provider.label} provider`}>
             <div class="flex items-start justify-between gap-4">
-              <label class="flex min-h-[24px] items-start gap-3 cursor-pointer">
+              <label class="flex min-h-[24px] items-start gap-3">
                 <input
                   type="radio"
                   name="transcription-provider"
@@ -590,7 +590,7 @@
     class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
     open={trashEntries.length > 0}
   >
-    <summary class="cursor-pointer text-md font-semibold text-fg">
+    <summary class="text-md font-semibold text-fg">
       Trash
       {#if trashLoaded && trashEntries.length > 0}
         <span class="ml-2 text-xs font-normal text-fg-muted">
@@ -688,9 +688,7 @@
     <details
       class="mt-8 rounded-md border border-border bg-surface p-6 shadow-card"
     >
-      <summary class="cursor-pointer text-md font-semibold text-fg">
-        Developer
-      </summary>
+      <summary class="text-md font-semibold text-fg"> Developer </summary>
       <p class="mt-2 text-sm text-fg-muted">
         Dev-only options. Hidden in release builds.
       </p>

@@ -223,7 +223,7 @@
 {:else}
   <button
     type="button"
-    class="grid min-h-[64px] w-full grid-cols-[48px_1fr] items-center gap-3 py-2 text-left disabled:cursor-not-allowed"
+    class="grid min-h-[64px] w-full grid-cols-[48px_1fr] items-center gap-3 py-2 text-left"
     aria-label={`Open "${entry.title}" — ${statusHumanLabel}`}
     disabled={rowDisabled}
     title={rowDisabled ? "No LingQ collection id" : undefined}
