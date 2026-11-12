@@ -46,7 +46,7 @@
     {href}
     {...rest}
     bind:this={ref}
-    class="{classes} no-underline hover:no-underline"
+    class="{classes} cursor-default no-underline hover:no-underline"
   >
     {@render children()}
   </a>
